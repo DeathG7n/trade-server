@@ -100,6 +100,11 @@ const getTicksHistory = async (asset) => {
       }
 
       if(bearish15(18) && bullish15(19)){
+        data = {
+          signal : false,
+          text: `${asset?.name} is bullish on 15 minutes`,
+          data: closePricesM1_21
+      }
         if(lowerTrend == true){
             if(bearish1(19) && bullish1(20)){
                 data = {
@@ -120,22 +125,27 @@ const getTicksHistory = async (asset) => {
         }
       }
       if(bullish15(18) && bearish15(19)){
+        data = {
+          signal : false,
+          text: `${asset?.name} is bearish on 15 minutes`,
+          data: closePricesM1_21
+      }
         if(lowerTrend == false){
             if(bullish1(19) && bearish1(20)){
                 data = {
                     signal : true,
-                    text: `${asset?.name} is bullish`,
+                    text: `${asset?.name} is bearish`,
                     data: closePricesM1_21
                 }
-                console.log(`${asset?.name} is bullish`)
+                console.log(`${asset?.name} is bearish`)
             }
             if(bullish1(18) && bearish1(19) && bearish1(20)){
                 data = {
                     signal : true,
-                    text: `${asset?.name} is bullish`,
+                    text: `${asset?.name} is bearish`,
                     data: closePricesM1_21
                 }
-                console.log(`${asset?.name} is bullish`)
+                console.log(`${asset?.name} is bearish`)
             }
         }
       }
