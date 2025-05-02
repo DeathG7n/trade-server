@@ -114,7 +114,7 @@ const getTicksHistory = async (asset) => {
                 }
                 console.log(`${asset?.name} is bullish`)
             }
-            if(bearish1(18) && bullish1(17) && bullish1(20)){
+            if(bearish1(18) && bullish1(19) && bullish1(20)){
                 data = {
                     signal : true,
                     text: `${asset?.name} is bullish`,
