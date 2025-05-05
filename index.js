@@ -7,6 +7,7 @@ const connection = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=368
 const ta = require('ta.js')
 const api = new DerivAPIBasic({ connection })
 let data = "No signal yet"
+const date = new Date();
 
 app.use(cors())
 
@@ -128,6 +129,8 @@ const get1minute = async (asset) => {
         }
       }
 
+      console.log(data, date.toString())
+
     } catch (error){
         data = {
           signal : true,
@@ -205,6 +208,8 @@ const get5minutes = async (asset) => {
           }
       }
     }
+
+    console.log(data, date.toString())
 
   } catch (error){
       data = {
