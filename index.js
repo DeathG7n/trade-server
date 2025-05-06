@@ -212,10 +212,7 @@ const get5minutes = async (asset) => {
     console.log(data, date.toString())
 
   } catch (error){
-      data = {
-        signal : true,
-        text: error?.message,
-      }
+    data = error?.error?.message
     console.log(error) 
   }
 };
