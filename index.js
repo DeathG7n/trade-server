@@ -27,6 +27,14 @@ const assets = [
   {
     name: "Volatility 150(1s) Index",
     symbol: "1HZ150V"
+  },
+  {
+    name: "Volatility 75 Index",
+    symbol: "R_75"
+  }, 
+  {
+    name: "Jump 100 Index",
+    symbol: "JD100"
   }
 ]
 
