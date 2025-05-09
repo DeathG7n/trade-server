@@ -101,8 +101,8 @@ const getSignal = async (asset) => {
       console.log(`${asset?.name} is bullish`)
     }
     if(bullish60(18) && bearish60(19)){
-      data = `${asset?.name} is bearish on the 15 minutes`
-      console.log(`${asset?.name} is bullish`)
+      data = `${asset?.name} is bearish on the 1 hour`
+      console.log(`${asset?.name} is bearish`)
     }
 
     count += 1
