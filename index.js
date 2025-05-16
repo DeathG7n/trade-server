@@ -1,4 +1,5 @@
 const express = require('express')
+const say = require('say');
 const app = express()
 const cors = require('cors')
 const WebSocket = require('ws');
@@ -25,17 +26,13 @@ app.listen(3000,()=>{
 
 const assets = [
   {
-    name: "Volatility 150(1s) Index",
-    symbol: "1HZ150V"
-  },
-  {
     name: "Volatility 75 Index",
     symbol: "R_75"
   },
-  {
-    name: "Jump 100 Index",
-    symbol: "JD100"
-  }
+   {
+    name: "Volatility 150 Index",
+    symbol: "1HZ150V"
+  },
 ]
 
 
@@ -61,48 +58,34 @@ function getTicksRequest(symbol, count, timeframe){
 
 const getSignal = async (asset) => {
   try{
-    const periodM15 = getTicksRequest(asset?.symbol, 21 , getTimeFrame(15, "mins"))
-    const periodH1 = getTicksRequest(asset?.symbol, 21 , getTimeFrame(1, "hrs"))
+    const period = getTicksRequest(asset?.symbol, 22 , getTimeFrame(5, "mins"))
 
-    const candlesM15 = await api.ticksHistory(periodM15);
-    const candlesH1 = await api.ticksHistory(periodH1);
+    const candles = await api.ticksHistory(period);
 
-    const closePricesM15 = candlesM15?.candles?.map(i => {return i?.close})
-    const closePricesH1 = candlesH1?.candles?.map(i => {return i?.close})
+    const closePrices = candles?.candles?.map(i => {return i?.close})
 
-    const openPricesM15 = candlesM15?.candles?.map(i => {return i?.open})
-    const openPricesH1 = candlesH1?.candles?.map(i => {return i?.open})
+    const current14 = closePrices.slice(-14)
+    const previous14 = closePrices.slice(-15).slice(0,14)
 
-    function bearish15(candle){
-      return openPricesM15[candle] > closePricesM15[candle]
-    }
-    function bullish15(candle){
-      return closePricesM15[candle] > openPricesM15[candle]
-    }
+    const current21 = closePrices.slice(-21)
+    const previous21 = closePrices.slice(0,21)
 
-    function bearish60(candle){
-      return openPricesH1[candle] > closePricesH1[candle]
-    }
-    function bullish60(candle){
-      return closePricesH1[candle] > openPricesH1[candle]
+    const current14ema = ta.ema(current14, current14.length)
+    const previous14ema = ta.ema(previous14, previous14.length)
+    const current21ema = ta.ema(current21, current21.length)
+    const previous21ema = ta.ema(previous21, previous21.length)
+
+
+    if(previous14ema > previous21ema && current14ema < current21ema){
+      console.log(`Bullish Crossover Detected on ${asset?.name}`)
+      data = `Bullish Crossover Detected on ${asset?.name}`
+      say.speak(`signal`);
     }
 
-    if(bearish15(18) && bullish15(19)){
-      data = `${asset?.name} is bullish on the 15 minutes`
-      console.log(`${asset?.name} is bullish`)
-    }
-    if(bullish15(18) && bearish15(19)){
-      data = `${asset?.name} is bearish on the 15 minutes`
-      console.log(`${asset?.name} is bearish`)
-    }
-
-    if(bearish60(18) && bullish60(19)){
-      data = `${asset?.name} is bullish on the 1 hour`
-      console.log(`${asset?.name} is bullish`)
-    }
-    if(bullish60(18) && bearish60(19)){
-      data = `${asset?.name} is bearish on the 1 hour`
-      console.log(`${asset?.name} is bearish`)
+    if(previous14ema < previous21ema && current14ema > current21ema){
+      console.log(`Bearish Crossover Detected on ${asset?.name}`)
+      data = `Bearish Crossover Detected on ${asset?.name}`
+      say.speak(`signal`);
     }
 
     count += 1
@@ -113,3 +96,12 @@ const getSignal = async (asset) => {
     console.log(error?.error?.message) 
   }
 };
+
+const arg = process.argv
+if (arg[arg.length - 1] == "true"){
+  setInterval(()=>{
+    assets.forEach((asset)=>{ 
+      getSignal(asset) 
+    })
+  }, 1000)
+} 
