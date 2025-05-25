@@ -1,5 +1,4 @@
 const express = require('express')
-const say = require('say');
 const app = express()
 const cors = require('cors')
 const WebSocket = require('ws');
@@ -28,11 +27,7 @@ const assets = [
   {
     name: "Volatility 75 Index",
     symbol: "R_75"
-  },
-   {
-    name: "Volatility 150 Index",
-    symbol: "1HZ150V"
-  },
+  }
 ]
 
 
@@ -58,38 +53,52 @@ function getTicksRequest(symbol, count, timeframe){
 
 const getSignal = async (asset) => {
   try{
-    const period = getTicksRequest(asset?.symbol, 22 , getTimeFrame(5, "mins"))
+    const period = getTicksRequest(asset?.symbol, 21 , getTimeFrame(1, "mins"))
 
     const candles = await api.ticksHistory(period);
 
     const closePrices = candles?.candles?.map(i => {return i?.close})
+    const openPrices = candles?.candles?.map(i => {return i?.open})
 
     const current14 = closePrices.slice(-14)
-    const previous14 = closePrices.slice(-15).slice(0,14)
-
-    const current21 = closePrices.slice(-21)
-    const previous21 = closePrices.slice(0,21)
+    const current21 = closePrices
 
     const current14ema = ta.ema(current14, current14.length)
-    const previous14ema = ta.ema(previous14, previous14.length)
     const current21ema = ta.ema(current21, current21.length)
-    const previous21ema = ta.ema(previous21, previous21.length)
 
-
-    if(previous14ema > previous21ema && current14ema < current21ema){
-      console.log(`Bullish Crossover Detected on ${asset?.name}`)
-      data = `Bullish Crossover Detected on ${asset?.name}`
-      say.speak(`signal`);
+    function bearish(candle){
+      return openPrices[candle] > closePrices[candle]
+    }
+    function bullish(candle){
+      return closePrices[candle] > openPrices[candle]
     }
 
-    if(previous14ema < previous21ema && current14ema > current21ema){
-      console.log(`Bearish Crossover Detected on ${asset?.name}`)
-      data = `Bearish Crossover Detected on ${asset?.name}`
-      say.speak(`signal`);
+
+    if(current14ema > current21ema){
+      if(bearish(19) && bullish(20)){
+        data = `Bullish Signal Detected on ${asset?.name}`
+        console.log(`${asset?.name} is bullish`)
+      }
+      if(bearish(18) && bullish(19) && bullish(20)){
+        data = `Bullish Signal Detected on ${asset?.name}`
+        console.log(`${asset?.name} is bullish`)
+      }
+    }
+
+    if(current14ema < current21ema){
+      if(bullish(19) && bearish(20)){
+        data = `Bearish Signal Detected on ${asset?.name}`
+        console.log(`${asset?.name} is bearish`)
+      }
+      if(bullish(18) && bearish(19) && bearish(20)){
+        data = `Bearish Signal Detected on ${asset?.name}`
+        console.log(`${asset?.name} is bearish`)
+      }
     }
 
     count += 1
     console.log(data, count)
+    console.log(current14, current21)
 
   } catch (error){
     data = error?.error?.message
@@ -97,11 +106,4 @@ const getSignal = async (asset) => {
   }
 };
 
-const arg = process.argv
-if (arg[arg.length - 1] == "true"){
-  setInterval(()=>{
-    assets.forEach((asset)=>{ 
-      getSignal(asset) 
-    })
-  }, 1000)
-} 
+
