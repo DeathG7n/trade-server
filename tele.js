@@ -7,6 +7,7 @@ const connection = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=368
 const ta = require('ta.js')
 const api = new DerivAPIBasic({ connection })
 let count = 0
+let previousCandle = 0
 
 const BOT_TOKEN = '8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ';
 const CHAT_ID = '8068534792';
@@ -16,7 +17,7 @@ app.listen(3000,()=>{
     assets.forEach((asset)=>{ 
         getSignal(asset) 
     })
-  },30000)
+  },1000)
   console.log("Server is running")
 })
 
@@ -82,29 +83,32 @@ const getSignal = async (asset) => {
       return closePrices[candle] > openPrices[candle]
     }
 
+    if(previousCandle != closePrices[19]){
+      previousCandle = closePrices[19]
+      if(current14ema > current21ema){
+        if(bearish(18) && bullish(19)){
+          sendMessage(`${asset?.name} is bullish`)
+          console.log(`${asset?.name} is bullish`)
+        }
+        if(bearish(17) && bullish(18) && bullish(19)){
+          sendMessage(`${asset?.name} is bullish`)
+          console.log(`${asset?.name} is bullish`)
+        }
+      }
 
-    if(current14ema > current21ema){
-      if(bearish(19) && bullish(20)){
-        sendMessage(`${asset?.name} is bullish`)
-        console.log(`${asset?.name} is bullish`)
+      if(current14ema < current21ema){
+        if(bullish(18) && bearish(19)){
+          sendMessage(`${asset?.name} is bearish`)
+          console.log(`${asset?.name} is bearish`)
+        }
+        if(bullish(17) && bearish(18) && bearish(19)){
+          sendMessage(`${asset?.name} is bearish`)
+          console.log(`${asset?.name} is bearish`)
+        }
       }
-      if(bearish(18) && bullish(19) && bullish(20)){
-        sendMessage(`${asset?.name} is bullish`)
-        console.log(`${asset?.name} is bullish`)
-      }
+
     }
-
-    if(current14ema < current21ema){
-      if(bullish(19) && bearish(20)){
-        sendMessage(`${asset?.name} is bearish`)
-        console.log(`${asset?.name} is bearish`)
-      }
-      if(bullish(18) && bearish(19) && bearish(20)){
-        sendMessage(`${asset?.name} is bearish`)
-        console.log(`${asset?.name} is bearish`)
-      }
-    }
-
+    
     count += 1
     console.log(count)
 
