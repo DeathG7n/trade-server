@@ -23,8 +23,8 @@ app.listen(3000,()=>{
 
 const assets = [
   {
-    name: "Jump 100 Index",
-    symbol: "JD100"
+    name: "Volatility 75 Index",
+    symbol: "R_75"
   }
 ]
 
@@ -63,7 +63,7 @@ function getTicksRequest(symbol, count, timeframe){
 
 const getSignal = async (asset) => {
   try{
-    const period = getTicksRequest(asset?.symbol, 21 , getTimeFrame(3, "mins"))
+    const period = getTicksRequest(asset?.symbol, 21 , getTimeFrame(5, "mins"))
 
     const candles = await api.ticksHistory(period);
 
