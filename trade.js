@@ -71,10 +71,8 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'portfolio') {
         if(data?.portfolio?.contracts == []){
             openPositions = false
-            console.log("No open positions")
         } else{
             openPositions = true
-            console.log(`${data?.portfolio?.contracts?.length} position${data?.portfolio?.contracts?.length <= 1 ? "" : "s"} ${data?.portfolio?.contracts?.length <= 1 ? "is" : "are"} open`)
         }
     }
 
