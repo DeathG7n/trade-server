@@ -1,6 +1,7 @@
 const WebSocket = require('ws');
 const express = require('express')
 const app = express()
+const cors = require('cors')
 const ta = require('ta.js')
 
 const API_TOKEN = 'St6G0SSIRWnEhYd';
@@ -12,6 +13,16 @@ let position = null
 let openContractId = null
 let openPositions = false
 let count = 0
+
+app.use(cors())
+
+app.get("/",(req, res)=>{
+  console.log("Hi")
+})
+
+app.listen(3000,()=>{
+  console.log("Server is running")
+})
 
 function send(msg) {
     ws.send(JSON.stringify(msg));
