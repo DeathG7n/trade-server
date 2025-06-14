@@ -124,11 +124,13 @@ ws.on('message', async(msg) => {
         const crossedDown = previous14ema > previous21ema && current14ema < current21ema;
 
         if (crossedUp) {
+            sendMessage(`Crossed Up`)
             if (position === 'MULTDOWN') closePosition(openContractId);
-            openPositions === false && buyMultiplier('MULTUP');
+            buyMultiplier('MULTUP');
         } else if (crossedDown) {
+            sendMessage(`Crossed Down`)
             if (position === 'MULTUP') closePosition(openContractId);
-            openPositions === false && buyMultiplier('MULTDOWN');
+            buyMultiplier('MULTDOWN');
         }
 
         count += 1
