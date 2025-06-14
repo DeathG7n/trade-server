@@ -3,9 +3,13 @@ const express = require('express')
 const app = express()
 const cors = require('cors')
 const ta = require('ta.js')
+const axios = require('axios');
 
 const API_TOKEN = 'St6G0SSIRWnEhYd';
 const ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=36807');
+
+const BOT_TOKEN = '8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ';
+const CHAT_ID = '8068534792';
 
 let closePrices = []
 let openPrices = []
@@ -36,6 +40,19 @@ function calculateEMA(prices, period) {
     }
     return ema;
 }
+
+const sendMessage = async (message) => {
+  try {
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+    await axios.post(url, {
+      chat_id: CHAT_ID,
+      text: message,
+    });
+    console.log('Message sent successfully!');
+  } catch (error) {
+    console.error('Error sending message:', error.response?.data || error.message);
+  }
+};
 
 function buyMultiplier(direction) {
     console.log(`📈 Sending ${direction} order...`);
@@ -80,7 +97,7 @@ ws.on('message', async(msg) => {
     }
 
     if (data.msg_type === 'portfolio') {
-        if(data?.portfolio?.contracts == []){
+        if(data?.portfolio?.contracts?.length == 0){
             openPositions = false
         } else{
             openPositions = true
@@ -97,11 +114,11 @@ ws.on('message', async(msg) => {
         const previous14 = closePrices.slice(-15).slice(0,14)
         const previous21 = closePrices.slice(0,21)
         
-        const current14ema = ta.ema(current14, current14.length)
-        const current21ema = ta.ema(current21, current21.length)
+        const current14ema = calculateEMA(current14, current14.length)
+        const current21ema = calculateEMA(current21, current21.length)
         
-        const previous14ema = ta.ema(previous14, previous14.length)
-        const previous21ema = ta.ema(previous21, previous21.length)
+        const previous14ema = calculateEMA(previous14, previous14.length)
+        const previous21ema = calculateEMA(previous21, previous21.length)
 
         const crossedUp = previous14ema < previous21ema && current14ema > current21ema;
         const crossedDown = previous14ema > previous21ema && current14ema < current21ema;
