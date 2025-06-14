@@ -100,10 +100,13 @@ ws.on('message', async(msg) => {
         } else{
             openPositions = true
         }
+        for (let i = 0; i < data?.portfolio?.contracts?.length; i++) {
+            console.log(data?.portfolio?.contracts[i]?.contract_id)
+            closePosition(data?.portfolio?.contracts[i]?.contract_id)
+        }
     }
 
     if (data.msg_type === 'candles') {
-        buyMultiplier('MULTDOWN');
         closePrices = data?.candles?.map(i => {return i?.close})
         openPrices = data?.candles?.map(i => {return i?.open})
 
@@ -125,11 +128,11 @@ ws.on('message', async(msg) => {
         if (crossedUp) {
             sendMessage(`Crossed Up`)
             if (position === 'MULTDOWN') closePosition(openContractId);
-            buyMultiplier('MULTUP');
+            openPositions === false && buyMultiplier('MULTUP');
         } else if (crossedDown) {
             sendMessage(`Crossed Down`)
             if (position === 'MULTUP') closePosition(openContractId);
-            buyMultiplier('MULTDOWN');
+            openPositions === false && buyMultiplier('MULTDOWN');
         }
 
         count += 1
