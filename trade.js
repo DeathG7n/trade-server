@@ -65,7 +65,7 @@ function buyMultiplier(direction) {
             contract_type: direction,
             currency: 'USD',
             symbol: 'R_75',
-            multiplier: 15,
+            multiplier: 100,
         }
     });
 }
@@ -100,10 +100,10 @@ ws.on('message', async(msg) => {
         } else{
             openPositions = true
         }
-        for (let i = 0; i < data?.portfolio?.contracts?.length; i++) {
-            console.log(data?.portfolio?.contracts[i]?.contract_id)
-            closePosition(data?.portfolio?.contracts[i]?.contract_id)
-        }
+        // for (let i = 0; i < data?.portfolio?.contracts?.length; i++) {
+        //     console.log(data?.portfolio?.contracts[i]?.contract_id)
+        //     closePosition(data?.portfolio?.contracts[i]?.contract_id)
+        // }
     }
 
     if (data.msg_type === 'candles') {
@@ -156,30 +156,3 @@ ws.on('message', async(msg) => {
         console.error('❗ Error:', data.error.message);
     }
 });
-
-
-    // if (data.msg_type === 'tick') {
-    //     const price = Number(data.tick.quote);
-    //     closePrices.push(price);
-    //     if (closePrices.length > 50) closePrices.shift();
-
-    //     const ema14 = calculateEMA(closePrices.slice(-14), 14);
-    //     const ema21 = calculateEMA(closePrices.slice(-21), 21);
-
-    //     console.log(`EMA14: ${ema14.toFixed(2)}, EMA21: ${ema21.toFixed(2)}, Price: ${price}`);
-
-        // Detect crossover
-        // const lastEma14 = calculateEMA(closePrices.slice(-15, -1), 14);
-        // const lastEma21 = calculateEMA(closePrices.slice(-22, -1), 21);
-
-        // const crossedUp = lastEma14 < lastEma21 && ema14 > ema21;
-        // const crossedDown = lastEma14 > lastEma21 && ema14 < ema21;
-
-        // if (crossedUp) {
-        //     if (position === 'MULTDOWN') closePosition(openContractId);
-            //if (openContractId == null) buyMultiplier('MULTUP');
-        // } else if (crossedDown) {
-        //     if (position === 'MULTUP') closePosition(openContractId);
-            //if (openContractId == null) buyMultiplier('MULTDOWN');
-    //     }
-    // }
