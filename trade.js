@@ -31,7 +31,7 @@ function buyMultiplier(direction) {
 
     send({
         buy: 1,
-        price: 1, // stake
+        price: 1,
         parameters: {
             amount: 1,
             basis: 'stake',
