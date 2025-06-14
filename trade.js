@@ -55,8 +55,7 @@ const sendMessage = async (message) => {
 };
 
 function buyMultiplier(direction) {
-    console.log(`📈 Sending ${direction} order...`);
-
+    console.log(`📈 Buying ${direction} multiplier...`);
     send({
         buy: 1,
         price: 1,
@@ -66,9 +65,8 @@ function buyMultiplier(direction) {
             contract_type: direction,
             currency: 'USD',
             symbol: 'R_75',
-            multiplier: 100,
-            stop_loss: 0.5,
-        },
+            multiplier: 15,
+        }
     });
 }
 
@@ -105,6 +103,7 @@ ws.on('message', async(msg) => {
     }
 
     if (data.msg_type === 'candles') {
+        buyMultiplier('MULTDOWN');
         closePrices = data?.candles?.map(i => {return i?.close})
         openPrices = data?.candles?.map(i => {return i?.open})
 
@@ -139,13 +138,13 @@ ws.on('message', async(msg) => {
     
 
     if (data.msg_type === 'buy') {
-        openContractId = data.buy.contract_id;
-        position = data.buy.contract_type;
+        openContractId = data?.buy?.contract_id;
+        position = data?.buy?.contract_type;
         console.log(`🟢 Entered ${position} position, Contract ID: ${openContractId}`);
     }
 
     if (data.msg_type === 'sell') {
-        console.log(`💸 Position closed at ${data.sell.sold_for} USD`);
+        console.log(`💸 Position closed at ${data?.sell?.sold_for} USD`);
         openContractId = null;
         position = null;
     }
