@@ -17,12 +17,11 @@ let position = null
 let openContractId = null
 let openPosition = {}
 let openPositions = false
-let count = 0
 
 app.use(cors())
 
 app.get("/",(req, res)=>{
-  console.log("Hi")
+  res.json("Hi")
 })
 
 app.listen(3000,()=>{
@@ -140,9 +139,6 @@ ws.on('message', async(msg) => {
             position === 'MULTDOWN' && closePosition(openContractId);
             openPositions === false && buyMultiplier('MULTDOWN');
         }
-
-        count += 1
-        console.log(count)
     }
     
 
