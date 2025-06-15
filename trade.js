@@ -16,7 +16,7 @@ let openPrices = []
 let position = null
 let openContractId = null
 let openPosition = {}
-let openPositions = false
+let canBuy = false
 
 app.use(cors())
 
@@ -42,6 +42,7 @@ function calculateEMA(prices, period) {
 }
 
 function detectCrossover() {
+    closePrices.pop()
     const lastCloses = closePrices.slice(-22); // Enough for EMA-21
 
     const ema14_now = calculateEMA(lastCloses.slice(-14), 14);
@@ -103,7 +104,7 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'authorize') {
         console.log('✅ Authorized');
         setInterval(()=>{
-            send({ ticks_history: 'R_75', style: 'candles', count: 23, granularity: 60, end: 'latest'})
+            send({ ticks_history: 'R_75', style: 'candles', count: 24, granularity: 60, end: 'latest'})
             send({ portfolio: 1 })
         }, 5000)
     }
@@ -111,12 +112,17 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'portfolio') {
         // console.log(data?.portfolio?.contracts)
         if(data?.portfolio?.contracts?.length == 0){
-            openPositions = false
+            canBuy = true
+            openContractId = null;
+            position = null;
         } else{
-            openPositions = true
+            canBuy = false
             openPosition = data?.portfolio?.contracts[data?.portfolio?.contracts?.length - 1] 
             position = openPosition?.contract_type
             openContractId = openPosition?.contract_id
+            if(data?.portfolio?.contracts?.length > 1){
+                closePosition(openContractId)
+            }
         }
         // for (let i = 0; i < data?.portfolio?.contracts?.length; i++) {
         //     console.log(data?.portfolio?.contracts[i]?.contract_id)
@@ -131,25 +137,22 @@ ws.on('message', async(msg) => {
         const { crossedUp, crossedDown } = detectCrossover();
 
         if (crossedUp) {
-            sendMessage(`Crossed Up`)
             position === 'MULTDOWN' && closePosition(openContractId);
-            openPositions === false && buyMultiplier('MULTUP');
+            canBuy && buyMultiplier('MULTUP');
         } else if (crossedDown) {
-            sendMessage(`Crossed Down`)
-            position === 'MULTDOWN' && closePosition(openContractId);
-            openPositions === false && buyMultiplier('MULTDOWN');
+            position === 'MULTUP' && closePosition(openContractId);
+            canBuy  && buyMultiplier('MULTDOWN');
         }
     }
     
 
     if (data.msg_type === 'buy') {
+        sendMessage(`${position == "MULTIUP"? "Up Position Entered" : "Down Position Entered"}`)
         console.log(`🟢 Entered ${position} position, Contract ID: ${openContractId}`);
     }
 
     if (data.msg_type === 'sell') {
         console.log(`💸 Position closed at ${data?.sell?.sold_for} USD`);
-        openContractId = null;
-        position = null;
     }
 
     if (data.error) {
