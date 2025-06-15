@@ -42,7 +42,6 @@ function calculateEMA(prices, period) {
 }
 
 function detectCrossover() {
-    closePrices.pop()
     const lastCloses = closePrices.slice(-22); // Enough for EMA-21
 
     const ema14_now = calculateEMA(lastCloses.slice(-14), 14);
@@ -147,7 +146,7 @@ ws.on('message', async(msg) => {
     
 
     if (data.msg_type === 'buy') {
-        sendMessage(`${position == "MULTIUP"? "Up Position Entered" : "Down Position Entered"}`)
+        sendMessage(`${position} position entered`)
         console.log(`🟢 Entered ${position} position, Contract ID: ${openContractId}`);
     }
 
