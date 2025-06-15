@@ -15,6 +15,7 @@ let closePrices = []
 let openPrices = []
 let position = null
 let openContractId = null
+let openPosition = {}
 let openPositions = false
 let count = 0
 
@@ -39,6 +40,20 @@ function calculateEMA(prices, period) {
         ema = prices[i] * k + ema * (1 - k);
     }
     return ema;
+}
+
+function detectCrossover() {
+    const lastCloses = closePrices.slice(-22); // Enough for EMA-21
+
+    const ema14_now = calculateEMA(lastCloses.slice(-14), 14);
+    const ema21_now = calculateEMA(lastCloses.slice(-21), 21);
+    const ema14_prev = calculateEMA(lastCloses.slice(-15, -1), 14);
+    const ema21_prev = calculateEMA(lastCloses.slice(-22, -1), 21);
+
+    const crossedUp = ema14_prev < ema21_prev && ema14_now > ema21_now;
+    const crossedDown = ema14_prev > ema21_prev && ema14_now < ema21_now;
+
+    return { crossedUp, crossedDown };
 }
 
 const sendMessage = async (message) => {
@@ -89,16 +104,20 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'authorize') {
         console.log('✅ Authorized');
         setInterval(()=>{
-            send({ ticks_history: 'R_75', style: 'candles', count: 22, granularity: 60, end: 'latest'})
+            send({ ticks_history: 'R_75', style: 'candles', count: 23, granularity: 60, end: 'latest'})
             send({ portfolio: 1 })
         }, 5000)
     }
 
     if (data.msg_type === 'portfolio') {
+        // console.log(data?.portfolio?.contracts)
         if(data?.portfolio?.contracts?.length == 0){
             openPositions = false
         } else{
             openPositions = true
+            openPosition = data?.portfolio?.contracts[data?.portfolio?.contracts?.length - 1] 
+            position = openPosition?.contract_type
+            openContractId = openPosition?.contract_id
         }
         // for (let i = 0; i < data?.portfolio?.contracts?.length; i++) {
         //     console.log(data?.portfolio?.contracts[i]?.contract_id)
@@ -110,28 +129,15 @@ ws.on('message', async(msg) => {
         closePrices = data?.candles?.map(i => {return i?.close})
         openPrices = data?.candles?.map(i => {return i?.open})
 
-        const current14 = closePrices.slice(-14)
-        const current21 = closePrices
-
-        const previous14 = closePrices.slice(-15).slice(0,14)
-        const previous21 = closePrices.slice(0,21)
-        
-        const current14ema = calculateEMA(current14, current14.length)
-        const current21ema = calculateEMA(current21, current21.length)
-        
-        const previous14ema = calculateEMA(previous14, previous14.length)
-        const previous21ema = calculateEMA(previous21, previous21.length)
-
-        const crossedUp = previous14ema < previous21ema && current14ema > current21ema;
-        const crossedDown = previous14ema > previous21ema && current14ema < current21ema;
+        const { crossedUp, crossedDown } = detectCrossover();
 
         if (crossedUp) {
             sendMessage(`Crossed Up`)
-            if (position === 'MULTDOWN') closePosition(openContractId);
+            position === 'MULTDOWN' && closePosition(openContractId);
             openPositions === false && buyMultiplier('MULTUP');
         } else if (crossedDown) {
             sendMessage(`Crossed Down`)
-            if (position === 'MULTUP') closePosition(openContractId);
+            position === 'MULTDOWN' && closePosition(openContractId);
             openPositions === false && buyMultiplier('MULTDOWN');
         }
 
@@ -141,8 +147,6 @@ ws.on('message', async(msg) => {
     
 
     if (data.msg_type === 'buy') {
-        openContractId = data?.buy?.contract_id;
-        position = data?.buy?.contract_type;
         console.log(`🟢 Entered ${position} position, Contract ID: ${openContractId}`);
     }
 
