@@ -20,7 +20,6 @@ let canBuy = false
 let profit = null
 let stake = null
 let subscribed = false
-let signal = false;
 
 app.use(cors())
 
@@ -150,10 +149,16 @@ ws.on('message', async(msg) => {
 
         const { crossedUp, crossedDown } = detectCrossover();
         if(canBuy){
-            if (crossedUp && signal) {
+            if (crossedUp) {
                 buyMultiplier('MULTUP');
-            } else if (crossedDown && signal) {
+                setTimeout(()=>{
+                    send({ portfolio: 1 })
+                },1000)
+            } else if (crossedDown) {
                 buyMultiplier('MULTDOWN');
+                setTimeout(()=>{
+                    send({ portfolio: 1 })
+                },1000)
             }
         } else {
             if (crossedUp) {
@@ -176,13 +181,11 @@ ws.on('message', async(msg) => {
     
 
     if (data.msg_type === 'buy') {
-        signal = false
         sendMessage(`${position} position entered`)
         console.log(`🟢 Entered ${position} position, Contract ID: ${openContractId}`);
     }
 
     if (data.msg_type === 'sell') {
-        signal = true
         sendMessage(`💸 Position closed at ${data?.sell?.sold_for} USD`)
         console.log(`💸 Position closed at ${data?.sell?.sold_for} USD`);
     }
