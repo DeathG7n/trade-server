@@ -20,6 +20,7 @@ let canBuy = false
 let profit = null
 let stake = null
 let subscribed = false
+let signal = false;
 
 app.use(cors())
 
@@ -37,14 +38,10 @@ function send(msg) {
 
 function calculateEMA(prices, period) {
     const k = 2 / (period + 1);
-    const sma = prices.slice(0, period).reduce((a, b) => a + b) / period;
-
-    let ema = sma;
-
-    for (let i = period; i < prices.length; i++) {
+    let ema = prices[0];
+    for (let i = 1; i < prices.length; i++) {
         ema = prices[i] * k + ema * (1 - k);
     }
-
     return ema;
 }
 
@@ -111,7 +108,7 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'authorize') {
         console.log('✅ Authorized');
         setInterval(()=>{
-            send({ ticks_history: 'R_75', style: 'candles', count: 24, granularity: 60, end: 'latest'})
+            send({ ticks_history: 'R_75', style: 'candles', count: 23, granularity: 60, end: 'latest'})
             send({ portfolio: 1 })
         }, 5000) 
     }
@@ -152,14 +149,20 @@ ws.on('message', async(msg) => {
         openPrices = data?.candles?.map(i => {return i?.open})
 
         const { crossedUp, crossedDown } = detectCrossover();
-
-        if (crossedUp) {
-            position === 'MULTDOWN' && closePosition(openContractId);
-            canBuy && buyMultiplier('MULTUP');
-        } else if (crossedDown) {
-            position === 'MULTUP' && closePosition(openContractId);
-            canBuy  && buyMultiplier('MULTDOWN');
+        if(canBuy){
+            if (crossedUp && signal) {
+                buyMultiplier('MULTUP');
+            } else if (crossedDown && signal) {
+                buyMultiplier('MULTDOWN');
+            }
+        } else {
+            if (crossedUp) {
+                position === 'MULTDOWN' && closePosition(openContractId);
+            } else if (crossedDown) {
+                position === 'MULTUP' && closePosition(openContractId);
+            }
         }
+        
         
     }
 
@@ -173,11 +176,13 @@ ws.on('message', async(msg) => {
     
 
     if (data.msg_type === 'buy') {
+        signal = false
         sendMessage(`${position} position entered`)
         console.log(`🟢 Entered ${position} position, Contract ID: ${openContractId}`);
     }
 
     if (data.msg_type === 'sell') {
+        signal = true
         sendMessage(`💸 Position closed at ${data?.sell?.sold_for} USD`)
         console.log(`💸 Position closed at ${data?.sell?.sold_for} USD`);
     }
