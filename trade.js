@@ -17,6 +17,9 @@ let position = null
 let openContractId = null
 let openPosition = {}
 let canBuy = false
+let profit = null
+let stake = null
+let subscribed = false
 
 app.use(cors())
 
@@ -34,10 +37,14 @@ function send(msg) {
 
 function calculateEMA(prices, period) {
     const k = 2 / (period + 1);
-    let ema = prices[0];
-    for (let i = 1; i < prices.length; i++) {
+    const sma = prices.slice(0, period).reduce((a, b) => a + b) / period;
+
+    let ema = sma;
+
+    for (let i = period; i < prices.length; i++) {
         ema = prices[i] * k + ema * (1 - k);
     }
+
     return ema;
 }
 
@@ -99,13 +106,14 @@ ws.on('open', () => {
 
 ws.on('message', async(msg) => {
     const data = JSON.parse(msg);
+    //console.log(data)
 
     if (data.msg_type === 'authorize') {
         console.log('✅ Authorized');
         setInterval(()=>{
             send({ ticks_history: 'R_75', style: 'candles', count: 24, granularity: 60, end: 'latest'})
             send({ portfolio: 1 })
-        }, 5000)
+        }, 5000) 
     }
 
     if (data.msg_type === 'portfolio') {
@@ -114,6 +122,7 @@ ws.on('message', async(msg) => {
             canBuy = true
             openContractId = null;
             position = null;
+            subscribed = false
         } else{
             canBuy = false
             openPosition = data?.portfolio?.contracts[data?.portfolio?.contracts?.length - 1] 
@@ -122,6 +131,15 @@ ws.on('message', async(msg) => {
             if(data?.portfolio?.contracts?.length > 1){
                 closePosition(openContractId)
             }
+            if(subscribed === false){
+                send({
+                    proposal_open_contract: 1,
+                    contract_id: openContractId, // Replace with your real contract ID
+                    subscribe: 1
+                });
+                subscribed = true
+            }
+             
         }
         // for (let i = 0; i < data?.portfolio?.contracts?.length; i++) {
         //     console.log(data?.portfolio?.contracts[i]?.contract_id)
@@ -142,6 +160,15 @@ ws.on('message', async(msg) => {
             position === 'MULTUP' && closePosition(openContractId);
             canBuy  && buyMultiplier('MULTDOWN');
         }
+        
+    }
+
+    if (data.msg_type === 'proposal_open_contract') {
+        profit = data?.proposal_open_contract?.profit
+        stake = data?.proposal_open_contract?.limit_order?.stop_out?.order_amount
+        if(profit >= Math.abs(stake)){
+            closePosition(openContractId)
+        }
     }
     
 
@@ -151,6 +178,7 @@ ws.on('message', async(msg) => {
     }
 
     if (data.msg_type === 'sell') {
+        sendMessage(`💸 Position closed at ${data?.sell?.sold_for} USD`)
         console.log(`💸 Position closed at ${data?.sell?.sold_for} USD`);
     }
 
