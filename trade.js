@@ -44,6 +44,13 @@ function send(msg) {
 //     return ema;
 // }
 
+function bearish(candle){
+    return openPrices[candle] > closePrices[candle]
+}
+function bullish(candle){
+    return closePrices[candle] > openPrices[candle]
+}
+
 function calculateEMA(prices, period) {
     const k = 2 / (period + 1);
     let emaArray = [];
@@ -74,8 +81,14 @@ function detectEMACrossover(closePrices) {
     const ema14Now = ema14[currIndex];
     const ema21Now = ema21[currIndex];
 
-    const crossedUp = ema14Prev < ema21Prev && ema14Now > ema21Now;
-    const crossedDown = ema14Prev > ema21Prev && ema14Now < ema21Now;
+    const closePrev = closePrices[prevIndex]
+    const openPrev = openPrices[prevIndex]
+
+    // const crossedUp = ema14Prev < ema21Prev && ema14Now > ema21Now;
+    // const crossedDown = ema14Prev > ema21Prev && ema14Now < ema21Now;
+
+    const crossedUp = closePrev > ema21Prev && openPrev < ema21Prev;
+    const crossedDown = closePrev < ema21Prev && openPrev > ema21Prev;
 
     return { crossedUp, crossedDown };
 }
