@@ -35,25 +35,47 @@ function send(msg) {
     ws.send(JSON.stringify(msg));
 }
 
+// function calculateEMA(prices, period) {
+//     const k = 2 / (period + 1);
+//     let ema = prices[0];
+//     for (let i = 1; i < prices.length; i++) {
+//         ema = prices[i] * k + ema * (1 - k);
+//     }
+//     return ema;
+// }
+
 function calculateEMA(prices, period) {
     const k = 2 / (period + 1);
-    let ema = prices[0];
-    for (let i = 1; i < prices.length; i++) {
-        ema = prices[i] * k + ema * (1 - k);
+    let emaArray = [];
+
+    emaArray[0] = prices?.[0];
+
+    for (let i = 1; i < prices?.length; i++) {
+        emaArray[i] = (prices[i] * k) + (emaArray[i - 1] * (1 - k));
     }
-    return ema;
+
+    return emaArray;
 }
 
-function detectCrossover() {
-    const lastCloses = closePrices.slice(-22); // Enough for EMA-21
+function detectEMACrossover(closePrices) {
+    if (closePrices?.length < 22){
+        console.log("not enough")
+    }
 
-    const ema14_now = calculateEMA(lastCloses.slice(-14), 14);
-    const ema21_now = calculateEMA(lastCloses.slice(-21), 21);
-    const ema14_prev = calculateEMA(lastCloses.slice(-15, -1), 14);
-    const ema21_prev = calculateEMA(lastCloses.slice(-22, -1), 21);
+    const ema14 = calculateEMA(closePrices, 14);
+    const ema21 = calculateEMA(closePrices, 21);
 
-    const crossedUp = ema14_prev < ema21_prev && ema14_now > ema21_now;
-    const crossedDown = ema14_prev > ema21_prev && ema14_now < ema21_now;
+    const len = closePrices?.length;
+    const prevIndex = len - 2;
+    const currIndex = len - 1;
+
+    const ema14Prev = ema14[prevIndex];
+    const ema21Prev = ema21[prevIndex];
+    const ema14Now = ema14[currIndex];
+    const ema21Now = ema21[currIndex];
+
+    const crossedUp = ema14Prev < ema21Prev && ema14Now > ema21Now;
+    const crossedDown = ema14Prev > ema21Prev && ema14Now < ema21Now;
 
     return { crossedUp, crossedDown };
 }
@@ -107,13 +129,12 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'authorize') {
         console.log('✅ Authorized');
         setInterval(()=>{
-            send({ ticks_history: 'R_75', style: 'candles', count: 23, granularity: 60, end: 'latest'})
+            send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 60, end: 'latest'})
             send({ portfolio: 1 })
         }, 5000) 
     }
 
     if (data.msg_type === 'portfolio') {
-        // console.log(data?.portfolio?.contracts)
         if(data?.portfolio?.contracts?.length == 0){
             canBuy = true
             openContractId = null;
@@ -146,25 +167,25 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'candles') {
         closePrices = data?.candles?.map(i => {return i?.close})
         openPrices = data?.candles?.map(i => {return i?.open})
+        //closePosition(openContractId)
 
-        const { crossedUp, crossedDown } = detectCrossover();
+        const { crossedUp, crossedDown } = detectEMACrossover(closePrices);
+
         if(canBuy){
             if (crossedUp) {
                 buyMultiplier('MULTUP');
-                setTimeout(()=>{
-                    send({ portfolio: 1 })
-                },1000)
+                send({ portfolio: 1 })
             } else if (crossedDown) {
                 buyMultiplier('MULTDOWN');
-                setTimeout(()=>{
-                    send({ portfolio: 1 })
-                },1000)
+                send({ portfolio: 1 })
             }
         } else {
             if (crossedUp) {
                 position === 'MULTDOWN' && closePosition(openContractId);
+                send({ portfolio: 1 })
             } else if (crossedDown) {
                 position === 'MULTUP' && closePosition(openContractId);
+                send({ portfolio: 1 })
             }
         }
         
@@ -186,6 +207,7 @@ ws.on('message', async(msg) => {
     }
 
     if (data.msg_type === 'sell') {
+        console.log(data)
         sendMessage(`💸 Position closed at ${data?.sell?.sold_for} USD`)
         console.log(`💸 Position closed at ${data?.sell?.sold_for} USD`);
     }
