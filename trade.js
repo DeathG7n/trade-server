@@ -209,13 +209,13 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'proposal_open_contract') {
         profit = data?.proposal_open_contract?.profit
         stake = data?.proposal_open_contract?.limit_order?.stop_out?.order_amount
-        if(stopLoss === null && profit >= (Math.abs(stake)/4)){
+        if(stopLoss === null && profit >= (Math.abs(stake)/10)){
             stopLoss = data?.proposal_open_contract?.commission
         }
         if(stopLoss !== null && profit <= stopLoss){
             closePosition(openContractId)
         }
-        if(profit >= (Math.abs(stake)/2)){
+        if(profit >= (Math.abs(stake)/4)){
             closePosition(openContractId)
         }
     }
