@@ -154,6 +154,7 @@ ws.on('message', async(msg) => {
             openContractId = null;
             position = null;
             subscribed = false
+            stopLoss = null
         } else{
             canBuy = false
             openPosition = data?.portfolio?.contracts[data?.portfolio?.contracts?.length - 1] 
