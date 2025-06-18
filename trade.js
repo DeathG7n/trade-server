@@ -18,6 +18,7 @@ let openContractId = null
 let openPosition = {}
 let canBuy = false
 let profit = null
+let stopLoss = null
 let stake = null
 let subscribed = false
 
@@ -144,7 +145,7 @@ ws.on('message', async(msg) => {
         setInterval(()=>{
             send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 60, end: 'latest'})
             send({ portfolio: 1 })
-        }, 5000) 
+        }, 5000)
     }
 
     if (data.msg_type === 'portfolio') {
@@ -180,7 +181,6 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'candles') {
         closePrices = data?.candles?.map(i => {return i?.close})
         openPrices = data?.candles?.map(i => {return i?.open})
-        //closePosition(openContractId)
 
         const { crossedUp, crossedDown } = detectEMACrossover(closePrices);
 
@@ -208,6 +208,12 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'proposal_open_contract') {
         profit = data?.proposal_open_contract?.profit
         stake = data?.proposal_open_contract?.limit_order?.stop_out?.order_amount
+        if(stopLoss === null && profit >= (Math.abs(stake)/4)){
+            stopLoss = data?.proposal_open_contract?.commission
+        }
+        if(stopLoss !== null && profit <= stopLoss){
+            closePosition(openContractId)
+        }
         if(profit >= (Math.abs(stake)/2)){
             closePosition(openContractId)
         }
@@ -220,7 +226,6 @@ ws.on('message', async(msg) => {
     }
 
     if (data.msg_type === 'sell') {
-        console.log(data)
         sendMessage(`💸 Position closed at ${data?.sell?.sold_for} USD`)
         console.log(`💸 Position closed at ${data?.sell?.sold_for} USD`);
     }
