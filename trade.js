@@ -208,7 +208,7 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'proposal_open_contract') {
         profit = data?.proposal_open_contract?.profit
         stake = data?.proposal_open_contract?.limit_order?.stop_out?.order_amount
-        if(profit >= Math.abs(stake)){
+        if(profit >= (Math.abs(stake)/2)){
             closePosition(openContractId)
         }
     }
