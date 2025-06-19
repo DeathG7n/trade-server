@@ -197,9 +197,9 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'authorize') {
         console.log('✅ Authorized');
         setInterval(()=>{
+            send({ portfolio: 1 })
             send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 60, end: 'latest'})
             send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 900, end: 'latest'})
-            send({ portfolio: 1 })
         }, 5000)
     }
 
@@ -290,7 +290,7 @@ ws.on('message', async(msg) => {
     }
 
     if (data.msg_type === 'proposal_open_contract') {
-        console.log(stopLoss)
+        console.log(data)
         profit = data?.proposal_open_contract?.profit
         stake = data?.proposal_open_contract?.limit_order?.stop_out?.order_amount
         if(stopLoss === null){
