@@ -11,6 +11,8 @@ const ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=36807');
 const BOT_TOKEN = '8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ';
 const CHAT_ID = '8068534792';
 
+let candles = []
+let heikinCandles = []
 let closePrices = []
 let openPrices = []
 let position = null
@@ -36,20 +38,39 @@ function send(msg) {
     ws.send(JSON.stringify(msg));
 }
 
-// function calculateEMA(prices, period) {
-//     const k = 2 / (period + 1);
-//     let ema = prices[0];
-//     for (let i = 1; i < prices.length; i++) {
-//         ema = prices[i] * k + ema * (1 - k);
-//     }
-//     return ema;
-// }
-
 function bearish(candle){
-    return openPrices[candle] > closePrices[candle]
+    return heikinCandles[candle]?.haOpen > heikinCandles[candle]?.haClose
 }
 function bullish(candle){
-    return closePrices[candle] > openPrices[candle]
+    return heikinCandles[candle]?.haOpen < heikinCandles[candle]?.haClose
+}
+
+function convertToHeikinAshi(candles) {
+    if (!candles || candles.length === 0) return [];
+
+    const haCandles = [];
+
+    for (let i = 0; i < candles.length; i++) {
+        const { open, high, low, close } = candles[i];
+
+        const haClose = (open + high + low + close) / 4;
+
+        let haOpen;
+        if (i === 0) {
+            // For the first candle, use real open/close
+            haOpen = (open + close) / 2;
+        } else {
+            const prev = haCandles[i - 1];
+            haOpen = (prev.haOpen + prev.haClose) / 2;
+        }
+
+        const haHigh = Math.max(high, haOpen, haClose);
+        const haLow = Math.min(low, haOpen, haClose);
+
+        haCandles.push({ haOpen, haHigh, haLow, haClose });
+    }
+
+    return haCandles;
 }
 
 function calculateEMA(prices, period) {
@@ -92,6 +113,28 @@ function detectEMACrossover(closePrices) {
     const crossedDown = closePrev < ema21Prev && openPrev > ema21Prev;
 
     return { crossedUp, crossedDown };
+}
+
+function detectSignal() {
+    const ema14 = calculateEMA(closePrices, 14);
+    const ema21 = calculateEMA(closePrices, 21);
+
+    const len = closePrices?.length;
+    const secondIndex = len - 3;
+    const prevIndex = len - 2;
+    const currIndex = len - 1;
+
+    const ema14Now = ema14[currIndex];
+    const ema21Now = ema21[currIndex];
+
+    const trend = ema14Now > ema21Now
+
+    const buyUpSignal = trend && bearish(secondIndex) && bullish(prevIndex) 
+    const buyDownSignal = trend === false && bullish(secondIndex) && bearish(prevIndex)
+    const sellUpSignal = trend && bearish(prevIndex)
+    const sellDownSignal = trend === false && bullish(prevIndex)
+
+    return { buyUpSignal , buyDownSignal,  sellUpSignal, sellDownSignal };
 }
 
 const sendMessage = async (message) => {
@@ -182,26 +225,46 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'candles') {
         closePrices = data?.candles?.map(i => {return i?.close})
         openPrices = data?.candles?.map(i => {return i?.open})
+        candles = data?.candles
+        heikinCandles = convertToHeikinAshi(candles)
 
-        const { crossedUp, crossedDown } = detectEMACrossover(closePrices);
+        const { buyUpSignal , buyDownSignal,  sellUpSignal, sellDownSignal } = detectSignal();
 
         if(canBuy){
-            if (crossedUp) {
+            if (buyUpSignal) {
                 buyMultiplier('MULTUP');
                 send({ portfolio: 1 })
-            } else if (crossedDown) {
+            } else if (buyDownSignal) {
                 buyMultiplier('MULTDOWN');
                 send({ portfolio: 1 })
             }
         } else {
-            if (crossedUp) {
+            if (sellDownSignal) {
                 position === 'MULTDOWN' && closePosition(openContractId);
                 send({ portfolio: 1 })
-            } else if (crossedDown) {
+            } else if (sellUpSignal) {
                 position === 'MULTUP' && closePosition(openContractId);
                 send({ portfolio: 1 })
             }
         }
+
+        // if(canBuy){
+        //     if (crossedUp) {
+        //         buyMultiplier('MULTUP');
+        //         send({ portfolio: 1 })
+        //     } else if (crossedDown) {
+        //         buyMultiplier('MULTDOWN');
+        //         send({ portfolio: 1 })
+        //     }
+        // } else {
+        //     if (crossedUp) {
+        //         position === 'MULTDOWN' && closePosition(openContractId);
+        //         send({ portfolio: 1 })
+        //     } else if (crossedDown) {
+        //         position === 'MULTUP' && closePosition(openContractId);
+        //         send({ portfolio: 1 })
+        //     }
+        // }
         
         
     }
@@ -213,10 +276,10 @@ ws.on('message', async(msg) => {
             stopLoss = data?.proposal_open_contract?.commission
         }
         if(stopLoss !== null && profit <= stopLoss){
-            closePosition(openContractId)
+            //closePosition(openContractId)
         }
         if(profit >= (Math.abs(stake)/4)){
-            closePosition(openContractId)
+            //closePosition(openContractId)
         }
     }
     
