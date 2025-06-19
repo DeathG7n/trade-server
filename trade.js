@@ -209,7 +209,7 @@ ws.on('message', async(msg) => {
             if(subscribed === false){
                 send({
                     proposal_open_contract: 1,
-                    contract_id: openContractId, // Replace with your real contract ID
+                    contract_id: openContractId,
                     subscribe: 1
                 });
                 subscribed = true
@@ -232,19 +232,19 @@ ws.on('message', async(msg) => {
 
         if(canBuy){
             if (buyUpSignal) {
+                if(position === null) position = 'MULTUP'
                 buyMultiplier('MULTUP');
                 send({ portfolio: 1 })
             } else if (buyDownSignal) {
+                if(position === null) position = 'MULTDOWN'
                 buyMultiplier('MULTDOWN');
                 send({ portfolio: 1 })
             }
         } else {
             if (sellDownSignal) {
                 position === 'MULTDOWN' && closePosition(openContractId);
-                send({ portfolio: 1 })
             } else if (sellUpSignal) {
                 position === 'MULTUP' && closePosition(openContractId);
-                send({ portfolio: 1 })
             }
         }
 
@@ -290,6 +290,7 @@ ws.on('message', async(msg) => {
     }
 
     if (data.msg_type === 'sell') {
+        send({ portfolio: 1 })
         sendMessage(`💸 Position closed at ${data?.sell?.sold_for} USD`)
         console.log(`💸 Position closed at ${data?.sell?.sold_for} USD`);
     }
