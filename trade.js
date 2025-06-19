@@ -24,6 +24,7 @@ let profit = null
 let stopLoss = null
 let stake = null
 let subscribed = false
+let count = 0
 
 app.use(cors())
 
@@ -181,7 +182,6 @@ function closePosition(contract_id) {
         sell: contract_id,
         price: 0,
     });
-    send({ portfolio: 1 })
     console.log(`❌ Closing position: ${contract_id}`);
 }
 
@@ -210,6 +210,7 @@ ws.on('message', async(msg) => {
             position = null;
             subscribed = false
             stopLoss = null
+            profit = null
         } else{
             canBuy = false
             openPosition = data?.portfolio?.contracts[data?.portfolio?.contracts?.length - 1] 
@@ -248,22 +249,24 @@ ws.on('message', async(msg) => {
 
         if(canBuy){
             if (buyUpSignal) {
+                canBuy = false
                 if(position === null) {
                     position = 'MULTUP'
                 }
                 buyMultiplier('MULTUP');
-                send({ portfolio: 1 })
             } else if (buyDownSignal) {
+                canBuy = false
                 if(position === null) {
                     position = 'MULTDOWN'
                 }
                 buyMultiplier('MULTDOWN');
-                send({ portfolio: 1 })
             }
         } else {
             if (sellDownSignal) {
+                canBuy = true
                 position === 'MULTDOWN' && closePosition(openContractId);
             } else if (sellUpSignal) {
+                canBuy = true
                 position === 'MULTUP' && closePosition(openContractId);
             }
         }
@@ -286,17 +289,20 @@ ws.on('message', async(msg) => {
         //     }
         // }
         
+        count += 1
+        console.log(count)
         
     }
 
     if (data.msg_type === 'proposal_open_contract') {
-        console.log(data)
         profit = data?.proposal_open_contract?.profit
         stake = data?.proposal_open_contract?.limit_order?.stop_out?.order_amount
         if(stopLoss === null){
             stopLoss = stake/4
         }
-        if(stopLoss !== null && profit <= stopLoss){
+        if(stopLoss !== null && profit !== null && profit <= stopLoss){
+            stopLoss = null
+            profit = null
             closePosition(openContractId)
         }
         if(profit >= (Math.abs(stake)/4)){
