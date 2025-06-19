@@ -290,10 +290,11 @@ ws.on('message', async(msg) => {
     }
 
     if (data.msg_type === 'proposal_open_contract') {
+        console.log(stopLoss)
         profit = data?.proposal_open_contract?.profit
         stake = data?.proposal_open_contract?.limit_order?.stop_out?.order_amount
         if(stopLoss === null){
-            stopLoss = Math.abs(stake)/4
+            stopLoss = stake/4
         }
         if(stopLoss !== null && profit <= stopLoss){
             closePosition(openContractId)
