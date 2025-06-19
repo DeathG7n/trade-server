@@ -14,6 +14,7 @@ const CHAT_ID = '8068534792';
 let candles = []
 let heikinCandles = []
 let closePrices = []
+let closePrices15 = []
 let openPrices = []
 let position = null
 let openContractId = null
@@ -119,7 +120,11 @@ function detectSignal() {
     const ema14 = calculateEMA(closePrices, 14);
     const ema21 = calculateEMA(closePrices, 21);
 
+    const ema14_15 = calculateEMA(closePrices15, 14);
+    const ema21_15 = calculateEMA(closePrices15, 21);
+
     const len = closePrices?.length;
+    const thirdIndex = len - 4;
     const secondIndex = len - 3;
     const prevIndex = len - 2;
     const currIndex = len - 1;
@@ -127,12 +132,16 @@ function detectSignal() {
     const ema14Now = ema14[currIndex];
     const ema21Now = ema21[currIndex];
 
-    const trend = ema14Now > ema21Now
+    const ema14_15Now = ema14_15[currIndex];
+    const ema21_15Now = ema21_15[currIndex];
 
-    const buyUpSignal = trend && bearish(secondIndex) && bullish(prevIndex) 
-    const buyDownSignal = trend === false && bullish(secondIndex) && bearish(prevIndex)
-    const sellUpSignal = trend && bearish(prevIndex)
-    const sellDownSignal = trend === false && bullish(prevIndex)
+    const trend = ema14Now > ema21Now
+    const trend15 = ema14_15Now > ema21_15Now
+
+    const buyUpSignal = trend15 && trend && (bearish(secondIndex) && bullish(prevIndex) || bearish(thirdIndex) && bullish(secondIndex) && bullish(prevIndex))
+    const buyDownSignal = trend15 === false && trend === false && (bullish(secondIndex) && bearish(prevIndex) || bullish(thirdIndex) && bearish(secondIndex) && bearish(prevIndex))
+    const sellUpSignal = trend15 && trend === false && (bullish(secondIndex) && bearish(prevIndex) || bullish(thirdIndex) && bearish(secondIndex) && bearish(prevIndex))
+    const sellDownSignal = trend15 === false && trend && (bearish(secondIndex) && bullish(prevIndex) || bearish(thirdIndex) && bullish(secondIndex) && bullish(prevIndex))
 
     return { buyUpSignal , buyDownSignal,  sellUpSignal, sellDownSignal };
 }
@@ -151,6 +160,7 @@ const sendMessage = async (message) => {
 };
 
 function buyMultiplier(direction) {
+    position = direction
     console.log(`📈 Buying ${direction} multiplier...`);
     send({
         buy: 1,
@@ -171,6 +181,7 @@ function closePosition(contract_id) {
         sell: contract_id,
         price: 0,
     });
+    send({ portfolio: 1 })
     console.log(`❌ Closing position: ${contract_id}`);
 }
 
@@ -187,6 +198,7 @@ ws.on('message', async(msg) => {
         console.log('✅ Authorized');
         setInterval(()=>{
             send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 60, end: 'latest'})
+            send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 900, end: 'latest'})
             send({ portfolio: 1 })
         }, 5000)
     }
@@ -223,20 +235,28 @@ ws.on('message', async(msg) => {
     }
 
     if (data.msg_type === 'candles') {
-        closePrices = data?.candles?.map(i => {return i?.close})
-        openPrices = data?.candles?.map(i => {return i?.open})
-        candles = data?.candles
-        heikinCandles = convertToHeikinAshi(candles)
+        if(data?.echo_req?.granularity === 60){
+            closePrices = data?.candles?.map(i => {return i?.close})
+            openPrices = data?.candles?.map(i => {return i?.open})
+            candles = data?.candles
+            heikinCandles = convertToHeikinAshi(candles)
+        } else{
+            closePrices15 = data?.candles?.map(i => {return i?.close})
+        }
 
         const { buyUpSignal , buyDownSignal,  sellUpSignal, sellDownSignal } = detectSignal();
 
         if(canBuy){
             if (buyUpSignal) {
-                if(position === null) position = 'MULTUP'
+                if(position === null) {
+                    position = 'MULTUP'
+                }
                 buyMultiplier('MULTUP');
                 send({ portfolio: 1 })
             } else if (buyDownSignal) {
-                if(position === null) position = 'MULTDOWN'
+                if(position === null) {
+                    position = 'MULTDOWN'
+                }
                 buyMultiplier('MULTDOWN');
                 send({ portfolio: 1 })
             }
@@ -272,11 +292,11 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'proposal_open_contract') {
         profit = data?.proposal_open_contract?.profit
         stake = data?.proposal_open_contract?.limit_order?.stop_out?.order_amount
-        if(stopLoss === null && profit >= (Math.abs(stake)/10)){
-            stopLoss = data?.proposal_open_contract?.commission
+        if(stopLoss === null){
+            stopLoss = Math.abs(stake)/4
         }
         if(stopLoss !== null && profit <= stopLoss){
-            //closePosition(openContractId)
+            closePosition(openContractId)
         }
         if(profit >= (Math.abs(stake)/4)){
             //closePosition(openContractId)
@@ -290,7 +310,6 @@ ws.on('message', async(msg) => {
     }
 
     if (data.msg_type === 'sell') {
-        send({ portfolio: 1 })
         sendMessage(`💸 Position closed at ${data?.sell?.sold_for} USD`)
         console.log(`💸 Position closed at ${data?.sell?.sold_for} USD`);
     }
