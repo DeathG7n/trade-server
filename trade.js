@@ -198,7 +198,7 @@ ws.on('message', async(msg) => {
         setInterval(()=>{
             send({ portfolio: 1 })
             send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 60, end: 'latest'})
-        }, 1000)
+        }, 2000)
     }
 
     if (data.msg_type === 'portfolio') {
