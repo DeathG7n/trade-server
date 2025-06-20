@@ -198,8 +198,6 @@ ws.on('message', async(msg) => {
         console.log('✅ Authorized');
         setInterval(()=>{
             send({ portfolio: 1 })
-        }, 2500)
-        setInterval(()=>{
             send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 60, end: 'latest'})
             send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 900, end: 'latest'})
         }, 5000)
@@ -267,9 +265,11 @@ ws.on('message', async(msg) => {
             if (sellDownSignal) {
                 canBuy = true
                 position === 'MULTDOWN' && closePosition(openContractId);
+                openContractId = null
             } else if (sellUpSignal) {
                 canBuy = true
                 position === 'MULTUP' && closePosition(openContractId);
+                openContractId = null
             }
         }
 
@@ -297,7 +297,6 @@ ws.on('message', async(msg) => {
     }
 
     if (data.msg_type === 'proposal_open_contract') {
-        console.log(data)
         const lotSize = data?.proposal_open_contract?.multiplier
         const entrySpot = data?.proposal_open_contract?.entry_spot
         const currentSpot = data?.proposal_open_contract?.current_spot
