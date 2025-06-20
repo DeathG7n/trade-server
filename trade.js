@@ -15,6 +15,7 @@ let openPrices = []
 let position = null
 let openContractId = null
 let openPosition = {}
+let openPositions = false
 let canBuy = false
 let profit = null
 let stopLoss = null
@@ -22,6 +23,8 @@ let stake = null
 let subscribed = false
 let count = 0
 let reason = ""
+let previousCandle = 0
+
 
 app.use(cors())
 
@@ -60,18 +63,13 @@ function detectEMACrossover() {
     const ema21 = calculateEMA(closePrices, 21);
 
     const len = closePrices?.length;
-    const prevIndex = len - 2;
-    const currIndex = len - 1;
+    const prevIndex = len - 3;
+    const currIndex = len - 2;
 
     const ema14Prev = ema14[prevIndex];
     const ema21Prev = ema21[prevIndex];
     const ema14Now = ema14[currIndex];
     const ema21Now = ema21[currIndex];
-
-    const trend = ema14Now > ema21Now
-
-    const closePrev = closePrices[prevIndex]
-    const openPrev = openPrices[prevIndex]
 
     const crossedUp = ema14Prev < ema21Prev && ema14Now > ema21Now;
     const crossedDown = ema14Prev > ema21Prev && ema14Now < ema21Now;
@@ -93,7 +91,6 @@ const sendMessage = async (message) => {
 };
 
 function buyMultiplier(direction) {
-    position = direction
     console.log(`📈 Buying ${direction} multiplier...`);
     send({
         buy: 1,
@@ -109,13 +106,12 @@ function buyMultiplier(direction) {
     });
 }
 
-function closePosition(contract_id, reason) {
+function closePosition(contract_id) {
     send({
         sell: contract_id,
         price: 0,
     });
-    reason = reason
-    console.log(`❌ Closing position: ${contract_id} because of ${reason}`);
+    console.log(`❌ Closing position: ${contract_id}`);
 }
 
 ws.on('open', () => {
@@ -131,7 +127,7 @@ ws.on('message', async(msg) => {
         console.log('✅ Authorized');
         setInterval(()=>{
             send({ portfolio: 1 })
-        }, 2100)
+        }, 10000)
         setInterval(()=>{
             send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 60, end: 'latest'})
         }, 1000)
@@ -139,19 +135,17 @@ ws.on('message', async(msg) => {
 
     if (data.msg_type === 'portfolio') {
         if(data?.portfolio?.contracts?.length === 0){
-            canBuy = true
             openContractId = null;
             position = null;
             subscribed = false
             stopLoss = null
             profit = null
         } else{
-            canBuy = false
             openPosition = data?.portfolio?.contracts[data?.portfolio?.contracts?.length - 1] 
             position = openPosition?.contract_type
             openContractId = openPosition?.contract_id
             if(data?.portfolio?.contracts?.length > 1){
-                closePosition(openContractId, 'More than one position open!!!')
+                closePosition(openContractId)
             }
             if(subscribed === false){
                 send({
@@ -161,49 +155,34 @@ ws.on('message', async(msg) => {
                 });
                 subscribed = true
             }
-             
         }
     }
 
     if (data.msg_type === 'candles') {
         closePrices = data?.candles?.map(i => {return i?.close})
         openPrices = data?.candles?.map(i => {return i?.open})
+        const len = closePrices?.length;
+        const prevIndex = len - 2;
         
         const { crossedUp, crossedDown } = detectEMACrossover();
 
-        if(canBuy){
+        if(previousCandle !== closePrices[prevIndex]){
+            previousCandle = closePrices[prevIndex]
             if (crossedUp) {
-                canBuy = false
-                if(position === null) {
-                    position = 'MULTUP'
-                }
+                position === 'MULTDOWN' && closePosition(openContractId);
                 buyMultiplier('MULTUP');
             } else if (crossedDown) {
-                canBuy = false
-                if(position === null) {
-                    position = 'MULTDOWN'
-                }
+                position === 'MULTUP' && closePosition(openContractId);
                 buyMultiplier('MULTDOWN');
-            }
-        } else if (canBuy === false){
-            if (crossedUp) {
-                canBuy = true
-                position === 'MULTDOWN' && closePosition(openContractId, 'Down Position in Uptrend!!!');
-                openContractId = null
-            } else if (crossedDown) {
-                canBuy = true
-                position === 'MULTUP' && closePosition(openContractId, 'Up Position in Downtrend!!!');
-                openContractId = null
             }
         }
         
         count += 1
-        console.log(count)
-        
+        console.log(count)    
     }
 
     if (data.msg_type === 'proposal_open_contract') {
-        console.log(data)
+        openPositions = true
         const entrySpot = data?.proposal_open_contract?.entry_spot
         const currentSpot = data?.proposal_open_contract?.current_spot
         const pip = currentSpot - entrySpot
@@ -219,21 +198,23 @@ ws.on('message', async(msg) => {
         if(stopLoss !== null && profit !== null && profit <= stopLoss){
             stopLoss = null
             profit = null
-            //closePosition(openContractId, 'Stop Loss Reached')
+            //closePosition(openContractId)
         }
         if(profit >= (Math.abs(stake)/2)){
-            //closePosition(openContractId, 'Take Profit Reached')
+            //closePosition(openContractId)
         }
     }
     
 
     if (data.msg_type === 'buy') {
+        position = data?.echo_req?.parameters?.contract_type
+        openContractId = data?.buy?.contract_id
         sendMessage(`${position} position entered`)
         console.log(`🟢 Entered ${position} position, Contract ID: ${openContractId}`);
     }
 
     if (data.msg_type === 'sell') {
-        sendMessage(`💸 Position closed at ${data?.sell?.sold_for} USD because ${reason}`)
+        sendMessage(`💸 Position closed at ${data?.sell?.sold_for} USD`)
         console.log(`💸 Position closed at ${data?.sell?.sold_for} USD`);
     }
 
