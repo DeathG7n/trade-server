@@ -28,12 +28,6 @@ let previousCandle = 0
 
 app.use(cors())
 
-app.get("/",(req, res)=>{
-    send({ portfolio: 1 })
-    send({ ticks_history: 'BOOM500', style: 'candles', count: 10000000000000000000, granularity: 300, end: 'latest'})
-    res.json("Hi")
-})
-
 app.listen(3000,()=>{
     console.log("Server is running")
 })
@@ -226,3 +220,9 @@ ws.on('message', async(msg) => {
         console.error('❗ Error:', data.error.message);
     }
 });
+
+app.get("/",(req, res)=>{
+    send({ portfolio: 1 })
+    send({ ticks_history: 'BOOM500', style: 'candles', count: 10000000000000000000, granularity: 300, end: 'latest'})
+    res.json("Hi")
+})
