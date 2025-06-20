@@ -29,11 +29,13 @@ let previousCandle = 0
 app.use(cors())
 
 app.get("/",(req, res)=>{
-  res.json("Hi")
+    send({ portfolio: 1 })
+    send({ ticks_history: 'BOOM500', style: 'candles', count: 10000000000000000000, granularity: 300, end: 'latest'})
+    res.json("Hi")
 })
 
 app.listen(3000,()=>{
-  console.log("Server is running")
+    console.log("Server is running")
 })
 
 function send(msg) {
@@ -100,7 +102,7 @@ function buyMultiplier(direction) {
             basis: 'stake',
             contract_type: direction,
             currency: 'USD',
-            symbol: 'R_75',
+            symbol: 'BOOM500',
             multiplier: 100,
         }
     });
@@ -125,12 +127,12 @@ ws.on('message', async(msg) => {
 
     if (data.msg_type === 'authorize') {
         console.log('✅ Authorized');
-        setInterval(()=>{
-            send({ portfolio: 1 })
-        }, 10000)
-        setInterval(()=>{
-            send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 60, end: 'latest'})
-        }, 1000)
+        // setInterval(()=>{
+        //     send({ portfolio: 1 })
+        // }, 10000)
+        // setInterval(()=>{
+        //     send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 300, end: 'latest'})
+        // }, 1000)
     }
 
     if (data.msg_type === 'portfolio') {
@@ -169,11 +171,13 @@ ws.on('message', async(msg) => {
         if(previousCandle !== closePrices[prevIndex]){
             previousCandle = closePrices[prevIndex]
             if (crossedUp) {
-                position === 'MULTDOWN' && closePosition(openContractId);
-                buyMultiplier('MULTUP');
+                sendMessage(`Cross Over`)
+                // position === 'MULTDOWN' && closePosition(openContractId);
+                // buyMultiplier('MULTUP');
             } else if (crossedDown) {
-                position === 'MULTUP' && closePosition(openContractId);
-                buyMultiplier('MULTDOWN');
+                sendMessage(`Cross Under`)
+                // position === 'MULTUP' && closePosition(openContractId);
+                // buyMultiplier('MULTDOWN');
             }
         }
         
