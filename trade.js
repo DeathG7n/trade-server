@@ -105,14 +105,13 @@ function detectEMACrossover(closePrices) {
     const ema14Now = ema14[currIndex];
     const ema21Now = ema21[currIndex];
 
+    const trend = ema14Now > ema21Now
+
     const closePrev = closePrices[prevIndex]
     const openPrev = openPrices[prevIndex]
 
-    // const crossedUp = ema14Prev < ema21Prev && ema14Now > ema21Now;
-    // const crossedDown = ema14Prev > ema21Prev && ema14Now < ema21Now;
-
-    const crossedUp = closePrev > ema21Prev && openPrev < ema21Prev;
-    const crossedDown = closePrev < ema21Prev && openPrev > ema21Prev;
+    const crossedUp = ema14Prev < ema21Prev && ema14Now > ema21Now;
+    const crossedDown = ema14Prev > ema21Prev && ema14Now < ema21Now;
 
     return { crossedUp, crossedDown };
 }
@@ -199,8 +198,7 @@ ws.on('message', async(msg) => {
         setInterval(()=>{
             send({ portfolio: 1 })
             send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 60, end: 'latest'})
-            send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 900, end: 'latest'})
-        }, 5000)
+        }, 1000)
     }
 
     if (data.msg_type === 'portfolio') {
@@ -245,51 +243,33 @@ ws.on('message', async(msg) => {
             closePrices15 = data?.candles?.map(i => {return i?.close})
         }
 
-        const { buyUpSignal , buyDownSignal,  sellUpSignal, sellDownSignal } = detectSignal();
+        const { crossedUp, crossedDown } = detectEMACrossover();
 
         if(canBuy){
-            if (buyUpSignal) {
+            if (crossedUp) {
                 canBuy = false
                 if(position === null) {
                     position = 'MULTUP'
                 }
                 buyMultiplier('MULTUP');
-            } else if (buyDownSignal) {
+            } else if (crossedDown) {
                 canBuy = false
                 if(position === null) {
                     position = 'MULTDOWN'
                 }
                 buyMultiplier('MULTDOWN');
             }
-        } else {
-            if (sellDownSignal) {
+        } else if (canBuy === false){
+            if (crossedUp) {
                 canBuy = true
                 position === 'MULTDOWN' && closePosition(openContractId);
                 openContractId = null
-            } else if (sellUpSignal) {
+            } else if (crossedDown) {
                 canBuy = true
                 position === 'MULTUP' && closePosition(openContractId);
                 openContractId = null
             }
         }
-
-        // if(canBuy){
-        //     if (crossedUp) {
-        //         buyMultiplier('MULTUP');
-        //         send({ portfolio: 1 })
-        //     } else if (crossedDown) {
-        //         buyMultiplier('MULTDOWN');
-        //         send({ portfolio: 1 })
-        //     }
-        // } else {
-        //     if (crossedUp) {
-        //         position === 'MULTDOWN' && closePosition(openContractId);
-        //         send({ portfolio: 1 })
-        //     } else if (crossedDown) {
-        //         position === 'MULTUP' && closePosition(openContractId);
-        //         send({ portfolio: 1 })
-        //     }
-        // }
         
         count += 1
         console.log(count)
@@ -314,10 +294,10 @@ ws.on('message', async(msg) => {
         if(stopLoss !== null && profit !== null && profit <= stopLoss){
             stopLoss = null
             profit = null
-            closePosition(openContractId)
+            //closePosition(openContractId)
         }
         if(profit >= (Math.abs(stake)/2)){
-            closePosition(openContractId)
+            //closePosition(openContractId)
         }
     }
     
