@@ -198,13 +198,15 @@ ws.on('message', async(msg) => {
         console.log('✅ Authorized');
         setInterval(()=>{
             send({ portfolio: 1 })
+        }, 2500)
+        setInterval(()=>{
             send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 60, end: 'latest'})
             send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 900, end: 'latest'})
         }, 5000)
     }
 
     if (data.msg_type === 'portfolio') {
-        if(data?.portfolio?.contracts?.length == 0){
+        if(data?.portfolio?.contracts?.length === 0){
             canBuy = true
             openContractId = null;
             position = null;
@@ -295,18 +297,28 @@ ws.on('message', async(msg) => {
     }
 
     if (data.msg_type === 'proposal_open_contract') {
+        console.log(data)
+        const lotSize = data?.proposal_open_contract?.multiplier
+        const entrySpot = data?.proposal_open_contract?.entry_spot
+        const currentSpot = data?.proposal_open_contract?.current_spot
+        const pip = currentSpot - entrySpot
         profit = data?.proposal_open_contract?.profit
         stake = data?.proposal_open_contract?.limit_order?.stop_out?.order_amount
+        const percent = (pip/currentSpot) * 100 * lotSize
+        console.log(pip , profit, percent)
         if(stopLoss === null){
             stopLoss = stake/4
+        }
+        if(stopLoss !== null && profit >= (Math.abs(stake)/4)){
+            stopLoss = data?.proposal_open_contract?.commission
         }
         if(stopLoss !== null && profit !== null && profit <= stopLoss){
             stopLoss = null
             profit = null
             closePosition(openContractId)
         }
-        if(profit >= (Math.abs(stake)/4)){
-            //closePosition(openContractId)
+        if(profit >= (Math.abs(stake)/2)){
+            closePosition(openContractId)
         }
     }
     
