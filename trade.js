@@ -88,7 +88,7 @@ function calculateEMA(prices, period) {
     return emaArray;
 }
 
-function detectEMACrossover(closePrices) {
+function detectEMACrossover() {
     if (closePrices?.length < 22){
         console.log("not enough")
     }
