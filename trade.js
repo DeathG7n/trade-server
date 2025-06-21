@@ -40,6 +40,16 @@ function send(msg) {
     ws.send(JSON.stringify(msg));
 }
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function run(ms) {
+    console.log(`⏳ Waiting ${ms/1000} seconds...`);
+    await sleep(ms)
+    console.log("✅ Done!");
+}
+
 function bearish(candle){
     return openPrices[candle] > closePrices[candle]
 }
@@ -183,13 +193,13 @@ ws.on('message', async(msg) => {
             previousCandle = closePrices[prevIndex]
             if (crossedUp) {
                 position === 'MULTDOWN' && closePosition(openContractId);
-                openPosition === null && buyMultiplier('MULTUP');
+                buyMultiplier('MULTUP');
             } else if (crossedDown) {
                 position === 'MULTUP' && closePosition(openContractId);
-                openPosition === null && buyMultiplier('MULTDOWN');
+                buyMultiplier('MULTDOWN');
             }
-        }
-        
+            await run(60000)
+        } 
         count += 1
         console.log(count)    
     }
