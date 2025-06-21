@@ -131,7 +131,6 @@ function closePosition(contract_id) {
         sell: contract_id,
         price: 0,
     });
-    send({ portfolio: 1 })
     console.log(`❌ Closing position: ${contract_id}`);
 }
 
