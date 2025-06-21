@@ -14,7 +14,7 @@ let closePrices = []
 let openPrices = []
 let position = null
 let openContractId = null
-let openPosition = {}
+let openPosition = null
 let openPositions = false
 let canBuy = false
 let profit = null
@@ -28,12 +28,23 @@ let previousCandle = 0
 
 app.use(cors())
 
+app.get("/",(req, res)=>{
+    res.json("Hi")
+})
+
 app.listen(3000,()=>{
     console.log("Server is running")
 })
 
 function send(msg) {
     ws.send(JSON.stringify(msg));
+}
+
+function bearish(candle){
+    return openPrices[candle] > closePrices[candle]
+}
+function bullish(candle){
+    return closePrices[candle] > openPrices[candle]
 }
 
 
@@ -67,8 +78,11 @@ function detectEMACrossover() {
     const ema14Now = ema14[currIndex];
     const ema21Now = ema21[currIndex];
 
-    const crossedUp = ema14Prev < ema21Prev && ema14Now > ema21Now;
-    const crossedDown = ema14Prev > ema21Prev && ema14Now < ema21Now;
+    const crossedUp = bearish(prevIndex) && bullish(currIndex)
+    const crossedDown = bullish(prevIndex) && bearish(currIndex)
+
+    // const crossedUp = ema14Prev < ema21Prev && ema14Now > ema21Now;
+    // const crossedDown = ema14Prev > ema21Prev && ema14Now < ema21Now;
 
     return { crossedUp, crossedDown };
 }
@@ -107,6 +121,7 @@ function closePosition(contract_id) {
         sell: contract_id,
         price: 0,
     });
+    send({ portfolio: 1 })
     console.log(`❌ Closing position: ${contract_id}`);
 }
 
@@ -121,16 +136,18 @@ ws.on('message', async(msg) => {
 
     if (data.msg_type === 'authorize') {
         console.log('✅ Authorized');
-        // setInterval(()=>{
-        //     send({ portfolio: 1 })
-        // }, 10000)
-        // setInterval(()=>{
-        //     send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 300, end: 'latest'})
-        // }, 1000)
+        send({ portfolio: 1 })
+        setInterval(()=>{
+            send({ portfolio: 1 })
+        }, 10000)
+        setInterval(()=>{
+            send({ ticks_history: 'BOOM500', style: 'candles', count: 10000000000000000000, granularity: 300, end: 'latest'})
+        }, 1000)
     }
 
     if (data.msg_type === 'portfolio') {
         if(data?.portfolio?.contracts?.length === 0){
+            openPosition = null
             openContractId = null;
             position = null;
             subscribed = false
@@ -165,13 +182,11 @@ ws.on('message', async(msg) => {
         if(previousCandle !== closePrices[prevIndex]){
             previousCandle = closePrices[prevIndex]
             if (crossedUp) {
-                sendMessage(`Cross Over`)
-                // position === 'MULTDOWN' && closePosition(openContractId);
-                // buyMultiplier('MULTUP');
+                position === 'MULTDOWN' && closePosition(openContractId);
+                openPosition === null && buyMultiplier('MULTUP');
             } else if (crossedDown) {
-                sendMessage(`Cross Under`)
-                // position === 'MULTUP' && closePosition(openContractId);
-                // buyMultiplier('MULTDOWN');
+                position === 'MULTUP' && closePosition(openContractId);
+                openPosition === null && buyMultiplier('MULTDOWN');
             }
         }
         
@@ -207,6 +222,11 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'buy') {
         position = data?.echo_req?.parameters?.contract_type
         openContractId = data?.buy?.contract_id
+        send({
+            proposal_open_contract: 1,
+            contract_id: data?.buy?.contract_id,
+            subscribe: 1
+        });
         sendMessage(`${position} position entered`)
         console.log(`🟢 Entered ${position} position, Contract ID: ${openContractId}`);
     }
@@ -220,9 +240,3 @@ ws.on('message', async(msg) => {
         console.error('❗ Error:', data.error.message);
     }
 });
-
-app.get("/",(req, res)=>{
-    send({ portfolio: 1 })
-    send({ ticks_history: 'BOOM500', style: 'candles', count: 10000000000000000000, granularity: 300, end: 'latest'})
-    res.json("Hi")
-})
