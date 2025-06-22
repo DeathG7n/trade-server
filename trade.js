@@ -4,7 +4,7 @@ const app = express()
 const cors = require('cors')
 const axios = require('axios');
 
-const API_TOKEN = 'jhcuZjhlmd18xal';
+const API_TOKEN = 'St6G0SSIRWnEhYd';
 const ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=36807');
 
 const BOT_TOKEN = '8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ';
@@ -18,7 +18,7 @@ let openPosition = null
 let openPositions = false
 let canBuy = false
 let profit = null
-let stopLoss = -250
+let stopLoss = null
 let stake = null
 let subscribed = false
 let count = 0
@@ -80,22 +80,16 @@ function detectEMACrossover() {
     const ema21 = calculateEMA(closePrices, 21);
 
     const len = closePrices?.length;
-    const prevIndex = len - 2;
-    const currIndex = len - 1;
+    const prevIndex = len - 3;
+    const currIndex = len - 2;
 
     const ema14Prev = ema14[prevIndex];
     const ema21Prev = ema21[prevIndex];
     const ema14Now = ema14[currIndex];
     const ema21Now = ema21[currIndex];
 
-    const prevClose = closePrices[prevIndex]
-    const prevOpen = openPrices[prevIndex]
-
-    const crossedUp = bullish(prevIndex) && prevClose > ema21Prev && ema21Prev > prevOpen
-    const crossedDown = bearish(prevIndex) && prevOpen > ema21Prev && ema21Prev > prevClose
-
-    // const crossedUp = bearish(prevIndex) && bullish(currIndex)
-    // const crossedDown = bullish(prevIndex) && bearish(currIndex)
+    const crossedUp = bearish(prevIndex) && bullish(currIndex)
+    const crossedDown = bullish(prevIndex) && bearish(currIndex)
 
     // const crossedUp = ema14Prev < ema21Prev && ema14Now > ema21Now;
     // const crossedDown = ema14Prev > ema21Prev && ema14Now < ema21Now;
@@ -126,7 +120,7 @@ function buyMultiplier(direction) {
             basis: 'stake',
             contract_type: direction,
             currency: 'USD',
-            symbol: 'R_75',
+            symbol: 'BOOM500',
             multiplier: 100,
         }
     });
@@ -156,7 +150,7 @@ ws.on('message', async(msg) => {
             send({ portfolio: 1 })
         }, 10000)
         setInterval(()=>{
-            send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 60, end: 'latest'})
+            send({ ticks_history: 'BOOM500', style: 'candles', count: 10000000000000000000, granularity: 1800, end: 'latest'})
         }, 1000)
     }
 
@@ -166,6 +160,7 @@ ws.on('message', async(msg) => {
             openContractId = null;
             position = null;
             subscribed = false
+            stopLoss = null
             profit = null
         } else{
             openPosition = data?.portfolio?.contracts[data?.portfolio?.contracts?.length - 1] 
@@ -202,7 +197,7 @@ ws.on('message', async(msg) => {
                 position === 'MULTUP' && closePosition(openContractId);
                 buyMultiplier('MULTDOWN');
             }
-            await run(30000)
+            await run(60000)
         } 
         count += 1
         console.log(count)    
@@ -216,12 +211,16 @@ ws.on('message', async(msg) => {
         profit = data?.proposal_open_contract?.profit
         stake = data?.proposal_open_contract?.limit_order?.stop_out?.order_amount
         console.log(pip , profit)
-        if(pip <= stopLoss){
-            closePosition(openContractId)
-            sendMessage(`Stop Loss Hit`)
+        if(stopLoss === null){
+            stopLoss = stake/4
         }
-        if(stopLoss === -250 && pip >= 250){
+        if(stopLoss !== null && profit >= (Math.abs(stake)/4)){
             stopLoss = data?.proposal_open_contract?.commission
+        }
+        if(stopLoss !== null && profit !== null && profit <= stopLoss){
+            stopLoss = null
+            profit = null
+            //closePosition(openContractId)
         }
         if(profit >= (Math.abs(stake)/2)){
             //closePosition(openContractId)
