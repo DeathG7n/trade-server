@@ -150,7 +150,7 @@ ws.on('message', async(msg) => {
             send({ portfolio: 1 })
         }, 10000)
         setInterval(()=>{
-            send({ ticks_history: 'BOOM500', style: 'candles', count: 10000000000000000000, granularity: 300, end: 'latest'})
+            send({ ticks_history: 'BOOM500', style: 'candles', count: 10000000000000000000, granularity: 1800, end: 'latest'})
         }, 1000)
     }
 
