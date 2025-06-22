@@ -167,6 +167,7 @@ ws.on('message', async(msg) => {
             position = null;
             subscribed = false
             profit = null
+            canBuy = true
         } else{
             openPosition = data?.portfolio?.contracts[data?.portfolio?.contracts?.length - 1] 
             position = openPosition?.contract_type
@@ -197,10 +198,10 @@ ws.on('message', async(msg) => {
             previousCandle = closePrices[prevIndex]
             if (crossedUp) {
                 position === 'MULTDOWN' && closePosition(openContractId);
-                buyMultiplier('MULTUP');
+                canBuy === true && buyMultiplier('MULTUP');
             } else if (crossedDown) {
                 position === 'MULTUP' && closePosition(openContractId);
-                buyMultiplier('MULTDOWN');
+                canBuy === true && buyMultiplier('MULTDOWN');
             }
             await run(30000)
         } 
@@ -209,6 +210,7 @@ ws.on('message', async(msg) => {
     }
 
     if (data.msg_type === 'proposal_open_contract') {
+        canBuy = false
         openPositions = true
         const entrySpot = data?.proposal_open_contract?.entry_spot
         const currentSpot = data?.proposal_open_contract?.current_spot
