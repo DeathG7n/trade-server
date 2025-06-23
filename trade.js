@@ -77,8 +77,11 @@ function detectEMACrossover() {
         console.log("not enough")
     }
 
-    const ema14 = calculateEMA(closePrices5, 14);
-    const ema21 = calculateEMA(closePrices5, 21);
+    const ema14 = calculateEMA(closePrices, 14);
+    const ema21 = calculateEMA(closePrices, 21);
+
+    const ema14_5 = calculateEMA(closePrices5, 14);
+    const ema21_5 = calculateEMA(closePrices5, 21);
 
     const len = closePrices?.length;
     const prevIndex = len - 2;
@@ -89,11 +92,14 @@ function detectEMACrossover() {
     const ema14Now = ema14[currIndex];
     const ema21Now = ema21[currIndex];
 
+    const ema14_5Now = ema14_5[currIndex];
+    const ema21_5Now = ema21_5[currIndex];
+
     const prevClose = closePrices[prevIndex]
     const prevOpen = openPrices[prevIndex]
 
-    const upTrend = ema14Now > ema21Now
-    const downTrend = ema14Now < ema21Now
+    const upTrend = ema14_5Now > ema21_5Now
+    const downTrend = ema14_5Now < ema21_5Now
 
     const crossedUp = upTrend && bullish(prevIndex) && prevClose >= ema21Prev && ema21Prev >= prevOpen
     const crossedDown = downTrend && bearish(prevIndex) && prevOpen >= ema21Prev && ema21Prev >= prevClose
@@ -136,11 +142,12 @@ function buyMultiplier(direction) {
     });
 }
 
-function closePosition(contract_id) {
+function closePosition(contract_id, why) {
     send({
         sell: contract_id,
         price: 0,
     });
+    reason = why
     console.log(`❌ Closing position: ${contract_id}`);
 }
 
@@ -156,13 +163,16 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'authorize') {
         console.log('✅ Authorized');
         send({ portfolio: 1 })
+        send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 300, end: 'latest'})
         setInterval(()=>{
             send({ portfolio: 1 })
         }, 10000)
         setInterval(()=>{
             send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 60, end: 'latest'})
-            send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 300, end: 'latest'})
         }, 1000)
+        setInterval(()=>{
+            send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 300, end: 'latest'})
+        }, 5000)
     }
 
     if (data.msg_type === 'portfolio') {
@@ -208,12 +218,12 @@ ws.on('message', async(msg) => {
         if(previousCandle !== closePrices[prevIndex]){
             previousCandle = closePrices[prevIndex]
             if (crossedUp) {
-                position === 'MULTDOWN' && closePosition(openContractId);
+                position === 'MULTDOWN' && closePosition(openContractId, `Opposite Signal`);
                 send({ portfolio: 1 })
                 await run(2000)
                 canBuy === true && buyMultiplier('MULTUP');
             } else if (crossedDown) {
-                position === 'MULTUP' && closePosition(openContractId);
+                position === 'MULTUP' && closePosition(openContractId, `Opposite Signal`);
                 send({ portfolio: 1 })
                 await run(2000)
                 canBuy === true && buyMultiplier('MULTDOWN');
@@ -232,20 +242,20 @@ ws.on('message', async(msg) => {
         const pip = currentSpot - entrySpot
         profit = data?.proposal_open_contract?.profit
         stake = data?.proposal_open_contract?.limit_order?.stop_out?.order_amount
-        console.log(pip , profit)
+        console.log(pip , profit, stopLoss)
         if(pip <= stopLoss){
-            closePosition(openContractId)
+            closePosition(openContractId, `Stop Loss Hit`)
             send({ portfolio: 1 })
             await run(2000)
         }
         if(stopLoss === -250 && pip >= 250){
             stopLoss = 50
         }
-        if(pip >= 1000){
-            closePosition(openContractId)
-            send({ portfolio: 1 })
-            await run(2000)
-        }
+        // if(pip >= 1000){
+        //     closePosition(openContractId)
+        //     send({ portfolio: 1 })
+        //     await run(2000)
+        // }
     }
     
 
@@ -262,8 +272,8 @@ ws.on('message', async(msg) => {
     }
 
     if (data.msg_type === 'sell') {
-        sendMessage(`💸 Position closed at ${data?.sell?.sold_for} USD`)
-        console.log(`💸 Position closed at ${data?.sell?.sold_for} USD`);
+        sendMessage(`💸 Position closed at ${data?.sell?.sold_for} USD, because ${reason}`)
+        console.log(`💸 Position closed at ${data?.sell?.sold_for} USD, because ${reason}`);
     }
 
     if (data.error) {
