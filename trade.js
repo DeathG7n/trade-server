@@ -167,6 +167,7 @@ ws.on('message', async(msg) => {
             position = null;
             subscribed = false
             profit = null
+            stopLoss = -250
             canBuy = true
         } else{
             openPosition = data?.portfolio?.contracts[data?.portfolio?.contracts?.length - 1] 
@@ -220,12 +221,14 @@ ws.on('message', async(msg) => {
         console.log(pip , profit)
         if(pip <= stopLoss){
             closePosition(openContractId)
+            await run(2000)
         }
         if(stopLoss === -250 && pip >= 250){
-            stopLoss = data?.proposal_open_contract?.commission
+            stopLoss = 50
         }
-        if(profit >= (Math.abs(stake)/2)){
-            //closePosition(openContractId)
+        if(pip >= 1000){
+            closePosition(openContractId)
+            await run(2000)
         }
     }
     
