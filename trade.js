@@ -11,6 +11,7 @@ const BOT_TOKEN = '8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ';
 const CHAT_ID = '8068534792';
 
 let closePrices = []
+let closePrices5 = []
 let openPrices = []
 let position = null
 let openContractId = null
@@ -76,8 +77,8 @@ function detectEMACrossover() {
         console.log("not enough")
     }
 
-    const ema14 = calculateEMA(closePrices, 14);
-    const ema21 = calculateEMA(closePrices, 21);
+    const ema14 = calculateEMA(closePrices5, 14);
+    const ema21 = calculateEMA(closePrices5, 21);
 
     const len = closePrices?.length;
     const prevIndex = len - 2;
@@ -91,8 +92,11 @@ function detectEMACrossover() {
     const prevClose = closePrices[prevIndex]
     const prevOpen = openPrices[prevIndex]
 
-    const crossedUp = bullish(prevIndex) && prevClose >= ema21Prev && ema21Prev >= prevOpen
-    const crossedDown = bearish(prevIndex) && prevOpen >= ema21Prev && ema21Prev >= prevClose
+    const upTrend = ema14Now > ema21Now
+    const downTrend = ema14Now < ema21Now
+
+    const crossedUp = upTrend && bullish(prevIndex) && prevClose >= ema21Prev && ema21Prev >= prevOpen
+    const crossedDown = downTrend && bearish(prevIndex) && prevOpen >= ema21Prev && ema21Prev >= prevClose
 
     // const crossedUp = bearish(prevIndex) && bullish(currIndex)
     // const crossedDown = bullish(prevIndex) && bearish(currIndex)
@@ -157,6 +161,7 @@ ws.on('message', async(msg) => {
         }, 10000)
         setInterval(()=>{
             send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 60, end: 'latest'})
+            send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 300, end: 'latest'})
         }, 1000)
     }
 
@@ -188,8 +193,13 @@ ws.on('message', async(msg) => {
     }
 
     if (data.msg_type === 'candles') {
-        closePrices = data?.candles?.map(i => {return i?.close})
-        openPrices = data?.candles?.map(i => {return i?.open})
+        if(data?.echo_req?.granularity === 60){
+            closePrices = data?.candles?.map(i => {return i?.close})
+            openPrices = data?.candles?.map(i => {return i?.open})
+        } else if (data?.echo_req?.granularity === 300){
+            closePrices5 = data?.candles?.map(i => {return i?.close})
+        }
+        
         const len = closePrices?.length;
         const prevIndex = len - 2;
         
@@ -199,9 +209,13 @@ ws.on('message', async(msg) => {
             previousCandle = closePrices[prevIndex]
             if (crossedUp) {
                 position === 'MULTDOWN' && closePosition(openContractId);
+                send({ portfolio: 1 })
+                await run(2000)
                 canBuy === true && buyMultiplier('MULTUP');
             } else if (crossedDown) {
                 position === 'MULTUP' && closePosition(openContractId);
+                send({ portfolio: 1 })
+                await run(2000)
                 canBuy === true && buyMultiplier('MULTDOWN');
             }
             await run(30000)
@@ -221,6 +235,7 @@ ws.on('message', async(msg) => {
         console.log(pip , profit)
         if(pip <= stopLoss){
             closePosition(openContractId)
+            send({ portfolio: 1 })
             await run(2000)
         }
         if(stopLoss === -250 && pip >= 250){
@@ -228,6 +243,7 @@ ws.on('message', async(msg) => {
         }
         if(pip >= 1000){
             closePosition(openContractId)
+            send({ portfolio: 1 })
             await run(2000)
         }
     }
