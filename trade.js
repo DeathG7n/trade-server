@@ -242,7 +242,7 @@ ws.on('message', async(msg) => {
         if(stopLoss === -250 && pip >= 250){
             stopLoss = 50
         }
-        if(pip >= 1000){
+        if(pip >= 500){
             closePosition(openContractId, `Take Profit Reached`)
             send({ portfolio: 1 })
             await run(2000)
