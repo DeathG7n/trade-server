@@ -171,6 +171,7 @@ ws.on('message', async(msg) => {
         }, 10000)
         setInterval(()=>{
             send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 60, end: 'latest'})
+            send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 900, end: 'latest'})
         }, 1000)
     }
 
