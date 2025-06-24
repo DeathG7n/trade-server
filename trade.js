@@ -80,9 +80,6 @@ function detectEMACrossover() {
     const ema14 = calculateEMA(closePrices, 14);
     const ema21 = calculateEMA(closePrices, 21);
 
-    const ema14_5 = calculateEMA(closePrices5, 14);
-    const ema21_5 = calculateEMA(closePrices5, 21);
-
     const len = closePrices?.length;
     const prevIndex = len - 2;
     const currIndex = len - 1;
@@ -92,14 +89,11 @@ function detectEMACrossover() {
     const ema14Now = ema14[currIndex];
     const ema21Now = ema21[currIndex];
 
-    const ema14_5Now = ema14_5[currIndex];
-    const ema21_5Now = ema21_5[currIndex];
-
     const prevClose = closePrices[prevIndex]
     const prevOpen = openPrices[prevIndex]
 
-    const upTrend = ema14_5Now > ema21_5Now
-    const downTrend = ema14_5Now < ema21_5Now
+    const upTrend = ema14Now > ema21Now
+    const downTrend = ema14Now < ema21Now
 
     const crossedUp = upTrend && bullish(prevIndex) && prevClose >= ema21Prev && ema21Prev >= prevOpen
     const crossedDown = downTrend && bearish(prevIndex) && prevOpen >= ema21Prev && ema21Prev >= prevClose
@@ -163,16 +157,12 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'authorize') {
         console.log('✅ Authorized');
         send({ portfolio: 1 })
-        send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 300, end: 'latest'})
         setInterval(()=>{
             send({ portfolio: 1 })
         }, 10000)
         setInterval(()=>{
             send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 60, end: 'latest'})
         }, 1000)
-        setInterval(()=>{
-            send({ ticks_history: 'R_75', style: 'candles', count: 10000000000000000000, granularity: 300, end: 'latest'})
-        }, 5000)
     }
 
     if (data.msg_type === 'portfolio') {
@@ -237,9 +227,10 @@ ws.on('message', async(msg) => {
     if (data.msg_type === 'proposal_open_contract') {
         canBuy = false
         openPositions = true
+        const type = data?.proposal_open_contract?.contract_type
         const entrySpot = data?.proposal_open_contract?.entry_spot
         const currentSpot = data?.proposal_open_contract?.current_spot
-        const pip = currentSpot - entrySpot
+        const pip = type === "MULTUP" ? currentSpot - entrySpot : entrySpot - currentSpot
         profit = data?.proposal_open_contract?.profit
         stake = data?.proposal_open_contract?.limit_order?.stop_out?.order_amount
         console.log(pip , profit, stopLoss)
@@ -251,11 +242,11 @@ ws.on('message', async(msg) => {
         if(stopLoss === -250 && pip >= 250){
             stopLoss = 50
         }
-        // if(pip >= 1000){
-        //     closePosition(openContractId)
-        //     send({ portfolio: 1 })
-        //     await run(2000)
-        // }
+        if(pip >= 1000){
+            closePosition(openContractId, `Take Profit Reached`)
+            send({ portfolio: 1 })
+            await run(2000)
+        }
     }
     
 
