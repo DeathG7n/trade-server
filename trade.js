@@ -13,6 +13,7 @@ const CHAT_ID = '8068534792';
 let closePrices = []
 let closePrices15 = []
 let openPrices = []
+let openPrices15 = []
 let position = null
 let openContractId = null
 let openPosition = null
@@ -58,6 +59,13 @@ function bullish(candle){
     return closePrices[candle] > openPrices[candle]
 }
 
+function bearish15(candle){
+    return openPrices15[candle] > closePrices15[candle]
+}
+function bullish15(candle){
+    return closePrices15[candle] > openPrices15[candle]
+}
+
 
 function calculateEMA(prices, period) {
     const k = 2 / (period + 1);
@@ -73,11 +81,8 @@ function calculateEMA(prices, period) {
 }
 
 function detectEMACrossover() {
-    if (closePrices?.length < 22){
-        console.log("not enough")
-    }
-
     const len = closePrices?.length;
+    const secondIndex = len - 3
     const prevIndex = len - 2;
     const currIndex = len - 1;
 
@@ -101,11 +106,11 @@ function detectEMACrossover() {
     const upTrend = ema14Now > ema21Now
     const downTrend = ema14Now < ema21Now
 
-    const upTrend15 = ema14_15Now > ema21_15Now
-    const downTrend15 = ema14_15Now < ema21_15Now
+    const upTrend15 = bearish15(secondIndex) && bullish15(prevIndex)
+    const downTrend15 = bullish15(secondIndex) && bearish15(prevIndex)
 
-    const crossedUp = upTrend15 && upTrend && bullish(prevIndex) && (prevClose >= ema21Prev) && (ema21Prev >= prevOpen)
-    const crossedDown = downTrend15 && downTrend && bearish(prevIndex) && (prevOpen >= ema21Prev) && (ema21Prev >= prevClose)
+    const crossedUp = upTrend15 && bullish(prevIndex) && (prevClose >= ema21Prev) && (ema21Prev >= prevOpen)
+    const crossedDown = downTrend15 && bearish(prevIndex) && (prevOpen >= ema21Prev) && (ema21Prev >= prevClose)
 
     // const crossedUp = bearish(prevIndex) && bullish(currIndex)
     // const crossedDown = bullish(prevIndex) && bearish(currIndex)
@@ -208,6 +213,7 @@ ws.on('message', async(msg) => {
             openPrices = data?.candles?.map(i => {return i?.open})
         } else if (data?.echo_req?.granularity === 900){
             closePrices15 = data?.candles?.map(i => {return i?.close})
+            openPrices15 = data?.candles?.map(i => {return i?.open})
         }
         
         const len = closePrices?.length;
@@ -252,7 +258,16 @@ ws.on('message', async(msg) => {
         if(stopLoss === -250 && pip >= 250){
             stopLoss = 100
         }
-        if(pip >= 550){
+        if(stopLoss === 100 && pip >= 500){
+            stopLoss = 250
+        }
+        if(stopLoss === 250 && pip >= 1000){
+            stopLoss = 500
+        }
+        if(stopLoss === 500 && pip >= 1500){
+            stopLoss = 750
+        }
+        if(pip >= 2000){
             closePosition(openContractId, `Take Profit Reached`)
             send({ portfolio: 1 })
             await run(2000)
