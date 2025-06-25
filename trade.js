@@ -206,7 +206,7 @@ ws.on('message', async(msg) => {
         if(data?.echo_req?.granularity === 60){
             closePrices = data?.candles?.map(i => {return i?.close})
             openPrices = data?.candles?.map(i => {return i?.open})
-        } else if (data?.echo_req?.granularity === 300){
+        } else if (data?.echo_req?.granularity === 900){
             closePrices15 = data?.candles?.map(i => {return i?.close})
         }
         
