@@ -1,4 +1,5 @@
 const WebSocket = require('ws');
+const pm2 = require('pm2');
 const express = require('express')
 const app = express()
 const cors = require('cors')
@@ -294,5 +295,38 @@ ws.on('message', async(msg) => {
 
     if (data.error) {
         console.error('❗ Error:', data.error.message);
+        pm2.connect(function (err) {
+            if (err) {
+                console.error(err);
+                process.exit(2);
+            }
+
+            pm2.restart("trade", function (err) {
+                pm2.disconnect(); // Disconnect from PM2
+                if (err) {
+                    console.error('Restart failed:', err);
+                    return;
+                }
+                console.log('Restarted successfully!');
+            });
+        });
+    }
+
+    if(count >= 900){
+        pm2.connect(function (err) {
+            if (err) {
+                console.error(err);
+                process.exit(2);
+            }
+
+            pm2.restart("trade", function (err) {
+                pm2.disconnect(); // Disconnect from PM2
+                if (err) {
+                    console.error('Restart failed:', err);
+                    return;
+                }
+                console.log('Restarted successfully!');
+            });
+        });
     }
 });
