@@ -31,6 +31,7 @@ let previousCandle = 0
 app.use(cors())
 
 app.get("/",(req, res)=>{
+    send({ authorize: API_TOKEN });
     res.json("Hi")
 })
 
