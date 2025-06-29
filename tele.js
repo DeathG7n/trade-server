@@ -1,5 +1,4 @@
 const express = require('express')
-const pm2 = require('pm2');
 const axios = require('axios');
 const app = express()
 const WebSocket = require('ws');
@@ -12,11 +11,11 @@ let previousCandle = 0
 const BOT_TOKEN = '8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ';
 const CHAT_ID = '8068534792';
 
-app.get("/",(req, res)=>{
+app.get("/", async(req, res)=>{
   assets.forEach((asset)=>{ 
     getSignal(asset) 
   })
-  res.json("Hi")
+  res.json(previousCandle)
 })
 
 app.listen(3000,()=>{
