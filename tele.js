@@ -12,12 +12,14 @@ let previousCandle = 0
 const BOT_TOKEN = '8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ';
 const CHAT_ID = '8068534792';
 
+app.get("/",(req, res)=>{
+  assets.forEach((asset)=>{ 
+    getSignal(asset) 
+  })
+  res.json("Hi")
+})
+
 app.listen(3000,()=>{
-  setInterval(()=>{
-    assets.forEach((asset)=>{ 
-      getSignal(asset) 
-    })
-  },1000)
   console.log("Server is running")
 })
 
@@ -119,7 +121,7 @@ const getSignal = async (asset) => {
     }
 
     if(previousCandle !== closePrices1[prevIndex]){
-      previousCandle = closePrices1[19]
+      previousCandle = closePrices1[prevIndex]
       if(buySignal){
         sendMessage(`${asset?.name} is bullish`)
         console.log(`${asset?.name} is bullish`)
@@ -137,21 +139,7 @@ const getSignal = async (asset) => {
 
   } catch (error){
     console.log(error?.error?.message)
-    pm2.connect(function (err) {
-      if (err) {
-        console.error(err);
-        process.exit(2);
-      }
-    
-      pm2.restart(0, function (err) {
-        pm2.disconnect(); // Disconnect from PM2
-          if (err) {
-            console.error('Restart failed:', err);
-            return;
-          }
-          console.log('Restarted successfully!');
-      });
-    }); 
+    sendMessage(error?.error?.message) 
   }
 };
 
@@ -163,7 +151,7 @@ function calculateEMA(prices, period) {
     emaArray[0] = prices?.[0];
 
     for (let i = 1; i < prices?.length; i++) {
-        emaArray[i] = (prices[i] * k) + (emaArray[i - 1] * (1 - k));
+      emaArray[i] = (prices[i] * k) + (emaArray[i - 1] * (1 - k));
     }
 
     return emaArray;
