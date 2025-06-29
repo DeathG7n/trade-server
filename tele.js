@@ -7,6 +7,7 @@ const connection = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=368
 const api = new DerivAPIBasic({ connection })
 let count = 0
 let previousCandle = 0
+let currentCandle = 0
 
 const BOT_TOKEN = '8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ';
 const CHAT_ID = '8068534792';
@@ -15,7 +16,7 @@ app.get("/", async(req, res)=>{
   assets.forEach((asset)=>{ 
     getSignal(asset) 
   })
-  res.json(previousCandle)
+  res.json(currentCandle)
 })
 
 app.listen(3000,()=>{
@@ -118,6 +119,7 @@ const getSignal = async (asset) => {
     function bullish15(candle){
       return closePrices15[candle] > openPrices15[candle]
     }
+    currentCandle = closePrices1[currIndex]
 
     if(previousCandle !== closePrices1[prevIndex]){
       previousCandle = closePrices1[prevIndex]
@@ -138,7 +140,6 @@ const getSignal = async (asset) => {
 
   } catch (error){
     console.log(error?.error?.message)
-    sendMessage(error?.error?.message) 
   }
 };
 
