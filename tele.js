@@ -7,7 +7,6 @@ const DerivAPIBasic = require('@deriv/deriv-api/dist/DerivAPIBasic');
 const connection = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=36807');
 const api = new DerivAPIBasic({ connection })
 let count = 0
-let previousCandle = 0
 
 const BOT_TOKEN = '8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ';
 const CHAT_ID = '8068534792';
@@ -24,19 +23,23 @@ app.listen(3000,()=>{
 const assets = [
   {
     name: "Volatility 75 Index",
-    symbol: "R_75"
+    symbol: "R_75",
+    previousCandle: 0
   },
   {
     name: "Volatility 150(1s) Index",
-    symbol: "1HZ150V"
+    symbol: "1HZ150V",
+    previousCandle: 0
   }, 
   {
     name: "Jump 10 Index",
-    symbol: "JD10"
+    symbol: "JD10",
+    previousCandle: 0
   },
   {
     name: "Jump 100 Index",
-    symbol: "JD100"
+    symbol: "JD100",
+    previousCandle: 0
   }
 ]
 
@@ -107,8 +110,6 @@ const getSignal = async (asset) => {
     const upTrend15 = ema14_15Now > ema21_15Now
     const downTrend15 = ema14_15Now < ema21_15Now
 
-    console.log(asset?.name, upTrend15)
-
     const higherBullSignal = upTrend15 && bearish15(secondIndex) && bullish15(prevIndex)
     const higherBearSignal = downTrend15 && bullish15(secondIndex) && bearish15(prevIndex)
     const lowerBullSignal = upTrend && (bearish1(secondIndex) && bullish1(prevIndex) || bearish1(thirdIndex) && bullish1(secondIndex) && bullish1(prevIndexIndex))
@@ -131,8 +132,8 @@ const getSignal = async (asset) => {
       return closePrices15[candle] > openPrices15[candle]
     }
 
-    if(previousCandle != closePrices1[prevIndex]){
-      previousCandle = closePrices1[19]
+    if(asset?.previousCandle != closePrices1[prevIndex]){
+      asset?.previousCandle = closePrices1[19]
       if(buySignal){
         sendMessage(`${asset?.name} is bullish`)
         console.log(`${asset?.name} is bullish`)
