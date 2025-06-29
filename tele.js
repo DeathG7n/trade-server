@@ -7,6 +7,7 @@ const DerivAPIBasic = require('@deriv/deriv-api/dist/DerivAPIBasic');
 const connection = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=36807');
 const api = new DerivAPIBasic({ connection })
 let count = 0
+let previousCandles = [0,0,0,0]
 
 const BOT_TOKEN = '8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ';
 const CHAT_ID = '8068534792';
@@ -24,22 +25,22 @@ const assets = [
   {
     name: "Volatility 75 Index",
     symbol: "R_75",
-    previousCandle: 0
+    count: 0
   },
   {
     name: "Volatility 150(1s) Index",
     symbol: "1HZ150V",
-    previousCandle: 0
+    count: 1
   }, 
   {
     name: "Jump 10 Index",
     symbol: "JD10",
-    previousCandle: 0
+    count: 2
   },
   {
     name: "Jump 100 Index",
     symbol: "JD100",
-    previousCandle: 0
+    count: 3
   }
 ]
 
@@ -132,8 +133,8 @@ const getSignal = async (asset) => {
       return closePrices15[candle] > openPrices15[candle]
     }
 
-    if(asset?.previousCandle != closePrices1[prevIndex]){
-      asset?.previousCandle = closePrices1[19]
+    if(previousCandles[asset?.count] !== closePrices1[prevIndex]){
+      previousCandles[asset?.count] = closePrices1[19]
       if(buySignal){
         sendMessage(`${asset?.name} is bullish`)
         console.log(`${asset?.name} is bullish`)
