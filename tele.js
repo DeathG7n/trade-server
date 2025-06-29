@@ -1,10 +1,10 @@
 const express = require('express')
+const pm2 = require('pm2');
 const axios = require('axios');
 const app = express()
 const WebSocket = require('ws');
 const DerivAPIBasic = require('@deriv/deriv-api/dist/DerivAPIBasic');
 const connection = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=36807');
-const ta = require('ta.js')
 const api = new DerivAPIBasic({ connection })
 let count = 0
 let previousCandle = 0
@@ -15,9 +15,9 @@ const CHAT_ID = '8068534792';
 app.listen(3000,()=>{
   setInterval(()=>{
     assets.forEach((asset)=>{ 
-        getSignal(asset) 
+      getSignal(asset) 
     })
-  },1000)
+  },2000)
   console.log("Server is running")
 })
 
@@ -25,6 +25,18 @@ const assets = [
   {
     name: "Volatility 75 Index",
     symbol: "R_75"
+  },
+  {
+    name: "Volatility 150(1s) Index",
+    symbol: "1HZ150V"
+  }, 
+  {
+    name: "Jump 10 Index",
+    symbol: "JD10"
+  },
+  {
+    name: "Jump 100 Index",
+    symbol: "JD100"
   }
 ]
 
@@ -63,48 +75,72 @@ function getTicksRequest(symbol, count, timeframe){
 
 const getSignal = async (asset) => {
   try{
-    const period = getTicksRequest(asset?.symbol, 21 , getTimeFrame(5, "mins"))
+    const period1 = getTicksRequest(asset?.symbol, 10000000000000000000 , getTimeFrame(1, "mins"))
+    const period15 = getTicksRequest(asset?.symbol, 10000000000000000000 , getTimeFrame(15, "mins"))
 
-    const candles = await api.ticksHistory(period);
+    const candles1 = await api.ticksHistory(period1);
+    const candles15 = await api.ticksHistory(period15);
 
-    const closePrices = candles?.candles?.map(i => {return i?.close})
-    const openPrices = candles?.candles?.map(i => {return i?.open})
+    const closePrices1 = candles1?.candles?.map(i => {return i?.close})
+    const openPrices1 = candles1?.candles?.map(i => {return i?.open})
+    const closePrices15 = candles15?.candles?.map(i => {return i?.close})
+    const openPrices15 = candles15?.candles?.map(i => {return i?.open})
 
-    const current14 = closePrices.slice(-14)
-    const current21 = closePrices
+    const len = closePrices1?.length;
+    const currIndex = len - 1;
+    const prevIndex = len - 2;
+    const secondIndex = len - 3
+    const thirdIndex = len - 4
 
-    const current14ema = ta.ema(current14, current14.length)
-    const current21ema = ta.ema(current21, current21.length)
+    const ema14 = calculateEMA(closePrices1, 14);
+    const ema21 = calculateEMA(closePrices1, 21);
+    const ema14_15 = calculateEMA(closePrices15, 14);
+    const ema21_15 = calculateEMA(closePrices15, 21);
 
-    function bearish(candle){
-      return openPrices[candle] > closePrices[candle]
+    const ema14Now = ema14[currIndex];
+    const ema21Now = ema21[currIndex];
+    const ema14_15Now = ema14_15[currIndex];
+    const ema21_15Now = ema21_15[currIndex];
+
+    const upTrend = ema14Now > ema21Now
+    const downTrend = ema14Now < ema21Now
+    const upTrend15 = ema14_15Now > ema21_15Now
+    const downTrend15 = ema14_15Now < ema21_15Now
+
+    console.log(asset?.name, upTrend15)
+
+    const higherBullSignal = upTrend15 && bearish15(secondIndex) && bullish15(prevIndex)
+    const higherBearSignal = downTrend15 && bullish15(secondIndex) && bearish15(prevIndex)
+    const lowerBullSignal = upTrend && (bearish1(secondIndex) && bullish1(prevIndex) || bearish1(thirdIndex) && bullish1(secondIndex) && bullish1(prevIndexIndex))
+    const lowerBearSignal = downTrend && (bullish1(secondIndex) && bearish1(prevIndex) || bullish1(thirdIndex) && bearish1(secondIndex) && bearish1(prevIndex))
+
+    const buySignal = higherBullSignal && lowerBullSignal
+    const sellSignal = higherBearSignal && lowerBearSignal
+
+    function bearish1(candle){
+      return openPrices1[candle] > closePrices1[candle]
     }
-    function bullish(candle){
-      return closePrices[candle] > openPrices[candle]
+    function bullish1(candle){
+      return closePrices1[candle] > openPrices1[candle]
     }
 
-    if(previousCandle != closePrices[19]){
-      previousCandle = closePrices[19]
-      if(current14ema > current21ema){
-        if(bearish(18) && bullish(19)){
-          sendMessage(`${asset?.name} is bullish`)
-          console.log(`${asset?.name} is bullish`)
-        }
-        if(bearish(17) && bullish(18) && bullish(19)){
-          sendMessage(`${asset?.name} is bullish`)
-          console.log(`${asset?.name} is bullish`)
-        }
+    function bearish15(candle){
+      return openPrices15[candle] > closePrices15[candle]
+    }
+    function bullish15(candle){
+      return closePrices15[candle] > openPrices15[candle]
+    }
+
+    if(previousCandle != closePrices1[prevIndex]){
+      previousCandle = closePrices1[19]
+      if(buySignal){
+        sendMessage(`${asset?.name} is bullish`)
+        console.log(`${asset?.name} is bullish`)
       }
 
-      if(current14ema < current21ema){
-        if(bullish(18) && bearish(19)){
-          sendMessage(`${asset?.name} is bearish`)
-          console.log(`${asset?.name} is bearish`)
-        }
-        if(bullish(17) && bearish(18) && bearish(19)){
-          sendMessage(`${asset?.name} is bearish`)
-          console.log(`${asset?.name} is bearish`)
-        }
+      if(sellSignal){
+        sendMessage(`${asset?.name} is bearish`)
+        console.log(`${asset?.name} is bearish`)
       }
 
     }
@@ -113,9 +149,35 @@ const getSignal = async (asset) => {
     console.log(count)
 
   } catch (error){
-    data = error?.error?.message
-    console.log(error?.error?.message) 
+    console.log(error?.error?.message)
+    pm2.connect(function (err) {
+      if (err) {
+        console.error(err);
+        process.exit(2);
+      }
+    
+      pm2.restart(0, function (err) {
+        pm2.disconnect(); // Disconnect from PM2
+          if (err) {
+            console.error('Restart failed:', err);
+            return;
+          }
+          console.log('Restarted successfully!');
+      });
+    }); 
   }
 };
 
 
+function calculateEMA(prices, period) {
+    const k = 2 / (period + 1);
+    let emaArray = [];
+
+    emaArray[0] = prices?.[0];
+
+    for (let i = 1; i < prices?.length; i++) {
+        emaArray[i] = (prices[i] * k) + (emaArray[i - 1] * (1 - k));
+    }
+
+    return emaArray;
+}
