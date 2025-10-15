@@ -13,8 +13,8 @@ const CHAT_ID = "8068534792";
 let closePrices = [];
 let openPrices = [];
 let count = 0;
-const assets = ["BOOM1000", "CRASH1000", "JD10"];
-const previousCandles = [0,0,0]
+const assets = ["BOOM1000", "CRASH1000", "R_75"];
+const previousCandles = [0, 0, 0];
 
 app.use(cors());
 
@@ -116,7 +116,7 @@ ws.on("message", async (msg) => {
           sendMessage(`CRASH on ${data?.echo_req?.ticks_history}`);
       }
     }
-    if (data?.echo_req?.ticks_history === "JD10") {
+    if (data?.echo_req?.ticks_history === "R_75") {
       closePrices = data?.candles?.map((i) => {
         return i?.close;
       });
@@ -160,6 +160,7 @@ ws.on("message", async (msg) => {
 
   if (data.error) {
     console.error("❗ Error:", data.error.message);
+    sendMessage("❗ Error:", data.error.message);
   }
 });
 
