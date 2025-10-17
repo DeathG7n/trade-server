@@ -128,7 +128,9 @@ ws.on("message", async (msg) => {
 
   if (data.msg_type === "authorize") {
     console.log("✅ Authorized");
-    send({ portfolio: 1 });
+    setInterval(()=>{
+      send({ portfolio: 1 });
+    }, 5000)
     send({
       ticks_history: "JD10",
       style: "candles",
@@ -199,7 +201,6 @@ ws.on("message", async (msg) => {
     count += 1;
     console.log(count);
     await run(30000);
-    send({ portfolio: 1 });
     send({
       ticks_history: data?.echo_req?.ticks_history,
       style: "candles",
@@ -210,14 +211,22 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "proposal_open_contract") {
+    console.log(data?.proposal_open_contract?.limit_order)
     canBuy = false;
     const type = data?.proposal_open_contract?.contract_type;
     const entrySpot = data?.proposal_open_contract?.entry_spot;
     const currentSpot = data?.proposal_open_contract?.current_spot;
+    const orderAmount = data?.proposal_open_contract?.limit_order?.stop_out?.order_amount
+    const stopOut = data?.proposal_open_contract?.limit_order?.stop_out?.value
+    const takeProfit = data?.proposal_open_contract?.limit_order?.take_profit?.value
     const pip =
       type === "MULTUP" ? currentSpot - entrySpot : entrySpot - currentSpot;
+    const loss =
+      type === "MULTUP" ? entrySpot - stopOut  : stopOut - entrySpot;
+    const gain =
+      type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     profit = data?.proposal_open_contract?.profit;
-    console.log(pip, profit);
+    console.log(pip, profit, loss, orderAmount, gain);
   }
 
   if (data.msg_type === "buy") {
