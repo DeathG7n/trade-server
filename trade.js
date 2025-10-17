@@ -25,6 +25,11 @@ let previousCandle = 0;
 app.use(cors());
 
 app.get("/", (req, res) => {
+  ws.on("open", () => {
+    console.log("🔌 Connected");
+    sendMessage("🔌 Connected");
+    send({ authorize: API_TOKEN });
+  });
   res.json("Hi");
 });
 
@@ -114,6 +119,7 @@ function closePosition(contract_id, why) {
 
 ws.on("open", () => {
   console.log("🔌 Connected");
+  sendMessage("🔌 Connected");
   send({ authorize: API_TOKEN });
 });
 
@@ -211,7 +217,7 @@ ws.on("message", async (msg) => {
     const pip =
       type === "MULTUP" ? currentSpot - entrySpot : entrySpot - currentSpot;
     profit = data?.proposal_open_contract?.profit;
-    console.log(pip, profit)
+    console.log(pip, profit);
   }
 
   if (data.msg_type === "buy") {

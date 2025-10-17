@@ -19,6 +19,11 @@ const previousCandles = [0, 0, 0];
 app.use(cors());
 
 app.get("/", (req, res) => {
+  ws.on("open", () => {
+    console.log("🔌 Connected");
+    sendMessage("🔌 Connected")
+    send({ authorize: API_TOKEN });
+  });
   res.json("Hi");
 });
 
@@ -65,6 +70,7 @@ const sendMessage = async (message) => {
 
 ws.on("open", () => {
   console.log("🔌 Connected");
+  sendMessage("🔌 Connected");
   send({ authorize: API_TOKEN });
 });
 
