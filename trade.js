@@ -103,7 +103,7 @@ function buyMultiplier(direction) {
       contract_type: direction,
       currency: "USD",
       symbol: "JD10",
-      multiplier: 1000000000,
+      multiplier: 100,
     },
   });
 }
