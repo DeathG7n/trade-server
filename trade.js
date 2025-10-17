@@ -103,7 +103,7 @@ function buyMultiplier(direction) {
       contract_type: direction,
       currency: "USD",
       symbol: "JD10",
-      multiplier: 100,
+      multiplier: 1000000000,
     },
   });
 }
@@ -132,7 +132,7 @@ ws.on("message", async (msg) => {
     send({
       ticks_history: "JD10",
       style: "candles",
-      count: 100,
+      count: 1000000000,
       granularity: 900,
       end: "latest",
     });
@@ -203,7 +203,7 @@ ws.on("message", async (msg) => {
     send({
       ticks_history: data?.echo_req?.ticks_history,
       style: "candles",
-      count: 100,
+      count: 1000000000,
       granularity: data?.echo_req?.granularity,
       end: "latest",
     });

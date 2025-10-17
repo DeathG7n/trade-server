@@ -83,7 +83,7 @@ ws.on("message", async (msg) => {
       send({
         ticks_history: asset,
         style: "candles",
-        count: 10,
+        count: 10000000000,
         granularity: 300,
         end: "latest",
       });
@@ -158,7 +158,7 @@ ws.on("message", async (msg) => {
     send({
       ticks_history: data?.echo_req?.ticks_history,
       style: "candles",
-      count: 10,
+      count: 10000000000,
       granularity: 300,
       end: "latest",
     });
