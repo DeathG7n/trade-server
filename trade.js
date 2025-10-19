@@ -21,6 +21,7 @@ let subscribed = false;
 let count = 0;
 let reason = "";
 let previousCandle = 0;
+let amount = 1
 
 app.use(cors());
 
@@ -63,10 +64,10 @@ function calculateEMA(prices, period) {
 
 function detectCrossover(fastMA, slowMA) {
   const lastIndex = fastMA.length - 1;
-  const prevFast = fastMA[lastIndex - 1];
-  const prevSlow = slowMA[lastIndex - 1];
-  const currFast = fastMA[lastIndex];
-  const currSlow = slowMA[lastIndex];
+  const prevFast = fastMA[lastIndex - 2];
+  const prevSlow = slowMA[lastIndex - 2];
+  const currFast = fastMA[lastIndex - 1];
+  const currSlow = slowMA[lastIndex - 1]
   if (prevFast < prevSlow && currFast > currSlow) {
     return "bullish";
   }
@@ -92,17 +93,17 @@ const sendMessage = async (message) => {
   }
 };
 
-function buyMultiplier(direction) {
+function buyMultiplier(direction, sym, stake) {
   console.log(`📈 Buying ${direction} multiplier...`);
   send({
     buy: 1,
-    price: 1,
+    price: stake,
     parameters: {
-      amount: 1,
+      amount: stake,
       basis: "stake",
       contract_type: direction,
       currency: "USD",
-      symbol: "JD10",
+      symbol: sym,
       multiplier: 100,
     },
   });
@@ -119,7 +120,7 @@ function closePosition(contract_id, why) {
 
 ws.on("open", () => {
   console.log("🔌 Connected");
-  sendMessage("🔌 Connected");
+  //sendMessage("🔌 Connected");
   send({ authorize: API_TOKEN });
 });
 
@@ -140,6 +141,11 @@ ws.on("message", async (msg) => {
     });
   }
 
+  if (data.msg_type === "balance"){
+    let balance = data?.balance?.balance
+    amount = balance/2 < 2000 ? Math.trunc(balance/2) : 2000
+  }
+
   if (data.msg_type === "portfolio") {
     if (data?.portfolio?.contracts?.length === 0) {
       openPosition = null;
@@ -154,7 +160,7 @@ ws.on("message", async (msg) => {
       position = openPosition?.contract_type;
       openContractId = openPosition?.contract_id;
       if (data?.portfolio?.contracts?.length > 1) {
-        closePosition(openContractId);
+        closePosition(openContractId, "too many positions");
       }
       if (subscribed === false) {
         send({
@@ -184,17 +190,19 @@ ws.on("message", async (msg) => {
     const signal = detectCrossover(ema14, ema21);
 
     if (previousCandle !== closePrices[prevIndex]) {
-      previousCandle = closePrices[prevIndex];
+      send({ balance: 1 });
       if (signal === "bullish") {
+        previousCandle = closePrices[prevIndex];
         position === "MULTDOWN" &&
           closePosition(openContractId, `Opposite Signal`);
         await run(2000);
-        canBuy === true && buyMultiplier("MULTUP");
+        buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
       } else if (signal === "bearish") {
+        previousCandle = closePrices[prevIndex];
         position === "MULTUP" &&
           closePosition(openContractId, `Opposite Signal`);
         await run(2000);
-        canBuy === true && buyMultiplier("MULTDOWN");
+        buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
       }
       await run(30000);
     }
@@ -211,7 +219,6 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "proposal_open_contract") {
-    console.log(data?.proposal_open_contract?.limit_order)
     canBuy = false;
     const type = data?.proposal_open_contract?.contract_type;
     const entrySpot = data?.proposal_open_contract?.entry_spot;
