@@ -21,7 +21,7 @@ let subscribed = false;
 let count = 0;
 let reason = "";
 let previousCandle = 0;
-let amount = 1
+let amount = null
 
 app.use(cors());
 
@@ -120,7 +120,6 @@ function closePosition(contract_id, why) {
 
 ws.on("open", () => {
   console.log("🔌 Connected");
-  //sendMessage("🔌 Connected");
   send({ authorize: API_TOKEN });
 });
 
@@ -129,9 +128,8 @@ ws.on("message", async (msg) => {
 
   if (data.msg_type === "authorize") {
     console.log("✅ Authorized");
-    setInterval(()=>{
-      send({ portfolio: 1 });
-    }, 5000)
+    send({ balance: 1 });
+    send({ portfolio: 1});
     send({
       ticks_history: "JD10",
       style: "candles",
@@ -143,7 +141,9 @@ ws.on("message", async (msg) => {
 
   if (data.msg_type === "balance"){
     let balance = data?.balance?.balance
-    amount = balance/2 < 2000 ? Math.trunc(balance/2) : 2000
+    amount = balance < 2000 ? Math.trunc(balance) : 2000
+    await run(10000);
+    send({ balance: 1 });
   }
 
   if (data.msg_type === "portfolio") {
@@ -171,6 +171,8 @@ ws.on("message", async (msg) => {
         subscribed = true;
       }
     }
+    await run(10000);
+    send({ portfolio: 1 });
   }
 
   if (data.msg_type === "candles") {
@@ -190,7 +192,6 @@ ws.on("message", async (msg) => {
     const signal = detectCrossover(ema14, ema21);
 
     if (previousCandle !== closePrices[prevIndex]) {
-      send({ balance: 1 });
       if (signal === "bullish") {
         previousCandle = closePrices[prevIndex];
         position === "MULTDOWN" &&
@@ -204,7 +205,6 @@ ws.on("message", async (msg) => {
         await run(2000);
         buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
       }
-      await run(30000);
     }
     count += 1;
     console.log(count);
@@ -260,7 +260,8 @@ ws.on("message", async (msg) => {
   }
 
   if (data.error) {
-    console.error("❗ Error:", data.error.message);
-    sendMessage("❗ Error:", data.error.message);
+    const error = data?.error?.message
+    console.error("❗ Error:", error);
+    sendMessage(`❗ Error: ${error}`);
   }
 });
