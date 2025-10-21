@@ -134,7 +134,7 @@ ws.on("message", async (msg) => {
       ticks_history: "JD10",
       style: "candles",
       count: 1000000000,
-      granularity: 900,
+      granularity: 60,
       end: "latest",
     });
   }
