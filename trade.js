@@ -12,6 +12,9 @@ const BOT_TOKEN = "8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ";
 const CHAT_ID = "8068534792";
 
 let closePrices = [];
+let openPrices = [];
+let highPrices = [];
+let lowPrices = [];
 let position = null;
 let openContractId = null;
 let openPosition = null;
@@ -37,6 +40,17 @@ app.get("/", (req, res) => {
 app.listen(3000, () => {
   console.log("Server is running");
 });
+
+function bearish(candle) {
+  return openPrices[candle] > closePrices[candle];
+}
+function bullish(candle) {
+  return closePrices[candle] > openPrices[candle];
+}
+
+function crossedEma(candle, ema) {
+  return highPrices[candle] > ema && ema > lowPrices[candle];
+}
 
 function send(msg) {
   ws.send(JSON.stringify(msg));
@@ -105,6 +119,7 @@ function buyMultiplier(direction, sym, stake) {
       currency: "USD",
       symbol: sym,
       multiplier: 100,
+      limit_order: { stop_loss: stake / 50, take_profit: stake }, 
     },
   });
 }
@@ -178,16 +193,27 @@ ws.on("message", async (msg) => {
   if (data.msg_type === "candles") {
     closePrices = data?.candles?.map((i) => {
       return i?.close;
-    });
+    })
     openPrices = data?.candles?.map((i) => {
       return i?.open;
-    });
-
-    const ema14 = calculateEMA(closePrices, 14);
-    const ema21 = calculateEMA(closePrices, 21);
+    })
+    highPrices = data?.candles?.map((i) => {
+      return i?.high;
+    })
+    lowPrices = data?.candles?.map((i) => {
+      return i?.low;
+    })
 
     const len = closePrices?.length;
     const prevIndex = len - 2;
+    const currIndex = len - 1;
+
+    const ema14 = calculateEMA(closePrices, 14);
+    const ema21 = calculateEMA(closePrices, 21);
+    const ema14Now = ema14[currIndex];
+    const ema21Now = ema21[currIndex];
+
+    const trend = ema14Now > ema21Now;
 
     const signal = detectCrossover(ema14, ema21);
 
@@ -219,6 +245,8 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "proposal_open_contract") {
+    let stop_loss = 1;
+    let take_profit = 4;
     canBuy = false;
     const type = data?.proposal_open_contract?.contract_type;
     const entrySpot = data?.proposal_open_contract?.entry_spot;

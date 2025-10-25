@@ -1,55 +1,95 @@
-const express = require('express')
-const axios = require('axios');
-const app = express()
-const WebSocket = require('ws');
-const DerivAPIBasic = require('@deriv/deriv-api/dist/DerivAPIBasic');
-const connection = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=36807');
-const api = new DerivAPIBasic({ connection })
-let count = 0
-let previousCandles = [0,0,0,0]
-let currentCandles = [0,0,0,0]
+const WebSocket = require("ws");
+const pm2 = require("pm2");
+const express = require("express");
+const app = express();
+const cors = require("cors");
+const axios = require("axios");
 
-const BOT_TOKEN = '8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ';
-const CHAT_ID = '8068534792';
+const API_TOKEN = "IxcmbIEL0Mb4fvQ";
+const ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=36807");
 
-app.get("/", async(req, res)=>{
-  assets.forEach((asset)=>{ 
-    getSignal(asset) 
-  })
-  res.json(currentCandles)
-})
+const BOT_TOKEN = "8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ";
+const CHAT_ID = "8068534792";
 
-app.listen(3000,()=>{
-  console.log("Server is running") 
-  setInterval(()=>{
-    assets.forEach((asset)=>{ 
-      getSignal(asset) 
-    })
-  }, 10000) 
-})
+let closePrices = [];
+let openPrices = [];
+let highPrices = [];
+let lowPrices = [];
+let position = null;
+let openContractId = null;
+let openPosition = null;
+let canBuy = false;
+let profit = null;
+let subscribed = false;
+let count = 0;
+let reason = "";
+let previousCandle = 0;
+let amount = null;
 
-const assets = [
-  {
-    name: "Volatility 150(1s) Index",
-    symbol: "1HZ150V",
-    count: 0
-  },
-  {
-    name: "Volatility 75 Index",
-    symbol: "R_75",
-    count: 1
-  },
-  {
-    name: "Jump 10 Index",
-    symbol: "JD10",
-    count: 2
-  },
-  {
-    name: "Jump 100 Index",
-    symbol: "JD100",
-    count: 3
+app.use(cors());
+
+app.get("/", (req, res) => {
+  ws.on("open", () => {
+    console.log("🔌 Connected");
+    sendMessage("🔌 Connected");
+    send({ authorize: API_TOKEN });
+  });
+  res.json("Hi");
+});
+
+app.listen(3000, () => {
+  console.log("Server is running");
+});
+
+function bearish(candle) {
+  return openPrices[candle] > closePrices[candle];
+}
+function bullish(candle) {
+  return closePrices[candle] > openPrices[candle];
+}
+
+function crossedEma(candle, ema) {
+  return highPrices[candle] > ema && ema > lowPrices[candle];
+}
+
+function send(msg) {
+  ws.send(JSON.stringify(msg));
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function run(ms) {
+  console.log(`⏳ Waiting ${ms / 1000} seconds...`);
+  await sleep(ms);
+  console.log("✅ Done!");
+}
+
+function calculateEMA(prices, period) {
+  const k = 2 / (period + 1);
+  let emaArray = [];
+  emaArray[0] = prices?.[0];
+  for (let i = 1; i < prices?.length; i++) {
+    emaArray[i] = prices[i] * k + emaArray[i - 1] * (1 - k);
   }
-]
+  return emaArray;
+}
+
+function detectCrossover(fastMA, slowMA) {
+  const lastIndex = fastMA.length - 1;
+  const prevFast = fastMA[lastIndex - 2];
+  const prevSlow = slowMA[lastIndex - 2];
+  const currFast = fastMA[lastIndex - 1];
+  const currSlow = slowMA[lastIndex - 1];
+  if (prevFast < prevSlow && currFast > currSlow) {
+    return "bullish";
+  }
+  if (prevFast > prevSlow && currFast < currSlow) {
+    return "bearish";
+  }
+  return null;
+}
 
 const sendMessage = async (message) => {
   try {
@@ -58,121 +98,209 @@ const sendMessage = async (message) => {
       chat_id: CHAT_ID,
       text: message,
     });
-    console.log('Message sent successfully!');
+    console.log("Message sent successfully!");
   } catch (error) {
-    console.error('Error sending message:', error.response?.data || error.message);
+    console.error(
+      "Error sending message:",
+      error.response?.data || error.message
+    );
   }
 };
 
-function getTimeFrame(count, time){
-    if(time == "mins"){
-      return count * 60
-    }
-    if(time == "hrs"){
-      return count * 3600
-    }
-}
-  
-function getTicksRequest(symbol, count, timeframe){
-    const ticks_history_request = {
-      ticks_history: symbol,
-      count: count,
-      end: 'latest',
-      style: 'candles',
-      granularity: timeframe,
-    };
-    return ticks_history_request
+function buyMultiplier(direction, sym, stake) {
+  console.log(`📈 Buying ${direction} multiplier...`);
+  send({
+    buy: 1,
+    price: stake,
+    parameters: {
+      amount: stake,
+      basis: "stake",
+      contract_type: direction,
+      currency: "USD",
+      symbol: sym,
+      multiplier: 100,
+      limit_order: { stop_loss: stake / 50, take_profit: stake },
+    },
+  });
 }
 
-const getSignal = async (asset) => {
-  try{
-    const period5 = getTicksRequest(asset?.symbol, 10000000000000000000 , getTimeFrame(5, "mins"))
-    const period60 = getTicksRequest(asset?.symbol, 10000000000000000000 , getTimeFrame(1, "hrs"))
+function closePosition(contract_id, why) {
+  send({
+    sell: contract_id,
+    price: 0,
+  });
+  reason = why;
+  console.log(`❌ Closing position: ${contract_id}`);
+}
 
-    const candles5 = await api.ticksHistory(period5);
-    const candles60 = await api.ticksHistory(period60);
+ws.on("open", () => {
+  console.log("🔌 Connected");
+  send({ authorize: API_TOKEN });
+});
 
-    const closePrices5 = candles5?.candles?.map(i => {return i?.close})
-    const openPrices5 = candles5?.candles?.map(i => {return i?.open})
-    const closePrices60 = candles60?.candles?.map(i => {return i?.close})
-    const openPrices60 = candles60?.candles?.map(i => {return i?.open})
+ws.on("message", async (msg) => {
+  const data = JSON.parse(msg);
 
-    const len = closePrices5?.length;
-    const currIndex = len - 1;
-    const prevIndex = len - 2;
-    const secondIndex = len - 3
-    const thirdIndex = len - 4
-
-    const ema14 = calculateEMA(closePrices5, 14);
-    const ema21 = calculateEMA(closePrices5, 21);
-    const ema14_60 = calculateEMA(closePrices60, 14);
-    const ema21_60 = calculateEMA(closePrices60, 21);
-
-    const ema14Now = ema14[currIndex];
-    const ema21Now = ema21[currIndex];
-    const ema14_60Now = ema14_60[currIndex];
-    const ema21_60Now = ema21_60[currIndex];
-
-    const upTrend = ema14Now > ema21Now
-    const downTrend = ema14Now < ema21Now
-    const upTrend15 = ema14_60Now > ema21_60Now
-    const downTrend15 = ema14_60Now < ema21_60Now
-
-    const higherBullSignal = upTrend15 && bearish60(secondIndex) && bullish60(prevIndex)
-    const higherBearSignal = downTrend15 && bullish60(secondIndex) && bearish60(prevIndex)
-    const lowerBullSignal = upTrend && (bearish5(secondIndex) && bullish5(prevIndex) || bearish5(thirdIndex) && bullish5(secondIndex) && bullish5(prevIndexIndex))
-    const lowerBearSignal = downTrend && (bullish5(secondIndex) && bearish5(prevIndex) || bullish5(thirdIndex) && bearish5(secondIndex) && bearish5(prevIndex))
-
-    const buySignal = higherBullSignal && lowerBullSignal
-    const sellSignal = higherBearSignal && lowerBearSignal
-
-    function bearish5(candle){
-      return openPrices5[candle] > closePrices5[candle]
-    }
-    function bullish5(candle){
-      return closePrices5[candle] > openPrices5[candle]
-    }
-
-    function bearish60(candle){
-      return openPrices60[candle] > closePrices60[candle]
-    }
-    function bullish60(candle){
-      return closePrices60[candle] > openPrices60[candle]
-    }
-    currentCandles[asset.count] = closePrices5[currIndex]
-
-    if(previousCandles[asset.count] !== closePrices5[prevIndex]){
-      previousCandles[asset.count] = closePrices5[prevIndex]
-      if(buySignal){
-        sendMessage(`${asset?.name} is bullish`)
-        console.log(`${asset?.name} is bullish`)
-      }
-
-      if(sellSignal){
-        sendMessage(`${asset?.name} is bearish`)
-        console.log(`${asset?.name} is bearish`)
-      }
-
-    }
-    
-    count += 1
-    console.log(count)
-
-  } catch (error){
-    console.log(error?.error?.message)
+  if (data.msg_type === "authorize") {
+    console.log("✅ Authorized");
+    send({ balance: 1 });
+    send({ portfolio: 1 });
+    send({
+      ticks_history: "JD10",
+      style: "candles",
+      count: 1000000000,
+      granularity: 60,
+      end: "latest",
+    });
   }
-};
 
+  if (data.msg_type === "balance") {
+    let balance = data?.balance?.balance;
+    amount = balance < 2000 ? Math.trunc(balance) : 2000;
+    await run(10000);
+    send({ balance: 1 });
+  }
 
-function calculateEMA(prices, period) {
-    const k = 2 / (period + 1);
-    let emaArray = [];
+  if (data.msg_type === "portfolio") {
+    if (data?.portfolio?.contracts?.length === 0) {
+      openPosition = null;
+      openContractId = null;
+      position = null;
+      subscribed = false;
+      profit = null;
+      canBuy = true;
+    } else {
+      openPosition =
+        data?.portfolio?.contracts[data?.portfolio?.contracts?.length - 1];
+      position = openPosition?.contract_type;
+      openContractId = openPosition?.contract_id;
+      if (data?.portfolio?.contracts?.length > 1) {
+        closePosition(openContractId, "too many positions");
+      }
+      if (subscribed === false) {
+        send({
+          proposal_open_contract: 1,
+          contract_id: openContractId,
+          subscribe: 1,
+        });
+        subscribed = true;
+      }
+    }
+    await run(10000);
+    send({ portfolio: 1 });
+  }
 
-    emaArray[0] = prices?.[0];
+  if (data.msg_type === "candles") {
+    try {
+      closePrices = data?.candles?.map((i) => {
+        return i?.close;
+      });
+      openPrices = data?.candles?.map((i) => {
+        return i?.open;
+      });
+      highPrices = data?.candles?.map((i) => {
+        return i?.high;
+      });
+      lowPrices = data?.candles?.map((i) => {
+        return i?.low;
+      });
 
-    for (let i = 1; i < prices?.length; i++) {
-      emaArray[i] = (prices[i] * k) + (emaArray[i - 1] * (1 - k));
+      const len = closePrices?.length;
+      const prevIndex = len - 2;
+      const currIndex = len - 1;
+
+      const ema14 = calculateEMA(closePrices, 14);
+      const ema21 = calculateEMA(closePrices, 21);
+      const ema14Now = ema14[currIndex];
+      const ema21Now = ema21[currIndex];
+
+      const trend = ema14Now > ema21Now;
+      console.log(trend === true)
+
+      const signal = detectCrossover(ema14, ema21);
+
+      if (previousCandle !== closePrices[prevIndex]) {
+        if (trend === true && bullish[prevIndex] && crossedEma[(prevIndex, ema21Now)]) {
+          previousCandle = closePrices[prevIndex];
+          position === "MULTDOWN" &&
+            closePosition(openContractId, `Opposite Signal`);
+          await run(2000);
+          buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+        } else if (
+          trend === false &&
+          bearish[prevIndex] &&
+          crossedEma[(prevIndex, ema21Now)]
+        ) {
+          previousCandle = closePrices[prevIndex];
+          position === "MULTUP" &&
+            closePosition(openContractId, `Opposite Signal`);
+          await run(2000);
+          buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+        }
+      }
+    } catch (err) {
+      sendMessage(err);
     }
 
-    return emaArray;
-}
+    count += 1;
+    console.log(count);
+    await run(30000);
+    send({
+      ticks_history: data?.echo_req?.ticks_history,
+      style: "candles",
+      count: 1000000000,
+      granularity: data?.echo_req?.granularity,
+      end: "latest",
+    });
+  }
+
+  if (data.msg_type === "proposal_open_contract") {
+    let stop_loss = 1;
+    let take_profit = 4;
+    canBuy = false;
+    const type = data?.proposal_open_contract?.contract_type;
+    const entrySpot = data?.proposal_open_contract?.entry_spot;
+    const currentSpot = data?.proposal_open_contract?.current_spot;
+    const orderAmount =
+      data?.proposal_open_contract?.limit_order?.stop_out?.order_amount;
+    const stopOut = data?.proposal_open_contract?.limit_order?.stop_out?.value;
+    const takeProfit =
+      data?.proposal_open_contract?.limit_order?.take_profit?.value;
+    const pip =
+      type === "MULTUP" ? currentSpot - entrySpot : entrySpot - currentSpot;
+    const loss = type === "MULTUP" ? entrySpot - stopOut : stopOut - entrySpot;
+    const gain =
+      type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
+    profit = data?.proposal_open_contract?.profit;
+    console.log(pip, profit, loss, orderAmount, gain);
+  }
+
+  if (data.msg_type === "buy") {
+    position = data?.echo_req?.parameters?.contract_type;
+    openContractId = data?.buy?.contract_id;
+    send({
+      proposal_open_contract: 1,
+      contract_id: data?.buy?.contract_id,
+      subscribe: 1,
+    });
+    sendMessage(`${position} position entered`);
+    console.log(
+      `🟢 Entered ${position} position, Contract ID: ${openContractId}`
+    );
+  }
+
+  if (data.msg_type === "sell") {
+    sendMessage(
+      `💸 Position closed at ${data?.sell?.sold_for} USD, because ${reason}`
+    );
+    console.log(
+      `💸 Position closed at ${data?.sell?.sold_for} USD, because ${reason}`
+    );
+  }
+
+  if (data.error) {
+    const error = data?.error?.message;
+    console.error("❗ Error:", error);
+    sendMessage(`❗ Error: ${error}`);
+  }
+});
