@@ -24,7 +24,7 @@ let subscribed = false;
 let count = 0;
 let reason = "";
 let previousCandle = 0;
-let amount = null
+let amount = null;
 
 app.use(cors());
 
@@ -81,7 +81,7 @@ function detectCrossover(fastMA, slowMA) {
   const prevFast = fastMA[lastIndex - 2];
   const prevSlow = slowMA[lastIndex - 2];
   const currFast = fastMA[lastIndex - 1];
-  const currSlow = slowMA[lastIndex - 1]
+  const currSlow = slowMA[lastIndex - 1];
   if (prevFast < prevSlow && currFast > currSlow) {
     return "bullish";
   }
@@ -119,7 +119,7 @@ function buyMultiplier(direction, sym, stake) {
       currency: "USD",
       symbol: sym,
       multiplier: 100,
-      limit_order: { stop_loss: stake / 50, take_profit: stake }, 
+      limit_order: { stop_loss: stake / 50, take_profit: stake },
     },
   });
 }
@@ -144,7 +144,7 @@ ws.on("message", async (msg) => {
   if (data.msg_type === "authorize") {
     console.log("✅ Authorized");
     send({ balance: 1 });
-    send({ portfolio: 1});
+    send({ portfolio: 1 });
     send({
       ticks_history: "JD10",
       style: "candles",
@@ -154,9 +154,9 @@ ws.on("message", async (msg) => {
     });
   }
 
-  if (data.msg_type === "balance"){
-    let balance = data?.balance?.balance
-    amount = balance < 2000 ? Math.trunc(balance) : 2000
+  if (data.msg_type === "balance") {
+    let balance = data?.balance?.balance;
+    amount = balance < 2000 ? Math.trunc(balance) : 2000;
     await run(10000);
     send({ balance: 1 });
   }
@@ -191,47 +191,57 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "candles") {
-    closePrices = data?.candles?.map((i) => {
-      return i?.close;
-    })
-    openPrices = data?.candles?.map((i) => {
-      return i?.open;
-    })
-    highPrices = data?.candles?.map((i) => {
-      return i?.high;
-    })
-    lowPrices = data?.candles?.map((i) => {
-      return i?.low;
-    })
+    try {
+      closePrices = data?.candles?.map((i) => {
+        return i?.close;
+      });
+      openPrices = data?.candles?.map((i) => {
+        return i?.open;
+      });
+      highPrices = data?.candles?.map((i) => {
+        return i?.high;
+      });
+      lowPrices = data?.candles?.map((i) => {
+        return i?.low;
+      });
 
-    const len = closePrices?.length;
-    const prevIndex = len - 2;
-    const currIndex = len - 1;
+      const len = closePrices?.length;
+      const prevIndex = len - 2;
+      const currIndex = len - 1;
 
-    const ema14 = calculateEMA(closePrices, 14);
-    const ema21 = calculateEMA(closePrices, 21);
-    const ema14Now = ema14[currIndex];
-    const ema21Now = ema21[currIndex];
+      const ema14 = calculateEMA(closePrices, 14);
+      const ema21 = calculateEMA(closePrices, 21);
+      const ema14Now = ema14[currIndex];
+      const ema21Now = ema21[currIndex];
 
-    const trend = ema14Now > ema21Now;
+      const trend = ema14Now > ema21Now;
+      console.log(trend === true)
 
-    const signal = detectCrossover(ema14, ema21);
+      const signal = detectCrossover(ema14, ema21);
 
-    if (previousCandle !== closePrices[prevIndex]) {
-      if (signal === "bullish") {
-        previousCandle = closePrices[prevIndex];
-        position === "MULTDOWN" &&
-          closePosition(openContractId, `Opposite Signal`);
-        await run(2000);
-        buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-      } else if (signal === "bearish") {
-        previousCandle = closePrices[prevIndex];
-        position === "MULTUP" &&
-          closePosition(openContractId, `Opposite Signal`);
-        await run(2000);
-        buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+      if (previousCandle !== closePrices[prevIndex]) {
+        if (trend === true && bullish[prevIndex] && crossedEma[(prevIndex, ema21Now)]) {
+          previousCandle = closePrices[prevIndex];
+          position === "MULTDOWN" &&
+            closePosition(openContractId, `Opposite Signal`);
+          await run(2000);
+          buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+        } else if (
+          trend === false &&
+          bearish[prevIndex] &&
+          crossedEma[(prevIndex, ema21Now)]
+        ) {
+          previousCandle = closePrices[prevIndex];
+          position === "MULTUP" &&
+            closePosition(openContractId, `Opposite Signal`);
+          await run(2000);
+          buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+        }
       }
+    } catch (err) {
+      sendMessage(err);
     }
+
     count += 1;
     console.log(count);
     await run(30000);
@@ -251,13 +261,14 @@ ws.on("message", async (msg) => {
     const type = data?.proposal_open_contract?.contract_type;
     const entrySpot = data?.proposal_open_contract?.entry_spot;
     const currentSpot = data?.proposal_open_contract?.current_spot;
-    const orderAmount = data?.proposal_open_contract?.limit_order?.stop_out?.order_amount
-    const stopOut = data?.proposal_open_contract?.limit_order?.stop_out?.value
-    const takeProfit = data?.proposal_open_contract?.limit_order?.take_profit?.value
+    const orderAmount =
+      data?.proposal_open_contract?.limit_order?.stop_out?.order_amount;
+    const stopOut = data?.proposal_open_contract?.limit_order?.stop_out?.value;
+    const takeProfit =
+      data?.proposal_open_contract?.limit_order?.take_profit?.value;
     const pip =
       type === "MULTUP" ? currentSpot - entrySpot : entrySpot - currentSpot;
-    const loss =
-      type === "MULTUP" ? entrySpot - stopOut  : stopOut - entrySpot;
+    const loss = type === "MULTUP" ? entrySpot - stopOut : stopOut - entrySpot;
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     profit = data?.proposal_open_contract?.profit;
@@ -288,7 +299,7 @@ ws.on("message", async (msg) => {
   }
 
   if (data.error) {
-    const error = data?.error?.message
+    const error = data?.error?.message;
     console.error("❗ Error:", error);
     sendMessage(`❗ Error: ${error}`);
   }
