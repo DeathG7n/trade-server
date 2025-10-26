@@ -61,9 +61,9 @@ function sleep(ms) {
 }
 
 async function run(ms) {
-  console.log(`⏳ Waiting ${ms / 1000} seconds...`);
+  // console.log(`⏳ Waiting ${ms / 1000} seconds...`);
   await sleep(ms);
-  console.log("✅ Done!");
+  // console.log("✅ Done!");
 }
 
 function calculateEMA(prices, period) {
@@ -118,8 +118,8 @@ function buyMultiplier(direction, sym, stake) {
       contract_type: direction,
       currency: "USD",
       symbol: sym,
-      multiplier: 100,
-      limit_order: { stop_loss: stake / 50, take_profit: stake },
+      multiplier: 750,
+      limit_order: { stop_loss: stake / 10, take_profit: stake / 2.5},
     },
   });
 }
@@ -146,7 +146,7 @@ ws.on("message", async (msg) => {
     send({ balance: 1 });
     send({ portfolio: 1 });
     send({
-      ticks_history: "JD10",
+      ticks_history: "stpRNG",
       style: "candles",
       count: 1000000000,
       granularity: 60,
@@ -156,7 +156,7 @@ ws.on("message", async (msg) => {
 
   if (data.msg_type === "balance") {
     let balance = data?.balance?.balance;
-    amount = balance < 2000 ? Math.trunc(balance) : 2000;
+    amount = balance < 2000 ? Math.trunc(balance / 5) : 2000;
     await run(10000);
     send({ balance: 1 });
   }
@@ -215,12 +215,11 @@ ws.on("message", async (msg) => {
       const ema21Now = ema21[currIndex];
 
       const trend = ema14Now > ema21Now;
-      console.log(trend === true)
 
       const signal = detectCrossover(ema14, ema21);
 
       if (previousCandle !== closePrices[prevIndex]) {
-        if (trend === true && bullish[prevIndex] && crossedEma(prevIndex, ema21Now)) {
+        if (trend === true && bullish(prevIndex) && crossedEma(prevIndex, ema21Now)) {
           previousCandle = closePrices[prevIndex];
           position === "MULTDOWN" &&
             closePosition(openContractId, `Opposite Signal`);
@@ -228,7 +227,7 @@ ws.on("message", async (msg) => {
           buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
         } else if (
           trend === false &&
-          bearish[prevIndex] &&
+          bearish(prevIndex) &&
           crossedEma(prevIndex, ema21Now)
         ) {
           previousCandle = closePrices[prevIndex];
@@ -244,7 +243,7 @@ ws.on("message", async (msg) => {
 
     count += 1;
     console.log(count);
-    await run(30000);
+    //await run(30000);
     send({
       ticks_history: data?.echo_req?.ticks_history,
       style: "candles",
@@ -255,8 +254,6 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "proposal_open_contract") {
-    let stop_loss = 1;
-    let take_profit = 4;
     canBuy = false;
     const type = data?.proposal_open_contract?.contract_type;
     const entrySpot = data?.proposal_open_contract?.entry_spot;
@@ -264,25 +261,31 @@ ws.on("message", async (msg) => {
     const orderAmount =
       data?.proposal_open_contract?.limit_order?.stop_out?.order_amount;
     const stopOut = data?.proposal_open_contract?.limit_order?.stop_out?.value;
+    const stopLoss =
+      data?.proposal_open_contract?.limit_order?.stop_loss?.value;
     const takeProfit =
       data?.proposal_open_contract?.limit_order?.take_profit?.value;
     const pip =
       type === "MULTUP" ? currentSpot - entrySpot : entrySpot - currentSpot;
     const loss = type === "MULTUP" ? entrySpot - stopOut : stopOut - entrySpot;
+    const risk = type === "MULTUP" ? entrySpot - stopLoss : stopLoss - entrySpot;
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     profit = data?.proposal_open_contract?.profit;
-    console.log(pip, profit, loss, orderAmount, gain);
+    const runningTrade = {
+      pip : pip,
+      profit : profit,
+      loss: loss,
+      orderAmount: orderAmount,
+      gain: gain,
+      risk: risk
+    }
+    console.log(runningTrade);
   }
 
   if (data.msg_type === "buy") {
     position = data?.echo_req?.parameters?.contract_type;
     openContractId = data?.buy?.contract_id;
-    send({
-      proposal_open_contract: 1,
-      contract_id: data?.buy?.contract_id,
-      subscribe: 1,
-    });
     sendMessage(`${position} position entered`);
     console.log(
       `🟢 Entered ${position} position, Contract ID: ${openContractId}`
