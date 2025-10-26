@@ -220,7 +220,7 @@ ws.on("message", async (msg) => {
       const signal = detectCrossover(ema14, ema21);
 
       if (previousCandle !== closePrices[prevIndex]) {
-        if (trend === true && bullish[prevIndex] && crossedEma[(prevIndex, ema21Now)]) {
+        if (trend === true && bullish[prevIndex] && crossedEma(prevIndex, ema21Now)) {
           previousCandle = closePrices[prevIndex];
           position === "MULTDOWN" &&
             closePosition(openContractId, `Opposite Signal`);
@@ -229,7 +229,7 @@ ws.on("message", async (msg) => {
         } else if (
           trend === false &&
           bearish[prevIndex] &&
-          crossedEma[(prevIndex, ema21Now)]
+          crossedEma(prevIndex, ema21Now)
         ) {
           previousCandle = closePrices[prevIndex];
           position === "MULTUP" &&
