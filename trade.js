@@ -224,7 +224,6 @@ ws.on("message", async (msg) => {
         ) {
           if (canBuy === false) {
             position === "MULTDOWN" && closePosition(openContractId, `Opposite Signal`);
-            send({ portfolio: 1 });
           }
           if (canBuy) {
             buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
@@ -237,7 +236,6 @@ ws.on("message", async (msg) => {
         ) {
           if (canBuy === false) {
             position === "MULTUP" && closePosition(openContractId, `Opposite Signal`);
-            send({ portfolio: 1 });
           }
           if (canBuy) {
             buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
