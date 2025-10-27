@@ -118,7 +118,7 @@ function buyMultiplier(direction, sym, stake) {
       currency: "USD",
       symbol: sym,
       multiplier: 750,
-      limit_order: { stop_loss: stake / 10, take_profit: stake / 2.5 },
+      limit_order: { stop_loss: stake / 10, take_profit: stake / 2 },
     },
   });
 }
@@ -155,7 +155,7 @@ ws.on("message", async (msg) => {
 
   if (data.msg_type === "balance") {
     let balance = data?.balance?.balance;
-    amount = balance < 2000 ? Math.trunc(balance / 5) : 2000;
+    amount = balance / 5 < 2000 ? Math.trunc(balance / 5) : 2000;
     await run(10000);
     send({ balance: 1 });
   }
