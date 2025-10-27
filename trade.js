@@ -222,8 +222,8 @@ ws.on("message", async (msg) => {
           bullish(prevIndex) &&
           crossedEma(prevIndex, ema21Now)
         ) {
-          if (position === "MULTDOWN") {
-            closePosition(openContractId, `Opposite Signal`);
+          if (canBuy === false) {
+            position === "MULTDOWN" && closePosition(openContractId, `Opposite Signal`);
             send({ portfolio: 1 });
           }
           if (canBuy) {
@@ -235,8 +235,8 @@ ws.on("message", async (msg) => {
           bearish(prevIndex) &&
           crossedEma(prevIndex, ema21Now)
         ) {
-          if (position === "MULTUP") {
-            closePosition(openContractId, `Opposite Signal`);
+          if (canBuy === false) {
+            position === "MULTUP" && closePosition(openContractId, `Opposite Signal`);
             send({ portfolio: 1 });
           }
           if (canBuy) {
