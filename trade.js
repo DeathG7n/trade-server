@@ -65,6 +65,10 @@ async function run(ms) {
   // console.log("✅ Done!");
 }
 
+function isNumberBetween(number, lowerBound, upperBound) {
+  return number >= lowerBound && number <= upperBound;
+}
+
 function calculateEMA(prices, period) {
   const k = 2 / (period + 1);
   let emaArray = [];
@@ -118,7 +122,7 @@ function buyMultiplier(direction, sym, stake) {
       currency: "USD",
       symbol: sym,
       multiplier: 750,
-      limit_order: { stop_loss: stake / 10, take_profit: stake / 2 },
+      limit_order: { stop_loss: stake / 5, take_profit: stake / 5 },
     },
   });
 }
@@ -155,7 +159,29 @@ ws.on("message", async (msg) => {
 
   if (data.msg_type === "balance") {
     let balance = data?.balance?.balance;
-    amount = balance / 5 < 2000 ? Math.trunc(balance / 5) : 2000;
+    if(isNumberBetween(balance, 0 , 5)){
+      amount = 1
+    } else if(isNumberBetween(balance, 5 , 10)){
+      amount = 2
+    } else if(isNumberBetween(balance, 10 , 20)){
+      amount = 4
+    } else if(isNumberBetween(balance, 20 , 40)){
+      amount = 8
+    } else if(isNumberBetween(balance, 40 , 80)){
+      amount = 16
+    } else if(isNumberBetween(balance, 80 , 160)){
+      amount = 32
+    } else if(isNumberBetween(balance, 160 , 320)){
+      amount = 64
+    } else if(isNumberBetween(balance, 320 , 640)){
+      amount = 128
+    } else if(isNumberBetween(balance, 640 , 1280)){
+      amount = 256
+    } else if(isNumberBetween(balance, 1280 , 2560)){
+      amount = 512
+    } else{
+      amount = 1000
+    }
     await run(10000);
     send({ balance: 1 });
   }
