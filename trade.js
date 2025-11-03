@@ -159,28 +159,30 @@ ws.on("message", async (msg) => {
 
   if (data.msg_type === "balance") {
     let balance = data?.balance?.balance;
-    if(isNumberBetween(balance, 0 , 5)){
-      amount = 1
-    } else if(isNumberBetween(balance, 5 , 10)){
-      amount = 2
-    } else if(isNumberBetween(balance, 10 , 20)){
-      amount = 4
-    } else if(isNumberBetween(balance, 20 , 40)){
-      amount = 8
-    } else if(isNumberBetween(balance, 40 , 80)){
-      amount = 16
-    } else if(isNumberBetween(balance, 80 , 160)){
-      amount = 32
-    } else if(isNumberBetween(balance, 160 , 320)){
-      amount = 64
-    } else if(isNumberBetween(balance, 320 , 640)){
-      amount = 128
-    } else if(isNumberBetween(balance, 640 , 1280)){
-      amount = 256
-    } else if(isNumberBetween(balance, 1280 , 2560)){
-      amount = 512
-    } else{
-      amount = 1000
+    if (isNumberBetween(balance, 0, 5)) {
+      amount = 1;
+    } else if (isNumberBetween(balance, 5, 10)) {
+      amount = 2;
+    } else if (isNumberBetween(balance, 10, 20)) {
+      amount = 4;
+    } else if (isNumberBetween(balance, 20, 40)) {
+      amount = 8;
+    } else if (isNumberBetween(balance, 40, 80)) {
+      amount = 16;
+    } else if (isNumberBetween(balance, 80, 160)) {
+      amount = 32;
+    } else if (isNumberBetween(balance, 160, 320)) {
+      amount = 64;
+    } else if (isNumberBetween(balance, 320, 640)) {
+      amount = 128;
+    } else if (isNumberBetween(balance, 640, 1280)) {
+      amount = 256;
+    } else if (isNumberBetween(balance, 1280, 2560)) {
+      amount = 512;
+    } else if (isNumberBetween(balance, 2560, 5120)) {
+      amount = 1000;
+    } else {
+      amount = 1000;
     }
     await run(10000);
     send({ balance: 1 });
@@ -249,7 +251,8 @@ ws.on("message", async (msg) => {
           crossedEma(prevIndex, ema21Now)
         ) {
           if (canBuy === false) {
-            position === "MULTDOWN" && closePosition(openContractId, `Opposite Signal`);
+            position === "MULTDOWN" &&
+              closePosition(openContractId, `Opposite Signal`);
             buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
           }
           if (canBuy) {
@@ -262,7 +265,8 @@ ws.on("message", async (msg) => {
           crossedEma(prevIndex, ema21Now)
         ) {
           if (canBuy === false) {
-            position === "MULTUP" && closePosition(openContractId, `Opposite Signal`);
+            position === "MULTUP" &&
+              closePosition(openContractId, `Opposite Signal`);
             buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
           }
           if (canBuy) {
