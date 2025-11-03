@@ -251,11 +251,11 @@ ws.on("message", async (msg) => {
           crossedEma(prevIndex, ema21Now)
         ) {
           if (canBuy === false) {
-            position === "MULTDOWN" &&
+            if(position === "MULTDOWN"){
               closePosition(openContractId, `Opposite Signal`);
-            buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-          }
-          if (canBuy) {
+              buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+            }
+          } else {
             buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
           }
           previousCandle = closePrices[prevIndex];
@@ -265,11 +265,11 @@ ws.on("message", async (msg) => {
           crossedEma(prevIndex, ema21Now)
         ) {
           if (canBuy === false) {
-            position === "MULTUP" &&
+            if(position === "MULTUP"){
               closePosition(openContractId, `Opposite Signal`);
-            buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-          }
-          if (canBuy) {
+              buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+            }
+          } else {
             buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
           }
           previousCandle = closePrices[prevIndex];
