@@ -250,11 +250,12 @@ ws.on("message", async (msg) => {
         ) {
           if (canBuy === false) {
             position === "MULTDOWN" && closePosition(openContractId, `Opposite Signal`);
+            buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
           }
           if (canBuy) {
             buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-            previousCandle = closePrices[prevIndex];
           }
+          previousCandle = closePrices[prevIndex];
         } else if (
           trend === false &&
           bearish(prevIndex) &&
@@ -262,11 +263,12 @@ ws.on("message", async (msg) => {
         ) {
           if (canBuy === false) {
             position === "MULTUP" && closePosition(openContractId, `Opposite Signal`);
+            buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
           }
           if (canBuy) {
             buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
-            previousCandle = closePrices[prevIndex];
           }
+          previousCandle = closePrices[prevIndex];
         }
       }
     } catch (err) {
