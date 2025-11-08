@@ -122,7 +122,7 @@ function buyMultiplier(direction, sym, stake) {
       currency: "USD",
       symbol: sym,
       multiplier: 750,
-      limit_order: { stop_loss: stake / 5, take_profit: stake / 5 },
+      limit_order: { stop_loss: stake / 5, take_profit: stake },
     },
   });
 }
@@ -245,33 +245,34 @@ ws.on("message", async (msg) => {
       const signal = detectCrossover(ema14, ema21);
 
       if (previousCandle !== closePrices[prevIndex]) {
-        if (
-          trend === true &&
-          bullish(prevIndex) &&
-          crossedEma(prevIndex, ema21Now)
-        ) {
+        if (trend === true) {
           if (canBuy === false) {
-            if(position === "MULTDOWN"){
+            if (position === "MULTDOWN") {
               closePosition(openContractId, `Opposite Signal`);
+              if (bullish(prevIndex) && crossedEma(prevIndex, ema21Now)) {
+                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+              }
+            }
+          } else {
+            if (bullish(prevIndex) && crossedEma(prevIndex, ema21Now)) {
               buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
             }
-          } else {
-            buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
           }
           previousCandle = closePrices[prevIndex];
-        } else if (
-          trend === false &&
-          bearish(prevIndex) &&
-          crossedEma(prevIndex, ema21Now)
-        ) {
+        } else if (trend === false) {
           if (canBuy === false) {
-            if(position === "MULTUP"){
+            if (position === "MULTUP") {
               closePosition(openContractId, `Opposite Signal`);
-              buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+              if (bearish(prevIndex) && crossedEma(prevIndex, ema21Now)) {
+                buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+              }
             }
           } else {
-            buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+            if (bearish(prevIndex) && crossedEma(prevIndex, ema21Now)) {
+              buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+            }
           }
+          previousCandle = closePrices[prevIndex];
           previousCandle = closePrices[prevIndex];
         }
       }
@@ -292,6 +293,7 @@ ws.on("message", async (msg) => {
 
   if (data.msg_type === "proposal_open_contract") {
     canBuy = false;
+    subscribed = true
     const type = data?.proposal_open_contract?.contract_type;
     const entrySpot = data?.proposal_open_contract?.entry_spot;
     const currentSpot = data?.proposal_open_contract?.current_spot;
