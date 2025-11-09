@@ -245,34 +245,33 @@ ws.on("message", async (msg) => {
       const signal = detectCrossover(ema14, ema21);
 
       if (previousCandle !== closePrices[prevIndex]) {
-        if (trend === true) {
+        if (
+          trend === true &&
+          bullish(prevIndex) &&
+          crossedEma(prevIndex, ema21Now)
+        ) {
           if (canBuy === false) {
-            if (position === "MULTDOWN") {
+            if(position === "MULTDOWN"){
               closePosition(openContractId, `Opposite Signal`);
-              if (bullish(prevIndex) && crossedEma(prevIndex, ema21Now)) {
-                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-              }
-            }
-          } else {
-            if (bullish(prevIndex) && crossedEma(prevIndex, ema21Now)) {
               buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
             }
+          } else {
+            buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
           }
           previousCandle = closePrices[prevIndex];
-        } else if (trend === false) {
+        } else if (
+          trend === false &&
+          bearish(prevIndex) &&
+          crossedEma(prevIndex, ema21Now)
+        ) {
           if (canBuy === false) {
-            if (position === "MULTUP") {
+            if(position === "MULTUP"){
               closePosition(openContractId, `Opposite Signal`);
-              if (bearish(prevIndex) && crossedEma(prevIndex, ema21Now)) {
-                buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
-              }
-            }
-          } else {
-            if (bearish(prevIndex) && crossedEma(prevIndex, ema21Now)) {
               buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
             }
+          } else {
+            buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
           }
-          previousCandle = closePrices[prevIndex];
           previousCandle = closePrices[prevIndex];
         }
       }
@@ -290,6 +289,7 @@ ws.on("message", async (msg) => {
       end: "latest",
     });
   }
+
 
   if (data.msg_type === "proposal_open_contract") {
     canBuy = false;
