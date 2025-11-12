@@ -13,6 +13,8 @@ const CHAT_ID = "8068534792";
 
 let closePrices = [];
 let openPrices = [];
+let closePrices15 = [];
+let openPrices15 = [];
 let highPrices = [];
 let lowPrices = [];
 let position = null;
@@ -122,7 +124,7 @@ function buyMultiplier(direction, sym, stake) {
       currency: "USD",
       symbol: sym,
       multiplier: 750,
-      limit_order: { stop_loss: stake / 5, take_profit: stake / 2},
+      limit_order: { stop_loss: stake / 5, take_profit: stake / 2 },
     },
   });
 }
@@ -155,6 +157,15 @@ ws.on("message", async (msg) => {
       granularity: 60,
       end: "latest",
     });
+    setInterval(() => {
+      send({
+        ticks_history: "stpRNG",
+        style: "candles",
+        count: 1000000000,
+        granularity: 900,
+        end: "latest",
+      });
+    }, 300000);
   }
 
   if (data.msg_type === "balance") {
@@ -217,83 +228,121 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "candles") {
-    try {
-      closePrices = data?.candles?.map((i) => {
+    if (data?.echo_req?.granularity === 900) {
+      closePrices15 = data?.candles?.map((i) => {
         return i?.close;
       });
-      openPrices = data?.candles?.map((i) => {
-        return i?.open;
-      });
-      highPrices = data?.candles?.map((i) => {
-        return i?.high;
-      });
-      lowPrices = data?.candles?.map((i) => {
-        return i?.low;
-      });
+    } else {
+      try {
+        closePrices = data?.candles?.map((i) => {
+          return i?.close;
+        });
+        openPrices = data?.candles?.map((i) => {
+          return i?.open;
+        });
+        highPrices = data?.candles?.map((i) => {
+          return i?.high;
+        });
+        lowPrices = data?.candles?.map((i) => {
+          return i?.low;
+        });
 
-      const len = closePrices?.length;
-      const prevIndex = len - 2;
-      const currIndex = len - 1;
+        const len = closePrices?.length;
+        const prevIndex = len - 2;
+        const currIndex = len - 1;
 
-      const ema14 = calculateEMA(closePrices, 14);
-      const ema21 = calculateEMA(closePrices, 21);
-      const ema14Now = ema14[currIndex];
-      const ema21Now = ema21[currIndex];
+        const ema14 = calculateEMA(closePrices, 14);
+        const ema21 = calculateEMA(closePrices, 21);
+        const ema14Now = ema14[currIndex];
+        const ema21Now = ema21[currIndex];
 
-      const trend = ema14Now > ema21Now;
+        const trend = ema14Now > ema21Now;
 
-      const signal = detectCrossover(ema14, ema21);
+        const ema14_15 = calculateEMA(closePrices15, 14);
+        const ema21_15 = calculateEMA(closePrices15, 21);
+        const ema14_15Now = ema14_15[currIndex];
+        const ema21_15Now = ema21_15[currIndex];
 
-      if (previousCandle !== closePrices[prevIndex]) {
-        if (
-          trend === true &&
-          bullish(prevIndex) &&
-          crossedEma(prevIndex, ema21Now)
-        ) {
-          if (canBuy === false) {
-            if(position === "MULTDOWN"){
-              closePosition(openContractId, `Opposite Signal`);
-              buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+        const trend15 = ema14_15Now > ema21_15Now;
+
+        const signal = detectCrossover(ema14, ema21);
+
+        if (previousCandle !== closePrices[prevIndex]) {
+          if (trend15 === true) {
+            if (canBuy === false) {
+              if (position === "MULTDOWN") {
+                closePosition(openContractId, `Opposite Signal`);
+                if (
+                  trend === true &&
+                  bullish(prevIndex) &&
+                  crossedEma(prevIndex, ema21Now)
+                ) {
+                  buyMultiplier(
+                    "MULTUP",
+                    data?.echo_req?.ticks_history,
+                    amount
+                  );
+                  previousCandle = closePrices[prevIndex];
+                }
+              }
+            } else {
+              if (
+                trend === true &&
+                bullish(prevIndex) &&
+                crossedEma(prevIndex, ema21Now)
+              ) {
+                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+                previousCandle = closePrices[prevIndex];
+              }
             }
           } else {
-            buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-          }
-          previousCandle = closePrices[prevIndex];
-        } else if (
-          trend === false &&
-          bearish(prevIndex) &&
-          crossedEma(prevIndex, ema21Now)
-        ) {
-          if (canBuy === false) {
-            if(position === "MULTUP"){
-              closePosition(openContractId, `Opposite Signal`);
-              buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+            if (canBuy === false) {
+              if (position === "MULTUP") {
+                closePosition(openContractId, `Opposite Signal`);
+                if (
+                  trend === false &&
+                  bearish(prevIndex) &&
+                  crossedEma(prevIndex, ema21Now)
+                ) {
+                  buyMultiplier(
+                    "MULTDOWN",
+                    data?.echo_req?.ticks_history,
+                    amount
+                  );
+                  previousCandle = closePrices[prevIndex];
+                }
+              }
+            } else {
+              if (
+                trend === false &&
+                bearish(prevIndex) &&
+                crossedEma(prevIndex, ema21Now)
+              ) {
+                buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+                previousCandle = closePrices[prevIndex];
+              }
             }
-          } else {
-            buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
           }
-          previousCandle = closePrices[prevIndex];
         }
+      } catch (err) {
+        sendMessage(err);
       }
-    } catch (err) {
-      sendMessage(err);
+
+      count += 1;
+      console.log(count);
+      send({
+        ticks_history: data?.echo_req?.ticks_history,
+        style: "candles",
+        count: 1000000000,
+        granularity: data?.echo_req?.granularity,
+        end: "latest",
+      });
     }
-
-    count += 1;
-    console.log(count);
-    send({
-      ticks_history: data?.echo_req?.ticks_history,
-      style: "candles",
-      count: 1000000000,
-      granularity: data?.echo_req?.granularity,
-      end: "latest",
-    });
   }
-
 
   if (data.msg_type === "proposal_open_contract") {
     canBuy = false;
-    subscribed = true
+    subscribed = true;
     const type = data?.proposal_open_contract?.contract_type;
     const entrySpot = data?.proposal_open_contract?.entry_spot;
     const currentSpot = data?.proposal_open_contract?.current_spot;
