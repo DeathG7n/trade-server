@@ -1,5 +1,4 @@
 const WebSocket = require("ws");
-const pm2 = require("pm2");
 const express = require("express");
 const app = express();
 const cors = require("cors");
@@ -13,8 +12,8 @@ const CHAT_ID = "8068534792";
 
 let closePrices = [];
 let openPrices = [];
-let closePrices15 = [];
-let openPrices15 = [];
+let epochs = [];
+let closePrices30 = [];
 let highPrices = [];
 let lowPrices = [];
 let position = null;
@@ -24,17 +23,12 @@ let canBuy = false;
 let subscribed = false;
 let count = 0;
 let reason = "";
-let previousCandle = 0;
+let previousCandleEpoch = 0;
 let amount = null;
 
 app.use(cors());
 
 app.get("/", (req, res) => {
-  ws.on("open", () => {
-    console.log("🔌 Connected");
-    sendMessage("🔌 Connected");
-    send({ authorize: API_TOKEN });
-  });
   res.json("Hi");
 });
 
@@ -79,21 +73,6 @@ function calculateEMA(prices, period) {
     emaArray[i] = prices[i] * k + emaArray[i - 1] * (1 - k);
   }
   return emaArray;
-}
-
-function detectCrossover(fastMA, slowMA) {
-  const lastIndex = fastMA.length - 1;
-  const prevFast = fastMA[lastIndex - 2];
-  const prevSlow = slowMA[lastIndex - 2];
-  const currFast = fastMA[lastIndex - 1];
-  const currSlow = slowMA[lastIndex - 1];
-  if (prevFast < prevSlow && currFast > currSlow) {
-    return "bullish";
-  }
-  if (prevFast > prevSlow && currFast < currSlow) {
-    return "bearish";
-  }
-  return null;
 }
 
 const sendMessage = async (message) => {
@@ -145,15 +124,20 @@ ws.on("open", () => {
 
 ws.on("message", async (msg) => {
   const data = JSON.parse(msg);
+  //console.log(data)
+
+  if (data.msg_type !== "candles") {
+    //console.log(data)
+  }
 
   if (data.msg_type === "authorize") {
     console.log("✅ Authorized");
-    send({ balance: 1 });
+    send({ balance: 1, subscribe: 1 });
     send({ portfolio: 1 });
     send({
       ticks_history: "stpRNG",
       style: "candles",
-      count: 1000000000,
+      count: 500,
       granularity: 60,
       end: "latest",
     });
@@ -161,8 +145,8 @@ ws.on("message", async (msg) => {
       send({
         ticks_history: "stpRNG",
         style: "candles",
-        count: 1000000000,
-        granularity: 900,
+        count: 300,
+        granularity: 1800,
         end: "latest",
       });
     }, 300000);
@@ -172,31 +156,29 @@ ws.on("message", async (msg) => {
     let balance = data?.balance?.balance;
     if (isNumberBetween(balance, 0, 5)) {
       amount = 1;
-    } else if (isNumberBetween(balance, 5, 10)) {
+    } else if (isNumberBetween(balance, 6, 10)) {
       amount = 2;
-    } else if (isNumberBetween(balance, 10, 20)) {
+    } else if (isNumberBetween(balance, 11, 20)) {
       amount = 4;
-    } else if (isNumberBetween(balance, 20, 40)) {
+    } else if (isNumberBetween(balance, 21, 40)) {
       amount = 8;
-    } else if (isNumberBetween(balance, 40, 80)) {
+    } else if (isNumberBetween(balance, 41, 80)) {
       amount = 16;
-    } else if (isNumberBetween(balance, 80, 160)) {
+    } else if (isNumberBetween(balance, 81, 160)) {
       amount = 32;
-    } else if (isNumberBetween(balance, 160, 320)) {
+    } else if (isNumberBetween(balance, 161, 320)) {
       amount = 64;
-    } else if (isNumberBetween(balance, 320, 640)) {
+    } else if (isNumberBetween(balance, 321, 640)) {
       amount = 128;
-    } else if (isNumberBetween(balance, 640, 1280)) {
+    } else if (isNumberBetween(balance, 641, 1280)) {
       amount = 256;
-    } else if (isNumberBetween(balance, 1280, 2560)) {
+    } else if (isNumberBetween(balance, 1281, 2560)) {
       amount = 512;
-    } else if (isNumberBetween(balance, 2560, 5120)) {
+    } else if (isNumberBetween(balance, 2561, 5120)) {
       amount = 1000;
     } else {
       amount = 1000;
     }
-    await run(10000);
-    send({ balance: 1 });
   }
 
   if (data.msg_type === "portfolio") {
@@ -228,24 +210,15 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "candles") {
-    if (data?.echo_req?.granularity === 900) {
-      closePrices15 = data?.candles?.map((i) => {
-        return i?.close;
-      });
+    if (data?.echo_req?.granularity === 1800) {
+      closePrices30 = data.candles.map((c) => c.close);
     } else {
       try {
-        closePrices = data?.candles?.map((i) => {
-          return i?.close;
-        });
-        openPrices = data?.candles?.map((i) => {
-          return i?.open;
-        });
-        highPrices = data?.candles?.map((i) => {
-          return i?.high;
-        });
-        lowPrices = data?.candles?.map((i) => {
-          return i?.low;
-        });
+        closePrices = data.candles.map((c) => c.close);
+        openPrices = data.candles.map((c) => c.open);
+        highPrices = data.candles.map((c) => c.high);
+        lowPrices = data.candles.map((c) => c.low);
+        epochs = data.candles.map((c) => c.epoch);
 
         const len = closePrices?.length;
         const prevIndex = len - 2;
@@ -253,46 +226,49 @@ ws.on("message", async (msg) => {
 
         const ema14 = calculateEMA(closePrices, 14);
         const ema21 = calculateEMA(closePrices, 21);
+        const ema21Prev = ema21[prevIndex];
         const ema14Now = ema14[currIndex];
         const ema21Now = ema21[currIndex];
 
         const trend = ema14Now > ema21Now;
 
-        const ema14_15 = calculateEMA(closePrices15, 14);
-        const ema21_15 = calculateEMA(closePrices15, 21);
-        const ema14_15Now = ema14_15[currIndex];
-        const ema21_15Now = ema21_15[currIndex];
+        const len30 = closePrices30?.length;
+        const currIndex30 = len30 - 1;
 
-        const trend15 = ema14_15Now > ema21_15Now;
+        const ema14_30 = calculateEMA(closePrices30, 14);
+        const ema21_30 = calculateEMA(closePrices30, 21);
+        const ema14_30Now = ema14_30[currIndex30];
+        const ema21_30Now = ema21_30[currIndex30];
 
-        const signal = detectCrossover(ema14, ema21);
+        const trend30 = ema14_30Now > ema21_30Now;
 
-        if (previousCandle !== closePrices[prevIndex]) {
-          if (trend15 === true) {
+        const prevEpoch = epochs[prevIndex];
+        if (previousCandleEpoch !== prevEpoch) {
+          if (trend30 === true) {
             if (canBuy === false) {
               if (position === "MULTDOWN") {
                 closePosition(openContractId, `Opposite Signal`);
                 if (
                   trend === true &&
                   bullish(prevIndex) &&
-                  crossedEma(prevIndex, ema21Now)
+                  crossedEma(prevIndex, ema21Prev)
                 ) {
                   buyMultiplier(
                     "MULTUP",
                     data?.echo_req?.ticks_history,
                     amount
                   );
-                  previousCandle = closePrices[prevIndex];
+                  previousCandleEpoch = prevEpoch;
                 }
               }
             } else {
               if (
                 trend === true &&
                 bullish(prevIndex) &&
-                crossedEma(prevIndex, ema21Now)
+                crossedEma(prevIndex, ema21Prev)
               ) {
                 buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-                previousCandle = closePrices[prevIndex];
+                previousCandleEpoch = prevEpoch;
               }
             }
           } else {
@@ -302,24 +278,28 @@ ws.on("message", async (msg) => {
                 if (
                   trend === false &&
                   bearish(prevIndex) &&
-                  crossedEma(prevIndex, ema21Now)
+                  crossedEma(prevIndex, ema21Prev)
                 ) {
                   buyMultiplier(
                     "MULTDOWN",
                     data?.echo_req?.ticks_history,
                     amount
                   );
-                  previousCandle = closePrices[prevIndex];
+                  previousCandleEpoch = prevEpoch;
                 }
               }
             } else {
               if (
                 trend === false &&
                 bearish(prevIndex) &&
-                crossedEma(prevIndex, ema21Now)
+                crossedEma(prevIndex, ema21Prev)
               ) {
-                buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
-                previousCandle = closePrices[prevIndex];
+                buyMultiplier(
+                  "MULTDOWN",
+                  data?.echo_req?.ticks_history,
+                  amount
+                );
+                previousCandleEpoch = prevEpoch;
               }
             }
           }
@@ -333,7 +313,7 @@ ws.on("message", async (msg) => {
       send({
         ticks_history: data?.echo_req?.ticks_history,
         style: "candles",
-        count: 1000000000,
+        count: 500,
         granularity: data?.echo_req?.granularity,
         end: "latest",
       });
@@ -388,6 +368,10 @@ ws.on("message", async (msg) => {
     console.log(
       `💸 Position closed at ${data?.sell?.sold_for} USD, because ${reason}`
     );
+    position = null;
+    openContractId = null;
+    canBuy = true;
+    subscribed = false;
   }
 
   if (data.error) {
