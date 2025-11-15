@@ -1,4 +1,5 @@
 const WebSocket = require("ws");
+const pm2 = require("pm2");
 const express = require("express");
 const app = express();
 const cors = require("cors");
@@ -12,7 +13,6 @@ const CHAT_ID = "8068534792";
 
 let closePrices = [];
 let openPrices = [];
-let epochs = [];
 let closePrices30 = [];
 let highPrices = [];
 let lowPrices = [];
@@ -23,8 +23,9 @@ let canBuy = false;
 let subscribed = false;
 let count = 0;
 let reason = "";
-let previousCandleEpoch = 0;
+let previousCandle = 0;
 let amount = null;
+let stopLoss = null;
 
 app.use(cors());
 
@@ -103,7 +104,7 @@ function buyMultiplier(direction, sym, stake) {
       currency: "USD",
       symbol: sym,
       multiplier: 750,
-      limit_order: { stop_loss: stake / 5, take_profit: stake / 2 },
+      limit_order: { stop_loss: stake / 2, take_profit: stake * 5 },
     },
   });
 }
@@ -124,21 +125,16 @@ ws.on("open", () => {
 
 ws.on("message", async (msg) => {
   const data = JSON.parse(msg);
-  //console.log(data)
-
-  if (data.msg_type !== "candles") {
-    //console.log(data)
-  }
 
   if (data.msg_type === "authorize") {
     console.log("✅ Authorized");
-    send({ balance: 1, subscribe: 1 });
+    send({ balance: 1 });
     send({ portfolio: 1 });
     send({
       ticks_history: "stpRNG",
       style: "candles",
       count: 500,
-      granularity: 60,
+      granularity: 300,
       end: "latest",
     });
     setInterval(() => {
@@ -156,29 +152,31 @@ ws.on("message", async (msg) => {
     let balance = data?.balance?.balance;
     if (isNumberBetween(balance, 0, 5)) {
       amount = 1;
-    } else if (isNumberBetween(balance, 6, 10)) {
+    } else if (isNumberBetween(balance, 5, 10)) {
       amount = 2;
-    } else if (isNumberBetween(balance, 11, 20)) {
+    } else if (isNumberBetween(balance, 10, 20)) {
       amount = 4;
-    } else if (isNumberBetween(balance, 21, 40)) {
+    } else if (isNumberBetween(balance, 20, 40)) {
       amount = 8;
-    } else if (isNumberBetween(balance, 41, 80)) {
+    } else if (isNumberBetween(balance, 40, 80)) {
       amount = 16;
-    } else if (isNumberBetween(balance, 81, 160)) {
+    } else if (isNumberBetween(balance, 80, 160)) {
       amount = 32;
-    } else if (isNumberBetween(balance, 161, 320)) {
+    } else if (isNumberBetween(balance, 160, 320)) {
       amount = 64;
-    } else if (isNumberBetween(balance, 321, 640)) {
+    } else if (isNumberBetween(balance, 320, 640)) {
       amount = 128;
-    } else if (isNumberBetween(balance, 641, 1280)) {
+    } else if (isNumberBetween(balance, 640, 1280)) {
       amount = 256;
-    } else if (isNumberBetween(balance, 1281, 2560)) {
+    } else if (isNumberBetween(balance, 1280, 2560)) {
       amount = 512;
-    } else if (isNumberBetween(balance, 2561, 5120)) {
+    } else if (isNumberBetween(balance, 2560, 5120)) {
       amount = 1000;
     } else {
       amount = 1000;
     }
+    await run(10000);
+    send({ balance: 1 });
   }
 
   if (data.msg_type === "portfolio") {
@@ -188,6 +186,7 @@ ws.on("message", async (msg) => {
       position = null;
       subscribed = false;
       canBuy = true;
+      stopLoss = null;
     } else {
       openPosition =
         data?.portfolio?.contracts[data?.portfolio?.contracts?.length - 1];
@@ -218,7 +217,6 @@ ws.on("message", async (msg) => {
         openPrices = data.candles.map((c) => c.open);
         highPrices = data.candles.map((c) => c.high);
         lowPrices = data.candles.map((c) => c.low);
-        epochs = data.candles.map((c) => c.epoch);
 
         const len = closePrices?.length;
         const prevIndex = len - 2;
@@ -242,8 +240,7 @@ ws.on("message", async (msg) => {
 
         const trend30 = ema14_30Now > ema21_30Now;
 
-        const prevEpoch = epochs[prevIndex];
-        if (previousCandleEpoch !== prevEpoch) {
+        if (previousCandle !== closePrices[prevIndex]) {
           if (trend30 === true) {
             if (canBuy === false) {
               if (position === "MULTDOWN") {
@@ -258,7 +255,7 @@ ws.on("message", async (msg) => {
                     data?.echo_req?.ticks_history,
                     amount
                   );
-                  previousCandleEpoch = prevEpoch;
+                  previousCandle = closePrices[prevIndex];
                 }
               }
             } else {
@@ -268,7 +265,7 @@ ws.on("message", async (msg) => {
                 crossedEma(prevIndex, ema21Prev)
               ) {
                 buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-                previousCandleEpoch = prevEpoch;
+                previousCandle = closePrices[prevIndex];
               }
             }
           } else {
@@ -285,7 +282,7 @@ ws.on("message", async (msg) => {
                     data?.echo_req?.ticks_history,
                     amount
                   );
-                  previousCandleEpoch = prevEpoch;
+                  previousCandle = closePrices[prevIndex];
                 }
               }
             } else {
@@ -299,7 +296,7 @@ ws.on("message", async (msg) => {
                   data?.echo_req?.ticks_history,
                   amount
                 );
-                previousCandleEpoch = prevEpoch;
+                previousCandle = closePrices[prevIndex];
               }
             }
           }
@@ -329,7 +326,7 @@ ws.on("message", async (msg) => {
     const orderAmount =
       data?.proposal_open_contract?.limit_order?.stop_out?.order_amount;
     const stopOut = data?.proposal_open_contract?.limit_order?.stop_out?.value;
-    const stopLoss =
+    const stop =
       data?.proposal_open_contract?.limit_order?.stop_loss?.value;
     const takeProfit =
       data?.proposal_open_contract?.limit_order?.take_profit?.value;
@@ -341,6 +338,22 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data?.proposal_open_contract?.profit;
+    if (pip >= 40) {
+      stopLoss = 20;
+      sendMessage(`💸 Stop Loss trailed to ${stopLoss}`);
+    } else if (pip >= 20) {
+      stopLoss = 10;
+      sendMessage(`💸 Stop Loss trailed to ${stopLoss}`);
+    } else if (pip >= 10) {
+      stopLoss = 5;
+      sendMessage(`💸 Stop Loss trailed to ${stopLoss}`);
+    } else if (pip >= 5) {
+      stopLoss = 1;
+      sendMessage(`💸 Stop Loss trailed to ${stopLoss}`);
+    }
+    if (stopLoss !== null && pip < stopLoss) {
+      closePosition(openContractId, `Stop Loss Hit`);
+    }
     const runningTrade = {
       pip: pip,
       profit: profit,
@@ -348,6 +361,7 @@ ws.on("message", async (msg) => {
       orderAmount: orderAmount,
       gain: gain,
       risk: risk,
+      stopLoss: stopLoss,
     };
     console.log(runningTrade);
   }
@@ -372,6 +386,7 @@ ws.on("message", async (msg) => {
     openContractId = null;
     canBuy = true;
     subscribed = false;
+    stopLoss = null;
   }
 
   if (data.error) {
