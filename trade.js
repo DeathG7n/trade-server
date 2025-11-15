@@ -145,7 +145,7 @@ ws.on("message", async (msg) => {
         granularity: 1800,
         end: "latest",
       });
-    }, 300000);
+    }, 900000);
   }
 
   if (data.msg_type === "balance") {
