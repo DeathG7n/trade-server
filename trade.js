@@ -25,7 +25,6 @@ let count = 0;
 let reason = "";
 let previousCandle = 0;
 let amount = null;
-let stopLoss = null;
 
 app.use(cors());
 
@@ -37,6 +36,7 @@ app.listen(3000, () => {
   console.log("Server is running");
 });
 
+//Functions
 function bearish(candle) {
   return openPrices[candle] > closePrices[candle];
 }
@@ -118,11 +118,35 @@ function closePosition(contract_id, why) {
   console.log(`❌ Closing position: ${contract_id}`);
 }
 
+const fs = require('fs');
+
+function readStorage() {
+  if (!fs.existsSync("storage.json")) {
+    fs.writeFileSync("storage.json", JSON.stringify({}));
+  }
+  return JSON.parse(fs.readFileSync("storage.json"));
+}
+
+function writeStorage(obj) {
+  fs.writeFileSync("storage.json", JSON.stringify(obj, null, 2));
+}
+
+function saveVar(key, value) {
+  const data = readStorage();
+  data[key] = value;
+  writeStorage(data);
+}
+
+function loadVar(key) {
+  return readStorage()[key];
+}
+
 ws.on("open", () => {
   console.log("🔌 Connected");
   send({ authorize: API_TOKEN });
 });
 
+//Websocket
 ws.on("message", async (msg) => {
   const data = JSON.parse(msg);
 
@@ -186,7 +210,7 @@ ws.on("message", async (msg) => {
       position = null;
       subscribed = false;
       canBuy = true;
-      stopLoss = null;
+      saveVar("stopLoss", 0);
     } else {
       openPosition =
         data?.portfolio?.contracts[data?.portfolio?.contracts?.length - 1];
@@ -318,6 +342,7 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "proposal_open_contract") {
+    const stopLoss = loadVar("stopLoss")
     canBuy = false;
     subscribed = true;
     const type = data?.proposal_open_contract?.contract_type;
@@ -339,19 +364,19 @@ ws.on("message", async (msg) => {
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data?.proposal_open_contract?.profit;
     if (pip >= 40 && stopLoss < 20) {
-      stopLoss = 20;
-      sendMessage(`💸 Stop Loss trailed to ${stopLoss}`);
+      saveVar("stopLoss", 20);
+      sendMessage(`💸 Stop Loss trailed from ${stopLoss}`);
     } else if (pip >= 20 && stopLoss < 10) {
-      stopLoss = 10;
-      sendMessage(`💸 Stop Loss trailed to ${stopLoss}`);
+      saveVar("stopLoss", 10);
+      sendMessage(`💸 Stop Loss trailed from ${stopLoss}`);
     } else if (pip >= 10 && stopLoss < 5) {
-      stopLoss = 5;
-      sendMessage(`💸 Stop Loss trailed to ${stopLoss}`);
+      saveVar("stopLoss", 5);
+      sendMessage(`💸 Stop Loss trailed from ${stopLoss}`);
     } else if (pip >= 5 && stopLoss === null) {
-      stopLoss = 1;
-      sendMessage(`💸 Stop Loss trailed to ${stopLoss}`);
+      saveVar("stopLoss", 1);
+      sendMessage(`💸 Stop Loss trailed from ${stopLoss}`);
     }
-    if (stopLoss !== null && pip < stopLoss) {
+    if (stopLoss !== 0 && pip < stopLoss) {
       closePosition(openContractId, `Stop Loss Hit`);
     }
     const runningTrade = {
@@ -386,7 +411,7 @@ ws.on("message", async (msg) => {
     openContractId = null;
     canBuy = true;
     subscribed = false;
-    stopLoss = null;
+    saveVar("stopLoss", 0);
   }
 
   if (data.error) {
