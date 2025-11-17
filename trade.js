@@ -335,7 +335,7 @@ ws.on("message", async (msg) => {
       update(10);
     } else if (pip >= 10 && stopLoss < 5) {
       update(5);
-    } else if (pip >= 5 && stopLoss === null) {
+    } else if (pip >= 5 && stopLoss === 0) {
       update(1);
     }
     if (stopLoss !== 0 && pip < stopLoss) {
