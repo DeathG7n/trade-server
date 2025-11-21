@@ -16,6 +16,7 @@ const uri =
 const client = new MongoClient(uri);
 
 let closePrices = [];
+let closePrices30 = [];
 let openPrices = [];
 let highPrices = [];
 let lowPrices = [];
@@ -145,6 +146,7 @@ async function update(stop) {
       { returnNewDocument: true }
     );
     sendMessage(`💸 Stop Loss trailed to ${stop}`);
+    stopLoss = stop;
   } catch (e) {
     console.error(e);
   }
@@ -165,6 +167,14 @@ ws.on("message", async (msg) => {
     console.log("✅ Authorized");
     send({ balance: 1, subscribe: 1 });
     send({ portfolio: 1 });
+    send({
+      ticks_history: "stpRNG",
+      style: "candles",
+      count: 300,
+      granularity: 3600,
+      end: "latest",
+    });
+    await run(10000);
     send({
       ticks_history: "stpRNG",
       style: "candles",
@@ -217,7 +227,7 @@ ws.on("message", async (msg) => {
         if (stopLoss === 0) {
           return;
         } else {
-          update(0); 
+          update(0);
         }
       }
     } else {
@@ -242,71 +252,100 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "candles") {
-    try {
-      closePrices = data.candles.map((c) => c.close);
-      openPrices = data.candles.map((c) => c.open);
-      highPrices = data.candles.map((c) => c.high);
-      lowPrices = data.candles.map((c) => c.low);
+    if (data.echo_req.granularity === 3600) {
+      closePrices30 = data.candles.map((c) => c.close);
+      await run(10000);
+      send({
+        ticks_history: data?.echo_req?.ticks_history,
+        style: "candles",
+        count: 300,
+        granularity: data?.echo_req?.granularity,
+        end: "latest",
+      });
+    } else {
+      try {
+        closePrices = data.candles.map((c) => c.close);
+        openPrices = data.candles.map((c) => c.open);
+        highPrices = data.candles.map((c) => c.high);
+        lowPrices = data.candles.map((c) => c.low);
 
-      const len = closePrices?.length;
-      const prevIndex = len - 2;
-      const currIndex = len - 1;
+        const len = closePrices?.length;
+        const prevIndex = len - 2;
+        const currIndex = len - 1;
 
-      const ema14 = calculateEMA(closePrices, 14);
-      const ema21 = calculateEMA(closePrices, 21);
-      const ema21Prev = ema21[prevIndex];
-      const ema14Now = ema14[currIndex];
-      const ema21Now = ema21[currIndex];
+        const ema14 = calculateEMA(closePrices, 14);
+        const ema21 = calculateEMA(closePrices, 21);
+        const ema21Prev = ema21[prevIndex];
+        const ema14Now = ema14[currIndex];
+        const ema21Now = ema21[currIndex];
 
-      const trend = ema14Now > ema21Now;
+        const trend = ema14Now > ema21Now;
 
-      if (previousCandle !== closePrices[prevIndex]) {
-        if (
-          trend === true &&
-          bullish(prevIndex) &&
-          crossedEma(prevIndex, ema21Prev)
-        ) {
-          if (canBuy === false) {
-            if (position === "MULTDOWN") {
-              closePosition(openContractId, `Opposite Signal`);
+        const len30 = closePrices?.length;
+        const currIndex30 = len30 - 1;
+
+        const ema14_30 = calculateEMA(closePrices30, 14);
+        const ema21_30 = calculateEMA(closePrices30, 21);
+        const ema14_30Now = ema14_30[currIndex30];
+        const ema21_30Now = ema21_30[currIndex30];
+
+        const trend30 = ema14_30Now > ema21_30Now;
+
+        if (previousCandle !== closePrices[prevIndex]) {
+          if (
+            trend30 === true &&
+            trend === true &&
+            bullish(prevIndex) &&
+            crossedEma(prevIndex, ema21Prev)
+          ) {
+            if (canBuy === false) {
+              if (position === "MULTDOWN") {
+                closePosition(openContractId, `Opposite Signal`);
+                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+                previousCandle = closePrices[prevIndex];
+              }
+            } else {
               buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
               previousCandle = closePrices[prevIndex];
             }
-          } else {
-            buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-            previousCandle = closePrices[prevIndex];
           }
-        }
-        if (
-          trend === false &&
-          bearish(prevIndex) &&
-          crossedEma(prevIndex, ema21Prev)
-        ) {
-          if (canBuy === false) {
-            if (position === "MULTUP") {
-              closePosition(openContractId, `Opposite Signal`);
+          if (
+            trend30 === false &&
+            trend === false &&
+            bearish(prevIndex) &&
+            crossedEma(prevIndex, ema21Prev)
+          ) {
+            if (canBuy === false) {
+              if (position === "MULTUP") {
+                closePosition(openContractId, `Opposite Signal`);
+                buyMultiplier(
+                  "MULTDOWN",
+                  data?.echo_req?.ticks_history,
+                  amount
+                );
+                previousCandle = closePrices[prevIndex];
+              }
+            } else {
               buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
               previousCandle = closePrices[prevIndex];
             }
-          } else {
-            buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
-            previousCandle = closePrices[prevIndex];
           }
         }
+      } catch (err) {
+        sendMessage(err);
       }
-    } catch (err) {
-      sendMessage(err);
-    }
 
-    count += 1;
-    console.log(count);
-    send({
-      ticks_history: data?.echo_req?.ticks_history,
-      style: "candles",
-      count: 500,
-      granularity: data?.echo_req?.granularity,
-      end: "latest",
-    });
+      count += 1;
+      console.log(count);
+      await run(10000);
+      send({
+        ticks_history: data?.echo_req?.ticks_history,
+        style: "candles",
+        count: 500,
+        granularity: data?.echo_req?.granularity,
+        end: "latest",
+      });
+    }
   }
 
   if (data.msg_type === "proposal_open_contract") {
@@ -369,7 +408,7 @@ ws.on("message", async (msg) => {
     );
     console.log(
       `💸 Position closed at ${data?.sell?.sold_for} USD, because ${reason}`
-    ); 
+    );
     position = null;
     openContractId = null;
     canBuy = true;
