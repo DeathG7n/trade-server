@@ -168,15 +168,7 @@ ws.on("message", async (msg) => {
     send({ balance: 1, subscribe: 1 });
     send({ portfolio: 1 });
     send({
-      ticks_history: "stpRNG",
-      style: "candles",
-      count: 300,
-      granularity: 3600,
-      end: "latest",
-    });
-    await run(10000);
-    send({
-      ticks_history: "stpRNG",
+      ticks_history: "R_75",
       style: "candles",
       count: 500,
       granularity: 300,
@@ -293,42 +285,42 @@ ws.on("message", async (msg) => {
 
         if (previousCandle !== closePrices[prevIndex]) {
           if (
-            trend30 === true &&
             trend === true &&
             bullish(prevIndex) &&
             crossedEma(prevIndex, ema21Prev)
           ) {
-            if (canBuy === false) {
-              if (position === "MULTDOWN") {
-                closePosition(openContractId, `Opposite Signal`);
-                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-                previousCandle = closePrices[prevIndex];
-              }
-            } else {
-              buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-              previousCandle = closePrices[prevIndex];
-            }
+            sendMessage(`Bullish Signal`);
+            // if (canBuy === false) {
+            //   if (position === "MULTDOWN") {
+            //     closePosition(openContractId, `Opposite Signal`);
+            //     buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+            //     previousCandle = closePrices[prevIndex];
+            //   }
+            // } else {
+            //   buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+            //   previousCandle = closePrices[prevIndex];
+            // }
           }
           if (
-            trend30 === false &&
             trend === false &&
             bearish(prevIndex) &&
             crossedEma(prevIndex, ema21Prev)
           ) {
-            if (canBuy === false) {
-              if (position === "MULTUP") {
-                closePosition(openContractId, `Opposite Signal`);
-                buyMultiplier(
-                  "MULTDOWN",
-                  data?.echo_req?.ticks_history,
-                  amount
-                );
-                previousCandle = closePrices[prevIndex];
-              }
-            } else {
-              buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
-              previousCandle = closePrices[prevIndex];
-            }
+            sendMessage(`Bearish Signal`);
+            // if (canBuy === false) {
+            //   if (position === "MULTUP") {
+            //     closePosition(openContractId, `Opposite Signal`);
+            //     buyMultiplier(
+            //       "MULTDOWN",
+            //       data?.echo_req?.ticks_history,
+            //       amount
+            //     );
+            //     previousCandle = closePrices[prevIndex];
+            //   }
+            // } else {
+            //   buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+            //   previousCandle = closePrices[prevIndex];
+            // }
           }
         }
       } catch (err) {
