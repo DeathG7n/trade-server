@@ -290,6 +290,7 @@ ws.on("message", async (msg) => {
             crossedEma(prevIndex, ema21Prev)
           ) {
             sendMessage(`Bullish Signal`);
+            previousCandle = closePrices[prevIndex];
             // if (canBuy === false) {
             //   if (position === "MULTDOWN") {
             //     closePosition(openContractId, `Opposite Signal`);
@@ -307,6 +308,7 @@ ws.on("message", async (msg) => {
             crossedEma(prevIndex, ema21Prev)
           ) {
             sendMessage(`Bearish Signal`);
+            previousCandle = closePrices[prevIndex];
             // if (canBuy === false) {
             //   if (position === "MULTUP") {
             //     closePosition(openContractId, `Opposite Signal`);
