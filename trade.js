@@ -108,8 +108,8 @@ function buyMultiplier(direction, sym, stake) {
       contract_type: direction,
       currency: "USD",
       symbol: sym,
-      multiplier: 750,
-      limit_order: { stop_loss: stake / 2, take_profit: stake * 5 },
+      multiplier: 50,
+      limit_order: { stop_loss: stake / 5, take_profit: stake /5 },
     },
   });
 }
@@ -171,7 +171,7 @@ ws.on("message", async (msg) => {
       ticks_history: "R_75",
       style: "candles",
       count: 500,
-      granularity: 300,
+      granularity: 60,
       end: "latest",
     });
   }
@@ -204,8 +204,7 @@ ws.on("message", async (msg) => {
       amount = 1000;
     }
     sendMessage(`💸 Balance is currently ${balance}`);
-    // await run(10000);
-    // send({ balance: 1 });
+    send({ portfolio: 1 });
   }
 
   if (data.msg_type === "portfolio") {
@@ -239,8 +238,6 @@ ws.on("message", async (msg) => {
         subscribed = true;
       }
     }
-    // await run(10000);
-    // send({ portfolio: 1 });
   }
 
   if (data.msg_type === "candles") {
@@ -289,40 +286,36 @@ ws.on("message", async (msg) => {
             bullish(prevIndex) &&
             crossedEma(prevIndex, ema21Prev)
           ) {
-            sendMessage(`Bullish Signal`);
-            previousCandle = closePrices[prevIndex];
-            // if (canBuy === false) {
-            //   if (position === "MULTDOWN") {
-            //     closePosition(openContractId, `Opposite Signal`);
-            //     buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-            //     previousCandle = closePrices[prevIndex];
-            //   }
-            // } else {
-            //   buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-            //   previousCandle = closePrices[prevIndex];
-            // }
+            if (canBuy === false) {
+              if (position === "MULTDOWN") {
+                closePosition(openContractId, `Opposite Signal`);
+                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+                previousCandle = closePrices[prevIndex];
+              }
+            } else {
+              buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+              previousCandle = closePrices[prevIndex];
+            }
           }
           if (
             trend === false &&
             bearish(prevIndex) &&
             crossedEma(prevIndex, ema21Prev)
           ) {
-            sendMessage(`Bearish Signal`);
-            previousCandle = closePrices[prevIndex];
-            // if (canBuy === false) {
-            //   if (position === "MULTUP") {
-            //     closePosition(openContractId, `Opposite Signal`);
-            //     buyMultiplier(
-            //       "MULTDOWN",
-            //       data?.echo_req?.ticks_history,
-            //       amount
-            //     );
-            //     previousCandle = closePrices[prevIndex];
-            //   }
-            // } else {
-            //   buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
-            //   previousCandle = closePrices[prevIndex];
-            // }
+            if (canBuy === false) {
+              if (position === "MULTUP") {
+                closePosition(openContractId, `Opposite Signal`);
+                buyMultiplier(
+                  "MULTDOWN",
+                  data?.echo_req?.ticks_history,
+                  amount
+                );
+                previousCandle = closePrices[prevIndex];
+              }
+            } else {
+              buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+              previousCandle = closePrices[prevIndex];
+            }
           }
         }
       } catch (err) {
@@ -350,6 +343,10 @@ ws.on("message", async (msg) => {
     const currentSpot = data?.proposal_open_contract?.current_spot;
     const orderAmount =
       data?.proposal_open_contract?.limit_order?.stop_out?.order_amount;
+    const lossAmount =
+      data?.proposal_open_contract?.limit_order?.stop_loss?.order_amount;
+    const profitAmount =
+      data?.proposal_open_contract?.limit_order?.take_profit?.order_amount;
     const stopOut = data?.proposal_open_contract?.limit_order?.stop_out?.value;
     const stop = data?.proposal_open_contract?.limit_order?.stop_loss?.value;
     const takeProfit =
@@ -358,32 +355,28 @@ ws.on("message", async (msg) => {
       type === "MULTUP" ? currentSpot - entrySpot : entrySpot - currentSpot;
     const loss = type === "MULTUP" ? entrySpot - stopOut : stopOut - entrySpot;
     const risk =
-      type === "MULTUP" ? entrySpot - stopLoss : stopLoss - entrySpot;
+      type === "MULTUP" ? entrySpot - stop : stop - entrySpot;
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data?.proposal_open_contract?.profit;
-    if (pip >= 40 && stopLoss < 20) {
-      update(20);
-    } else if (pip >= 20 && stopLoss < 10) {
+    if (pip >= 75 && stopLoss === 0) {
       update(10);
-    } else if (pip >= 10 && stopLoss < 5) {
-      update(5);
-    } else if (pip >= 5 && stopLoss === 0) {
-      update(1);
     }
     if (stopLoss !== 0 && pip < stopLoss) {
       closePosition(openContractId, `Stop Loss Hit`);
     }
     const runningTrade = {
-      pip: pip,
+      pip: pip, 
       profit: profit,
       loss: loss,
       orderAmount: orderAmount,
-      gain: gain,
+      lossAmount: lossAmount,
+      profitAmount: profitAmount,
+      gain: gain, 
       risk: risk,
       stopLoss: stopLoss,
     };
-    console.log(runningTrade);
+    console.log(runningTrade); 
   }
 
   if (data.msg_type === "buy") {
