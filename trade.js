@@ -324,7 +324,6 @@ ws.on("message", async (msg) => {
 
       count += 1;
       console.log(count);
-      await run(10000);
       send({
         ticks_history: data?.echo_req?.ticks_history,
         style: "candles",
