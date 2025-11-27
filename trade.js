@@ -29,6 +29,7 @@ let count = 0;
 let reason = "";
 let previousCandle = 0;
 let amount = null;
+let forfeit = 0.35;
 let stopLoss = null;
 
 app.use(cors());
@@ -109,7 +110,7 @@ function buyMultiplier(direction, sym, stake) {
       currency: "USD",
       symbol: sym,
       multiplier: 50,
-      limit_order: { stop_loss: stake / 5, take_profit: stake /5 },
+      limit_order: { stop_loss: stake * forfeit, take_profit: stake * 5 },
     },
   });
 }
@@ -171,7 +172,7 @@ ws.on("message", async (msg) => {
       ticks_history: "R_75",
       style: "candles",
       count: 500,
-      granularity: 60,
+      granularity: 300,
       end: "latest",
     });
   }
@@ -358,8 +359,8 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data?.proposal_open_contract?.profit;
-    if (pip >= 75 && stopLoss === 0) {
-      update(10);
+    if (pip >= 100 && stopLoss === 0) {
+      update(50);
     }
     if (stopLoss !== 0 && pip < stopLoss) {
       closePosition(openContractId, `Stop Loss Hit`);
