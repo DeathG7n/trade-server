@@ -16,7 +16,6 @@ const uri =
 const client = new MongoClient(uri);
 
 let closePrices = [];
-let closePrices30 = [];
 let openPrices = [];
 let highPrices = [];
 let lowPrices = [];
@@ -29,7 +28,6 @@ let count = 0;
 let reason = "";
 let previousCandle = 0;
 let amount = null;
-let forfeit = 0.35;
 let stopLoss = null;
 
 app.use(cors());
@@ -109,8 +107,8 @@ function buyMultiplier(direction, sym, stake) {
       contract_type: direction,
       currency: "USD",
       symbol: sym,
-      multiplier: 50,
-      limit_order: { stop_loss: stake * forfeit, take_profit: stake * 5 },
+      multiplier: 750,
+      limit_order: { stop_loss: stake / 2, take_profit: stake},
     },
   });
 }
@@ -167,12 +165,11 @@ ws.on("message", async (msg) => {
   if (data.msg_type === "authorize") {
     console.log("✅ Authorized");
     send({ balance: 1, subscribe: 1 });
-    send({ portfolio: 1 });
     send({
-      ticks_history: "R_75",
+      ticks_history: "stpRNG",
       style: "candles",
       count: 500,
-      granularity: 300,
+      granularity: 60,
       end: "latest",
     });
   }
@@ -181,28 +178,28 @@ ws.on("message", async (msg) => {
     let balance = data?.balance?.balance;
     if (isNumberBetween(balance, 0, 5)) {
       amount = 1;
-    } else if (isNumberBetween(balance, 5, 10)) {
+    } else if (isNumberBetween(balance, 6, 11)) {
       amount = 2;
-    } else if (isNumberBetween(balance, 10, 20)) {
+    } else if (isNumberBetween(balance, 12, 23)) {
       amount = 4;
-    } else if (isNumberBetween(balance, 20, 40)) {
+    } else if (isNumberBetween(balance, 24, 47)) {
       amount = 8;
-    } else if (isNumberBetween(balance, 40, 80)) {
+    } else if (isNumberBetween(balance, 48, 95)) {
       amount = 16;
-    } else if (isNumberBetween(balance, 80, 160)) {
+    } else if (isNumberBetween(balance, 96, 191)) {
       amount = 32;
-    } else if (isNumberBetween(balance, 160, 320)) {
+    } else if (isNumberBetween(balance, 192, 383)) {
       amount = 64;
-    } else if (isNumberBetween(balance, 320, 640)) {
+    } else if (isNumberBetween(balance, 384, 767)) {
       amount = 128;
-    } else if (isNumberBetween(balance, 640, 1280)) {
+    } else if (isNumberBetween(balance, 768, 1535)) {
       amount = 256;
-    } else if (isNumberBetween(balance, 1280, 2560)) {
+    } else if (isNumberBetween(balance, 1536, 3071)) {
       amount = 512;
-    } else if (isNumberBetween(balance, 2560, 5120)) {
+    } else if (isNumberBetween(balance, 3072, 5120)) {
       amount = 1000;
     } else {
-      amount = 1000;
+      amount = 2000;
     }
     sendMessage(`💸 Balance is currently ${balance}`);
     send({ portfolio: 1 });
@@ -242,97 +239,67 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "candles") {
-    if (data.echo_req.granularity === 3600) {
-      closePrices30 = data.candles.map((c) => c.close);
-      await run(10000);
-      send({
-        ticks_history: data?.echo_req?.ticks_history,
-        style: "candles",
-        count: 300,
-        granularity: data?.echo_req?.granularity,
-        end: "latest",
-      });
-    } else {
-      try {
-        closePrices = data.candles.map((c) => c.close);
-        openPrices = data.candles.map((c) => c.open);
-        highPrices = data.candles.map((c) => c.high);
-        lowPrices = data.candles.map((c) => c.low);
+    try {
+      closePrices = data.candles.map((c) => c.close);
+      openPrices = data.candles.map((c) => c.open);
+      highPrices = data.candles.map((c) => c.high);
+      lowPrices = data.candles.map((c) => c.low);
 
-        const len = closePrices?.length;
-        const prevIndex = len - 2;
-        const currIndex = len - 1;
+      const len = closePrices?.length;
+      const prevIndex = len - 3;
+      const currIndex = len - 2;
 
-        const ema14 = calculateEMA(closePrices, 14);
-        const ema21 = calculateEMA(closePrices, 21);
-        const ema21Prev = ema21[prevIndex];
-        const ema14Now = ema14[currIndex];
-        const ema21Now = ema21[currIndex];
+      const ema21 = calculateEMA(closePrices, 21);
+      const ema21Prev = ema21[prevIndex];
+      const ema21Now = ema21[currIndex];
 
-        const trend = ema14Now > ema21Now;
-
-        const len30 = closePrices?.length;
-        const currIndex30 = len30 - 1;
-
-        const ema14_30 = calculateEMA(closePrices30, 14);
-        const ema21_30 = calculateEMA(closePrices30, 21);
-        const ema14_30Now = ema14_30[currIndex30];
-        const ema21_30Now = ema21_30[currIndex30];
-
-        const trend30 = ema14_30Now > ema21_30Now;
-
-        if (previousCandle !== closePrices[prevIndex]) {
-          if (
-            trend === true &&
-            bullish(prevIndex) &&
-            crossedEma(prevIndex, ema21Prev)
-          ) {
-            if (canBuy === false) {
-              if (position === "MULTDOWN") {
-                closePosition(openContractId, `Opposite Signal`);
-                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-                previousCandle = closePrices[prevIndex];
-              }
-            } else {
+      if (previousCandle !== closePrices[prevIndex]) {
+        if (
+          crossedEma(prevIndex, ema21Prev) &&
+          bullish(prevIndex) &&
+          closePrices[currIndex] > ema21Now
+        ) {
+          if (canBuy === false) {
+            if (position === "MULTDOWN") {
+              closePosition(openContractId, `Opposite Signal`);
               buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
               previousCandle = closePrices[prevIndex];
             }
+          } else {
+            buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+            previousCandle = closePrices[prevIndex];
           }
-          if (
-            trend === false &&
-            bearish(prevIndex) &&
-            crossedEma(prevIndex, ema21Prev)
-          ) {
-            if (canBuy === false) {
-              if (position === "MULTUP") {
-                closePosition(openContractId, `Opposite Signal`);
-                buyMultiplier(
-                  "MULTDOWN",
-                  data?.echo_req?.ticks_history,
-                  amount
-                );
-                previousCandle = closePrices[prevIndex];
-              }
-            } else {
+        }
+        if (
+          crossedEma(prevIndex, ema21Prev) &&
+          bearish(prevIndex) &&
+          closePrices[currIndex] < ema21Now
+        ) {
+          if (canBuy === false) {
+            if (position === "MULTUP") {
+              closePosition(openContractId, `Opposite Signal`);
               buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
               previousCandle = closePrices[prevIndex];
             }
+          } else {
+            buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+            previousCandle = closePrices[prevIndex];
           }
         }
-      } catch (err) {
-        sendMessage(err);
       }
-
-      count += 1;
-      console.log(count);
-      send({
-        ticks_history: data?.echo_req?.ticks_history,
-        style: "candles",
-        count: 500,
-        granularity: data?.echo_req?.granularity,
-        end: "latest",
-      });
+    } catch (err) {
+      sendMessage(err);
     }
+
+    count += 1;
+    console.log(count);
+    send({
+      ticks_history: data?.echo_req?.ticks_history,
+      style: "candles",
+      count: 500,
+      granularity: data?.echo_req?.granularity,
+      end: "latest",
+    });
   }
 
   if (data.msg_type === "proposal_open_contract") {
@@ -354,29 +321,28 @@ ws.on("message", async (msg) => {
     const pip =
       type === "MULTUP" ? currentSpot - entrySpot : entrySpot - currentSpot;
     const loss = type === "MULTUP" ? entrySpot - stopOut : stopOut - entrySpot;
-    const risk =
-      type === "MULTUP" ? entrySpot - stop : stop - entrySpot;
+    const risk = type === "MULTUP" ? entrySpot - stop : stop - entrySpot;
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data?.proposal_open_contract?.profit;
-    if (pip >= 100 && stopLoss === 0) {
-      update(50);
+    if (pip >= 2 && stopLoss === 0) {
+      update(0.5);
     }
     if (stopLoss !== 0 && pip < stopLoss) {
       closePosition(openContractId, `Stop Loss Hit`);
     }
     const runningTrade = {
-      pip: pip, 
+      pip: pip,
       profit: profit,
       loss: loss,
       orderAmount: orderAmount,
       lossAmount: lossAmount,
       profitAmount: profitAmount,
-      gain: gain, 
+      gain: gain,
       risk: risk,
       stopLoss: stopLoss,
     };
-    console.log(runningTrade); 
+    console.log(runningTrade);
   }
 
   if (data.msg_type === "buy") {
