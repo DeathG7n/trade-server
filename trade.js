@@ -108,7 +108,7 @@ function buyMultiplier(direction, sym, stake) {
       currency: "USD",
       symbol: sym,
       multiplier: 750,
-      limit_order: { stop_loss: stake / 2, take_profit: stake},
+      limit_order: { stop_loss: stake / 2, take_profit: stake },
     },
   });
 }
@@ -293,6 +293,7 @@ ws.on("message", async (msg) => {
 
     count += 1;
     console.log(count);
+    await run(10000);
     send({
       ticks_history: data?.echo_req?.ticks_history,
       style: "candles",
@@ -374,5 +375,16 @@ ws.on("message", async (msg) => {
     const error = data?.error?.message;
     console.error("❗ Error: ", error);
     sendMessage(`❗ Error: ${error}`);
+    if (error === "You have reached the rate limit for ticks_history.") {
+      await run(30000);
+      send({
+        ticks_history: "stpRNG",
+        style: "candles",
+        count: 500,
+        granularity: 60,
+        end: "latest",
+      });
+      sendMessage(`Candles re-subscribed`);
+    }
   }
 });
