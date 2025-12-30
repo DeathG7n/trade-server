@@ -176,6 +176,7 @@ ws.on("message", async (msg) => {
 
   if (data.msg_type === "balance") {
     let balance = data?.balance?.balance;
+    balance = Math.trunc(balance)
     if (isNumberBetween(balance, 0, 5)) {
       amount = 1;
     } else if (isNumberBetween(balance, 6, 11)) {
