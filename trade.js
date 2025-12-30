@@ -5,7 +5,7 @@ const cors = require("cors");
 const axios = require("axios");
 const { MongoClient } = require("mongodb");
 
-const API_TOKEN = "IxcmbIEL0Mb4fvQ";
+const API_TOKEN = "cc2h1a8o1j3CiMQ";
 const ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=36807");
 
 const BOT_TOKEN = "8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ";
@@ -29,6 +29,7 @@ let reason = "";
 let previousCandle = 0;
 let amount = null;
 let stopLoss = null;
+const now = new Date();
 
 app.use(cors());
 
@@ -176,6 +177,7 @@ ws.on("message", async (msg) => {
 
   if (data.msg_type === "balance") {
     let balance = data?.balance?.balance;
+    sendMessage(`💸 Balance is currently ${balance}`);
     balance = Math.trunc(balance)
     if (isNumberBetween(balance, 0, 5)) {
       amount = 1;
@@ -202,7 +204,6 @@ ws.on("message", async (msg) => {
     } else {
       amount = 2000;
     }
-    sendMessage(`💸 Balance is currently ${balance}`);
     send({ portfolio: 1 });
   }
 
@@ -240,6 +241,11 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "candles") {
+    const current = new Date()
+    if(now.getHours != current.getHours){
+      now = new Date()
+      sendMessage("Bot is still running")
+    }
     try {
       closePrices = data.candles.map((c) => c.close);
       openPrices = data.candles.map((c) => c.open);
@@ -385,7 +391,11 @@ ws.on("message", async (msg) => {
         granularity: 60,
         end: "latest",
       });
-      sendMessage(`Candles re-subscribed`);
+      sendMessage(`Candles Resubscribed`);
+    }
+    if (error === "Please log in.") {
+      send({ authorize: API_TOKEN });
+      sendMessage(`Login Reinitiated`);
     }
   }
 });
