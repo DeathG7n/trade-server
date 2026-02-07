@@ -29,7 +29,8 @@ let reason = "";
 let previousCandle = 0;
 let amount = null;
 let stopLoss = null;
-const now = new Date();
+let now = new Date();
+let openTime = 0;
 
 app.use(cors());
 
@@ -108,8 +109,8 @@ function buyMultiplier(direction, sym, stake) {
       contract_type: direction,
       currency: "USD",
       symbol: sym,
-      multiplier: 750,
-      limit_order: { stop_loss: stake / 2, take_profit: stake },
+      multiplier: 100,
+      // limit_order: { stop_loss: stake / 2, take_profit: stake },
     },
   });
 }
@@ -167,18 +168,20 @@ ws.on("message", async (msg) => {
     console.log("✅ Authorized");
     send({ balance: 1, subscribe: 1 });
     send({
-      ticks_history: "stpRNG",
+      ticks_history: "BOOM1000",
       style: "candles",
       count: 500,
       granularity: 60,
       end: "latest",
+      subscribe: 1,
     });
   }
 
   if (data.msg_type === "balance") {
     let balance = data?.balance?.balance;
     sendMessage(`💸 Balance is currently ${balance}`);
-    balance = Math.trunc(balance)
+    console.log(`💸 Balance is currently ${balance}`);
+    balance = Math.trunc(balance);
     if (isNumberBetween(balance, 0, 5)) {
       amount = 1;
     } else if (isNumberBetween(balance, 6, 11)) {
@@ -240,11 +243,24 @@ ws.on("message", async (msg) => {
     }
   }
 
+  if (data.msg_type === "ohlc") {
+    if (openTime !== data.ohlc.open_time) {
+      openTime = data.ohlc.open_time;
+      send({
+        ticks_history: data?.echo_req?.ticks_history,
+        style: "candles",
+        count: 500,
+        granularity: data?.echo_req?.granularity,
+        end: "latest",
+      });
+    }
+  }
+
   if (data.msg_type === "candles") {
-    const current = new Date()
-    if(now.getHours != current.getHours){
-      now = new Date()
-      sendMessage("Bot is still running")
+    const current = new Date();
+    if (now.getHours() != current.getHours()) {
+      now = new Date();
+      sendMessage("Bot is still running");
     }
     try {
       closePrices = data.candles.map((c) => c.close);
@@ -256,16 +272,16 @@ ws.on("message", async (msg) => {
       const prevIndex = len - 3;
       const currIndex = len - 2;
 
+      const ema14 = calculateEMA(closePrices, 14);
+      const ema14Prev = ema14[prevIndex];
+      const ema14Now = ema14[currIndex];
+
       const ema21 = calculateEMA(closePrices, 21);
       const ema21Prev = ema21[prevIndex];
       const ema21Now = ema21[currIndex];
 
       if (previousCandle !== closePrices[prevIndex]) {
-        if (
-          crossedEma(prevIndex, ema21Prev) &&
-          bullish(prevIndex) &&
-          closePrices[currIndex] > ema21Now
-        ) {
+        if (ema14Prev < ema21Prev && ema14Now > ema21Now) {
           if (canBuy === false) {
             if (position === "MULTDOWN") {
               closePosition(openContractId, `Opposite Signal`);
@@ -277,11 +293,7 @@ ws.on("message", async (msg) => {
             previousCandle = closePrices[prevIndex];
           }
         }
-        if (
-          crossedEma(prevIndex, ema21Prev) &&
-          bearish(prevIndex) &&
-          closePrices[currIndex] < ema21Now
-        ) {
+        if (ema14Prev > ema21Prev && ema14Now < ema21Now) {
           if (canBuy === false) {
             if (position === "MULTUP") {
               closePosition(openContractId, `Opposite Signal`);
@@ -300,14 +312,6 @@ ws.on("message", async (msg) => {
 
     count += 1;
     console.log(count);
-    await run(10000);
-    send({
-      ticks_history: data?.echo_req?.ticks_history,
-      style: "candles",
-      count: 500,
-      granularity: data?.echo_req?.granularity,
-      end: "latest",
-    });
   }
 
   if (data.msg_type === "proposal_open_contract") {
@@ -337,7 +341,7 @@ ws.on("message", async (msg) => {
       update(0.5);
     }
     if (stopLoss !== 0 && pip < stopLoss) {
-      closePosition(openContractId, `Stop Loss Hit`);
+      //closePosition(openContractId, `Stop Loss Hit`);
     }
     const runningTrade = {
       pip: pip,
@@ -385,7 +389,7 @@ ws.on("message", async (msg) => {
     if (error === "You have reached the rate limit for ticks_history.") {
       await run(30000);
       send({
-        ticks_history: "stpRNG",
+        ticks_history: "BOOM1000",
         style: "candles",
         count: 500,
         granularity: 60,
@@ -398,4 +402,9 @@ ws.on("message", async (msg) => {
       sendMessage(`Login Reinitiated`);
     }
   }
+});
+
+ws.on("close", () => {
+  sendMessage("WebSocket disconnected. Reconnecting...");
+  const ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=36807");
 });
