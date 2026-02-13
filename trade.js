@@ -171,7 +171,7 @@ ws.on("message", async (msg) => {
       ticks_history: "BOOM1000",
       style: "candles",
       count: 500,
-      granularity: 60,
+      granularity: 900,
       end: "latest",
       subscribe: 1,
     });
@@ -392,7 +392,7 @@ ws.on("message", async (msg) => {
         ticks_history: "BOOM1000",
         style: "candles",
         count: 500,
-        granularity: 60,
+        granularity: 900,
         end: "latest",
       });
       sendMessage(`Candles Resubscribed`);
@@ -406,5 +406,5 @@ ws.on("message", async (msg) => {
 
 ws.on("close", () => {
   sendMessage("WebSocket disconnected. Reconnecting...");
-  const ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=36807");
+  ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=36807");
 });
