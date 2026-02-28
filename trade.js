@@ -93,7 +93,7 @@ const sendMessage = async (message) => {
   } catch (error) {
     console.error(
       "Error sending message:",
-      error.response?.data || error.message
+      error.response?.data || error.message,
     );
   }
 };
@@ -109,8 +109,8 @@ function buyMultiplier(direction, sym, stake) {
       contract_type: direction,
       currency: "USD",
       symbol: sym,
-      multiplier: 100,
-      // limit_order: { stop_loss: stake / 2, take_profit: stake },
+      multiplier: 750,
+      limit_order: { stop_loss: stake / 5, take_profit: stake / 2 },
     },
   });
 }
@@ -144,7 +144,7 @@ async function update(stop) {
     await collection.findOneAndUpdate(
       { trade: true },
       { $set: { stoploss: stop } },
-      { returnNewDocument: true }
+      { returnNewDocument: true },
     );
     sendMessage(`💸 Stop Loss trailed to ${stop}`);
     stopLoss = stop;
@@ -168,10 +168,10 @@ ws.on("message", async (msg) => {
     console.log("✅ Authorized");
     send({ balance: 1, subscribe: 1 });
     send({
-      ticks_history: "BOOM1000",
+      ticks_history: "stpRNG",
       style: "candles",
       count: 500,
-      granularity: 900,
+      granularity: 60,
       end: "latest",
       subscribe: 1,
     });
@@ -280,8 +280,16 @@ ws.on("message", async (msg) => {
       const ema21Prev = ema21[prevIndex];
       const ema21Now = ema21[currIndex];
 
+      const ema200 = calculateEMA(closePrices, 200);
+      const ema200Prev = ema200[prevIndex];
+      const ema200Now = ema200[currIndex];
+
       if (previousCandle !== closePrices[prevIndex]) {
-        if (ema14Prev < ema21Prev && ema14Now > ema21Now) {
+        if (
+          crossedEma(prevIndex, ema200Prev) &&
+          bullish(prevIndex) &&
+          closePrices[currIndex] > ema200Now
+        ) {
           if (canBuy === false) {
             if (position === "MULTDOWN") {
               closePosition(openContractId, `Opposite Signal`);
@@ -293,7 +301,11 @@ ws.on("message", async (msg) => {
             previousCandle = closePrices[prevIndex];
           }
         }
-        if (ema14Prev > ema21Prev && ema14Now < ema21Now) {
+        if (
+          crossedEma(prevIndex, ema200Prev) &&
+          bearish(prevIndex) &&
+          closePrices[currIndex] < ema200Now
+        ) {
           if (canBuy === false) {
             if (position === "MULTUP") {
               closePosition(openContractId, `Opposite Signal`);
@@ -362,17 +374,17 @@ ws.on("message", async (msg) => {
     openContractId = data?.buy?.contract_id;
     sendMessage(`${position} position entered`);
     console.log(
-      `🟢 Entered ${position} position, Contract ID: ${openContractId}`
+      `🟢 Entered ${position} position, Contract ID: ${openContractId}`,
     );
     send({ portfolio: 1 });
   }
 
   if (data.msg_type === "sell") {
     sendMessage(
-      `💸 Position closed at ${data?.sell?.sold_for} USD, because ${reason}`
+      `💸 Position closed at ${data?.sell?.sold_for} USD, because ${reason}`,
     );
     console.log(
-      `💸 Position closed at ${data?.sell?.sold_for} USD, because ${reason}`
+      `💸 Position closed at ${data?.sell?.sold_for} USD, because ${reason}`,
     );
     position = null;
     openContractId = null;
@@ -389,17 +401,20 @@ ws.on("message", async (msg) => {
     if (error === "You have reached the rate limit for ticks_history.") {
       await run(30000);
       send({
-        ticks_history: "BOOM1000",
+        ticks_history: "stpRNG",
         style: "candles",
         count: 500,
-        granularity: 900,
+        granularity: 60,
         end: "latest",
+        subscribe: 1
       });
       sendMessage(`Candles Resubscribed`);
     }
     if (error === "Please log in.") {
-      send({ authorize: API_TOKEN });
-      sendMessage(`Login Reinitiated`);
+      fetch(
+        "https://api.render.com/deploy/srv-d08lfobuibrs73b4vg9g?key=rpjXNGs05-o",
+      )
+      .then(res => sendMessage(`Login Reinitiated`))
     }
   }
 });
