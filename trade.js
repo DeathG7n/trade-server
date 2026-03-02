@@ -315,7 +315,7 @@ ws.on("message", async (msg) => {
           candleCrossesEitherEMA(prevIndex, ema14, ema21) &&
           trendUp &&
           bullish(prevIndex) &&
-          closePrices[currIndex] > ema21Now
+          closePrices[prevIndex] > ema21Prev
         ) {
           if (canBuy === false) {
             if (position === "MULTDOWN") {
@@ -333,7 +333,7 @@ ws.on("message", async (msg) => {
           candleCrossesEitherEMA(prevIndex, ema14, ema21) &&
           trendDown &&
           bearish(prevIndex) &&
-          closePrices[currIndex] < ema21Now
+          closePrices[prevIndex] < ema21Prev
         ) {
           if (canBuy === false) {
             if (position === "MULTUP") {
