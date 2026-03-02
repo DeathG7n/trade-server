@@ -4,9 +4,10 @@ const app = express();
 const cors = require("cors");
 const axios = require("axios");
 const { MongoClient } = require("mongodb");
+const { cross } = require("ta.js");
 
 const API_TOKEN = "cc2h1a8o1j3CiMQ";
-const ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=36807");
+let ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=36807");
 
 const BOT_TOKEN = "8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ";
 const CHAT_ID = "8068534792";
@@ -52,6 +53,28 @@ function bullish(candle) {
 
 function crossedEma(candle, ema) {
   return highPrices[candle] > ema && ema > lowPrices[candle];
+}
+
+function candleCrossesEitherEMA(index, ema1, ema2) {
+  return crossedEma(index, ema1[index]) || crossedEma(index, ema2[index]);
+}
+
+function recentEmaCross(emaFast, emaSlow, lookback = 15) {
+  const len = emaFast.length;
+
+  for (let i = len - 2; i >= len - lookback - 1 && i > 0; i--) {
+    // Bullish cross
+    if (emaFast[i - 1] <= emaSlow[i - 1] && emaFast[i] > emaSlow[i]) {
+      return "bullish";
+    }
+
+    // Bearish cross
+    if (emaFast[i - 1] >= emaSlow[i - 1] && emaFast[i] < emaSlow[i]) {
+      return "bearish";
+    }
+  }
+
+  return null;
 }
 
 function send(msg) {
@@ -109,7 +132,7 @@ function buyMultiplier(direction, sym, stake) {
       contract_type: direction,
       currency: "USD",
       symbol: sym,
-      multiplier: 750,
+      multiplier: 100,
       limit_order: { stop_loss: stake / 5, take_profit: stake / 2 },
     },
   });
@@ -168,7 +191,7 @@ ws.on("message", async (msg) => {
     console.log("✅ Authorized");
     send({ balance: 1, subscribe: 1 });
     send({
-      ticks_history: "stpRNG",
+      ticks_history: "R_75",
       style: "candles",
       count: 500,
       granularity: 60,
@@ -269,8 +292,8 @@ ws.on("message", async (msg) => {
       lowPrices = data.candles.map((c) => c.low);
 
       const len = closePrices?.length;
-      const prevIndex = len - 3;
-      const currIndex = len - 2;
+      const prevIndex = len - 2;
+      const currIndex = len - 1;
 
       const ema14 = calculateEMA(closePrices, 14);
       const ema14Prev = ema14[prevIndex];
@@ -280,15 +303,19 @@ ws.on("message", async (msg) => {
       const ema21Prev = ema21[prevIndex];
       const ema21Now = ema21[currIndex];
 
-      const ema200 = calculateEMA(closePrices, 200);
-      const ema200Prev = ema200[prevIndex];
-      const ema200Now = ema200[currIndex];
+      const trendUp = ema14Now > ema21Now;
+      const trendDown = ema21Now > ema14Now;
+
+      const crossType = recentEmaCross(ema14, ema21, 15);
+      console.log(crossType)
 
       if (previousCandle !== closePrices[prevIndex]) {
         if (
-          crossedEma(prevIndex, ema200Prev) &&
+          crossType === "bullish" &&
+          candleCrossesEitherEMA(prevIndex, ema14, ema21) &&
+          trendUp &&
           bullish(prevIndex) &&
-          closePrices[currIndex] > ema200Now
+          closePrices[currIndex] > ema21Now
         ) {
           if (canBuy === false) {
             if (position === "MULTDOWN") {
@@ -302,9 +329,11 @@ ws.on("message", async (msg) => {
           }
         }
         if (
-          crossedEma(prevIndex, ema200Prev) &&
+          crossType === "bearish" &&
+          candleCrossesEitherEMA(prevIndex, ema14, ema21) &&
+          trendDown &&
           bearish(prevIndex) &&
-          closePrices[currIndex] < ema200Now
+          closePrices[currIndex] < ema21Now
         ) {
           if (canBuy === false) {
             if (position === "MULTUP") {
@@ -349,11 +378,11 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data?.proposal_open_contract?.profit;
-    if (pip >= 2 && stopLoss === 0) {
-      update(0.5);
+    if (pip >= 100 && stopLoss === 0) {
+      update(20);
     }
     if (stopLoss !== 0 && pip < stopLoss) {
-      //closePosition(openContractId, `Stop Loss Hit`);
+      closePosition(openContractId, `Stop Loss Hit`);
     }
     const runningTrade = {
       pip: pip,
@@ -401,20 +430,19 @@ ws.on("message", async (msg) => {
     if (error === "You have reached the rate limit for ticks_history.") {
       await run(30000);
       send({
-        ticks_history: "stpRNG",
+        ticks_history: "R_75",
         style: "candles",
         count: 500,
         granularity: 60,
         end: "latest",
-        subscribe: 1
+        subscribe: 1,
       });
       sendMessage(`Candles Resubscribed`);
     }
     if (error === "Please log in.") {
       fetch(
         "https://api.render.com/deploy/srv-d08lfobuibrs73b4vg9g?key=rpjXNGs05-o",
-      )
-      .then(res => sendMessage(`Login Reinitiated`))
+      ).then((res) => sendMessage(`Login Reinitiated`));
     }
   }
 });
