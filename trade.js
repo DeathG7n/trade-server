@@ -133,7 +133,7 @@ function buyMultiplier(direction, sym, stake) {
       currency: "USD",
       symbol: sym,
       multiplier: 100,
-      limit_order: { stop_loss: stake / 5, take_profit: stake / 2 },
+      limit_order: { stop_loss: stake / 2.5, take_profit: stake },
     },
   });
 }
@@ -194,7 +194,7 @@ ws.on("message", async (msg) => {
       ticks_history: "R_75",
       style: "candles",
       count: 500,
-      granularity: 60,
+      granularity: 300,
       end: "latest",
       subscribe: 1,
     });
@@ -307,7 +307,7 @@ ws.on("message", async (msg) => {
       const trendDown = ema21Now > ema14Now;
 
       const crossType = recentEmaCross(ema14, ema21, 15);
-      console.log(crossType)
+      console.log(crossType);
 
       if (previousCandle !== closePrices[prevIndex]) {
         if (
@@ -317,6 +317,7 @@ ws.on("message", async (msg) => {
           bullish(prevIndex) &&
           closePrices[prevIndex] > ema21Prev
         ) {
+          sendMessage(`Bullish Cross`);
           if (canBuy === false) {
             if (position === "MULTDOWN") {
               closePosition(openContractId, `Opposite Signal`);
@@ -335,6 +336,7 @@ ws.on("message", async (msg) => {
           bearish(prevIndex) &&
           closePrices[prevIndex] < ema21Prev
         ) {
+          sendMessage(`Bearish Cross`);
           if (canBuy === false) {
             if (position === "MULTUP") {
               closePosition(openContractId, `Opposite Signal`);
@@ -433,7 +435,7 @@ ws.on("message", async (msg) => {
         ticks_history: "R_75",
         style: "candles",
         count: 500,
-        granularity: 60,
+        granularity: 300,
         end: "latest",
         subscribe: 1,
       });
