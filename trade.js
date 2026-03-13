@@ -18,6 +18,8 @@ const client = new MongoClient(uri);
 
 let closePrices = [];
 let openPrices = [];
+let closePrices15 = [];
+let openPrices15 = [];
 let highPrices = [];
 let lowPrices = [];
 let position = null;
@@ -32,6 +34,9 @@ let amount = null;
 let stopLoss = null;
 let now = new Date();
 let openTime = 0;
+let openTime2 = 0;
+let trendUp15 = null;
+let trendDown15 = null;
 
 app.use(cors());
 
@@ -133,7 +138,7 @@ function buyMultiplier(direction, sym, stake) {
       currency: "USD",
       symbol: sym,
       multiplier: 100,
-      limit_order: { stop_loss: stake / 2.5, take_profit: stake },
+      limit_order: { stop_loss: stake / 5, take_profit: stake },
     },
   });
 }
@@ -194,7 +199,15 @@ ws.on("message", async (msg) => {
       ticks_history: "R_75",
       style: "candles",
       count: 500,
-      granularity: 300,
+      granularity: 60,
+      end: "latest",
+      subscribe: 1,
+    });
+    send({
+      ticks_history: "R_75",
+      style: "candles",
+      count: 500,
+      granularity: 900,
       end: "latest",
       subscribe: 1,
     });
@@ -267,15 +280,29 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "ohlc") {
-    if (openTime !== data.ohlc.open_time) {
-      openTime = data.ohlc.open_time;
-      send({
-        ticks_history: data?.echo_req?.ticks_history,
-        style: "candles",
-        count: 500,
-        granularity: data?.echo_req?.granularity,
-        end: "latest",
-      });
+    if (data.ohlc.granularity === 60) {
+      if (openTime !== data.ohlc.open_time) {
+        openTime = data.ohlc.open_time;
+        send({
+          ticks_history: data?.echo_req?.ticks_history,
+          style: "candles",
+          count: 500,
+          granularity: data?.echo_req?.granularity,
+          end: "latest",
+        });
+      }
+    }
+    if (data.ohlc.granularity === 900) {
+      if (openTime2 !== data.ohlc.open_time) {
+        openTime2 = data.ohlc.open_time;
+        send({
+          ticks_history: data?.echo_req?.ticks_history,
+          style: "candles",
+          count: 500,
+          granularity: data?.echo_req?.granularity,
+          end: "latest",
+        });
+      }
     }
   }
 
@@ -285,72 +312,108 @@ ws.on("message", async (msg) => {
       now = new Date();
       sendMessage("Bot is still running");
     }
-    try {
-      closePrices = data.candles.map((c) => c.close);
-      openPrices = data.candles.map((c) => c.open);
-      highPrices = data.candles.map((c) => c.high);
-      lowPrices = data.candles.map((c) => c.low);
+    if (data?.echo_req?.granularity === 900) {
+      closePrices15 = data.candles.map((c) => c.close);
+      openPrices15 = data.candles.map((c) => c.open);
 
-      const len = closePrices?.length;
-      const prevIndex = len - 2;
+      const len = closePrices15?.length;
       const currIndex = len - 1;
 
-      const ema14 = calculateEMA(closePrices, 14);
-      const ema14Prev = ema14[prevIndex];
+      const ema14 = calculateEMA(closePrices15, 14);
       const ema14Now = ema14[currIndex];
 
-      const ema21 = calculateEMA(closePrices, 21);
-      const ema21Prev = ema21[prevIndex];
+      const ema21 = calculateEMA(closePrices15, 21);
       const ema21Now = ema21[currIndex];
 
-      const trendUp = ema14Now > ema21Now;
-      const trendDown = ema21Now > ema14Now;
+      trendUp15 = ema14Now > ema21Now;
+      trendDown15 = ema21Now > ema14Now;
+    }
+    if (data?.echo_req?.granularity === 60) {
+      try {
+        closePrices = data.candles.map((c) => c.close);
+        openPrices = data.candles.map((c) => c.open);
+        highPrices = data.candles.map((c) => c.high);
+        lowPrices = data.candles.map((c) => c.low);
 
-      const crossType = recentEmaCross(ema14, ema21, 15);
-      console.log(crossType);
+        const len = closePrices?.length;
+        const prevIndex = len - 2;
+        const currIndex = len - 1;
 
-      if (previousCandle !== closePrices[prevIndex]) {
-        if (
-          crossType === "bullish" &&
-          candleCrossesEitherEMA(prevIndex, ema14, ema21) &&
-          trendUp &&
-          bullish(prevIndex) &&
-          closePrices[prevIndex] > ema21Prev
-        ) {
-          sendMessage(`Bullish Cross`);
-          if (canBuy === false) {
+        const ema14 = calculateEMA(closePrices, 14);
+        const ema14Prev = ema14[prevIndex];
+        const ema14Now = ema14[currIndex];
+
+        const ema21 = calculateEMA(closePrices, 21);
+        const ema21Prev = ema21[prevIndex];
+        const ema21Now = ema21[currIndex];
+
+        const trendUp = ema14Now > ema21Now;
+        const trendDown = ema21Now > ema14Now;
+
+        const crossType = recentEmaCross(ema14, ema21, 15);
+
+        if(trendDown15 !== null || trendUp15 !==null ){
+          if(trendUp15){
             if (position === "MULTDOWN") {
-              closePosition(openContractId, `Opposite Signal`);
+                closePosition(openContractId, `Opposite Signal`);
+              }
+          }
+          if(trendDown15){
+            if (position === "MULTUP") {
+                closePosition(openContractId, `Opposite Signal`);
+              }
+          }
+        }
+
+        if (previousCandle !== closePrices[prevIndex]) {
+          if (
+            crossType === "bullish" &&
+            candleCrossesEitherEMA(prevIndex, ema14, ema21) &&
+            trendUp &&
+            trendUp15 &&
+            bullish(prevIndex) &&
+            closePrices[prevIndex] > ema21Prev
+          ) {
+            sendMessage(`Bullish Cross`);
+            if (canBuy === false) {
+              if (position === "MULTDOWN") {
+                closePosition(openContractId, `Opposite Signal`);
+                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+                previousCandle = closePrices[prevIndex];
+              }
+            } else {
               buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
               previousCandle = closePrices[prevIndex];
             }
-          } else {
-            buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-            previousCandle = closePrices[prevIndex];
           }
-        }
-        if (
-          crossType === "bearish" &&
-          candleCrossesEitherEMA(prevIndex, ema14, ema21) &&
-          trendDown &&
-          bearish(prevIndex) &&
-          closePrices[prevIndex] < ema21Prev
-        ) {
-          sendMessage(`Bearish Cross`);
-          if (canBuy === false) {
-            if (position === "MULTUP") {
-              closePosition(openContractId, `Opposite Signal`);
+          if (
+            crossType === "bearish" &&
+            candleCrossesEitherEMA(prevIndex, ema14, ema21) &&
+            trendDown15 &&
+            trendDown &&
+            bearish(prevIndex) &&
+            closePrices[prevIndex] < ema21Prev
+          ) {
+            sendMessage(`Bearish Cross`);
+            if (canBuy === false) {
+              if (position === "MULTUP") {
+                closePosition(openContractId, `Opposite Signal`);
+                buyMultiplier(
+                  "MULTDOWN",
+                  data?.echo_req?.ticks_history,
+                  amount,
+                );
+                previousCandle = closePrices[prevIndex];
+              }
+            } else {
               buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
               previousCandle = closePrices[prevIndex];
             }
-          } else {
-            buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
-            previousCandle = closePrices[prevIndex];
           }
         }
+      } catch (err) {
+        sendMessage(err);
       }
-    } catch (err) {
-      sendMessage(err);
     }
 
     count += 1;
@@ -384,7 +447,7 @@ ws.on("message", async (msg) => {
       update(20);
     }
     if (stopLoss !== 0 && pip < stopLoss) {
-      closePosition(openContractId, `Stop Loss Hit`);
+      //closePosition(openContractId, `Stop Loss Hit`);
     }
     const runningTrade = {
       pip: pip,
