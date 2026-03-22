@@ -339,6 +339,8 @@ ws.on("message", async (msg) => {
         const prevIndex = len - 2;
         const currIndex = len - 1;
 
+        const ema10 = calculateEMA(closePrices, 10);
+
         const ema14 = calculateEMA(closePrices, 14);
         const ema14Prev = ema14[prevIndex];
         const ema14Now = ema14[currIndex];
@@ -366,6 +368,12 @@ ws.on("message", async (msg) => {
         }
 
         if (previousCandle !== closePrices[prevIndex]) {
+          if(trendUp && crossedEma(currIndex, ema10) && bearish(currIndex)){
+            sendMessage(`Price is Overbought`);
+          }
+          if(trendDown && crossedEma(currIndex, ema10) && bullish(currIndex)){
+            sendMessage(`Price is Oversold`);
+          }
           if (
             crossType === "bullish" &&
             candleCrossesEitherEMA(prevIndex, ema14, ema21) &&
@@ -374,7 +382,6 @@ ws.on("message", async (msg) => {
             bullish(prevIndex) &&
             closePrices[prevIndex] > ema21Prev
           ) {
-            sendMessage(`Bullish Cross`);
             if (canBuy === false) {
               if (position === "MULTDOWN") {
                 closePosition(openContractId, `Opposite Signal`);
@@ -394,7 +401,6 @@ ws.on("message", async (msg) => {
             bearish(prevIndex) &&
             closePrices[prevIndex] < ema21Prev
           ) {
-            sendMessage(`Bearish Cross`);
             if (canBuy === false) {
               if (position === "MULTUP") {
                 closePosition(openContractId, `Opposite Signal`);
