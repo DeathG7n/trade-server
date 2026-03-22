@@ -368,10 +368,10 @@ ws.on("message", async (msg) => {
         }
 
         if (previousCandle !== closePrices[prevIndex]) {
-          if(trendUp && crossedEma(currIndex, ema10) && bearish(currIndex)){
+          if(trendUp && crossedEma(prevIndex, ema10) && bearish(prevIndex)){
             sendMessage(`Price is Overbought`);
           }
-          if(trendDown && crossedEma(currIndex, ema10) && bullish(currIndex)){
+          if(trendDown && crossedEma(prevIndex, ema10) && bullish(prevIndex)){
             sendMessage(`Price is Oversold`);
           }
           if (
