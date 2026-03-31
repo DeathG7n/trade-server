@@ -196,7 +196,7 @@ ws.on("message", async (msg) => {
     console.log("✅ Authorized");
     send({ balance: 1, subscribe: 1 });
     send({
-      ticks_history: "BOOM1000",
+      ticks_history: "CRASH1000",
       style: "candles",
       count: 500,
       granularity: 60,
@@ -204,7 +204,7 @@ ws.on("message", async (msg) => {
       subscribe: 1,
     });
     send({
-      ticks_history: "BOOM1000",
+      ticks_history: "CRASH1000",
       style: "candles",
       count: 500,
       granularity: 900,
@@ -354,6 +354,9 @@ ws.on("message", async (msg) => {
         const crossType = recentEmaCross(ema14, ema21, 15);
 
         if (previousCandle !== closePrices[prevIndex]) {
+          if(bearish(prevIndex)){
+            sendMessage("CRASH");
+          }
           // if (
           //   bullish(thirdIndex) && bearish(prevIndex)
           // ) {
@@ -368,22 +371,22 @@ ws.on("message", async (msg) => {
           //     previousCandle = closePrices[prevIndex];
           //   }
           // }
-          if (bullish(thirdIndex) && bearish(prevIndex)) {
-            if (canBuy === false) {
-              if (position === "MULTUP") {
-                closePosition(openContractId, `Opposite Signal`);
-                buyMultiplier(
-                  "MULTDOWN",
-                  data?.echo_req?.ticks_history,
-                  amount,
-                );
-                previousCandle = closePrices[prevIndex];
-              }
-            } else {
-              buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, 1);
-              previousCandle = closePrices[prevIndex];
-            }
-          }
+          // if (bullish(thirdIndex) && bearish(prevIndex)) {
+          //   if (canBuy === false) {
+          //     if (position === "MULTUP") {
+          //       closePosition(openContractId, `Opposite Signal`);
+          //       buyMultiplier(
+          //         "MULTDOWN",
+          //         data?.echo_req?.ticks_history,
+          //         amount,
+          //       );
+          //       previousCandle = closePrices[prevIndex];
+          //     }
+          //   } else {
+          //     buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, 1);
+          //     previousCandle = closePrices[prevIndex];
+          //   }
+          // }
         }
       } catch (err) {
         sendMessage(err);
@@ -481,7 +484,7 @@ ws.on("message", async (msg) => {
     if (error === "You have reached the rate limit for ticks_history.") {
       await run(30000);
       send({
-        ticks_history: "BOOM1000",
+        ticks_history: "CRASH1000",
         style: "candles",
         count: 500,
         granularity: 300,
