@@ -37,6 +37,7 @@ let openTime = 0;
 let openTime2 = 0;
 let trendUp15 = null;
 let trendDown15 = null;
+const sym = ["BOOM1000", "BOOM900", "CRASH1000", "CRASH900"];
 
 app.use(cors());
 
@@ -195,21 +196,15 @@ ws.on("message", async (msg) => {
   if (data.msg_type === "authorize") {
     console.log("✅ Authorized");
     send({ balance: 1, subscribe: 1 });
-    send({
-      ticks_history: "CRASH1000",
-      style: "candles",
-      count: 500,
-      granularity: 60,
-      end: "latest",
-      subscribe: 1,
-    });
-    send({
-      ticks_history: "CRASH1000",
-      style: "candles",
-      count: 500,
-      granularity: 900,
-      end: "latest",
-      subscribe: 1,
+    sym.forEach((s) => {
+      send({
+        ticks_history: s,
+        style: "candles",
+        count: 500,
+        granularity: 300,
+        end: "latest",
+        subscribe: 1,
+      });
     });
   }
 
@@ -312,22 +307,7 @@ ws.on("message", async (msg) => {
       now = new Date();
       sendMessage("Bot is still running");
     }
-    if (data?.echo_req?.granularity === 900) {
-      closePrices15 = data.candles.map((c) => c.close);
-      openPrices15 = data.candles.map((c) => c.open);
-
-      const len = closePrices15?.length;
-      const currIndex = len - 1;
-
-      const ema14 = calculateEMA(closePrices15, 14);
-      const ema14Now = ema14[currIndex];
-
-      const ema21 = calculateEMA(closePrices15, 21);
-      const ema21Now = ema21[currIndex];
-
-      trendUp15 = ema14Now > ema21Now;
-      trendDown15 = ema21Now > ema14Now;
-    }
+    console.log(data.echo_req.ticks_history)
     if (data?.echo_req?.granularity === 60) {
       try {
         closePrices = data.candles.map((c) => c.close);
@@ -353,40 +333,15 @@ ws.on("message", async (msg) => {
 
         const crossType = recentEmaCross(ema14, ema21, 15);
 
-        if (previousCandle !== closePrices[prevIndex]) {
-          if(bearish(prevIndex)){
-            sendMessage("CRASH");
+        if(data.echo_req.ticks_history.includes("BOOM")){
+          if (bullish(prevIndex)) {
+            sendMessage(data.echo_req.ticks_history);
           }
-          // if (
-          //   bullish(thirdIndex) && bearish(prevIndex)
-          // ) {
-          //   if (canBuy === false) {
-          //     if (position === "MULTDOWN") {
-          //       closePosition(openContractId, `Opposite Signal`);
-          //       buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-          //       previousCandle = closePrices[prevIndex];
-          //     }
-          //   } else {
-          //     buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-          //     previousCandle = closePrices[prevIndex];
-          //   }
-          // }
-          // if (bullish(thirdIndex) && bearish(prevIndex)) {
-          //   if (canBuy === false) {
-          //     if (position === "MULTUP") {
-          //       closePosition(openContractId, `Opposite Signal`);
-          //       buyMultiplier(
-          //         "MULTDOWN",
-          //         data?.echo_req?.ticks_history,
-          //         amount,
-          //       );
-          //       previousCandle = closePrices[prevIndex];
-          //     }
-          //   } else {
-          //     buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, 1);
-          //     previousCandle = closePrices[prevIndex];
-          //   }
-          // }
+        }
+        if(data.echo_req.ticks_history.includes("CRASH")){
+          if (bearish(prevIndex)) {
+            sendMessage(data.echo_req.ticks_history);
+          }
         }
       } catch (err) {
         sendMessage(err);
@@ -404,9 +359,11 @@ ws.on("message", async (msg) => {
       data.proposal_open_contract.current_spot_time -
       data.proposal_open_contract.date_start;
     console.log(duration);
-    if(duration % 60 == 0){
-      timePassed =duration / 60
-      sendMessage(`${timePassed} minute${timePassed > 1 ? "s" : ""} has passed`) 
+    if (duration % 60 == 0) {
+      timePassed = duration / 60;
+      sendMessage(
+        `${timePassed} minute${timePassed > 1 ? "s" : ""} has passed`,
+      );
     }
     const type = data?.proposal_open_contract?.contract_type;
     const entrySpot = data?.proposal_open_contract?.entry_spot;
@@ -434,9 +391,9 @@ ws.on("message", async (msg) => {
     if (stopLoss !== 0 && pip < stopLoss) {
       //closePosition(openContractId, `Stop Loss Hit`);
     }
-    if(duration >= 300){
-      closePosition(openContractId, `Stop Loss Hit`)
-      console.log("5 minutes has passed")
+    if (duration >= 300) {
+      closePosition(openContractId, `Stop Loss Hit`);
+      console.log("5 minutes has passed");
     }
     const runningTrade = {
       pip: pip,
