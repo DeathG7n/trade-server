@@ -307,8 +307,7 @@ ws.on("message", async (msg) => {
       now = new Date();
       sendMessage("Bot is still running");
     }
-    console.log(data.echo_req.ticks_history)
-    if (data?.echo_req?.granularity === 60) {
+    if (data?.echo_req?.granularity === 300) {
       try {
         closePrices = data.candles.map((c) => c.close);
         openPrices = data.candles.map((c) => c.open);
@@ -335,7 +334,7 @@ ws.on("message", async (msg) => {
 
         if(data.echo_req.ticks_history.includes("BOOM")){
           if (bullish(prevIndex)) {
-            sendMessage(data.echo_req.ticks_history);
+            sendMessage(data.echo_req.ticks_history); 
           }
         }
         if(data.echo_req.ticks_history.includes("CRASH")){
