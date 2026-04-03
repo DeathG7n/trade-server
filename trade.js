@@ -275,7 +275,7 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "ohlc") {
-    if (data.ohlc.granularity === 60) {
+    if (data.ohlc.granularity === 300) {
       if (openTime !== data.ohlc.open_time) {
         openTime = data.ohlc.open_time;
         send({
