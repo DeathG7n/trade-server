@@ -37,7 +37,7 @@ let openTime = 0;
 let openTime2 = 0;
 let trendUp15 = null;
 let trendDown15 = null;
-const sym = ["BOOM1000", "BOOM900", "CRASH1000", "CRASH900"];
+const sym = ["BOOM1000"];
 
 app.use(cors());
 
