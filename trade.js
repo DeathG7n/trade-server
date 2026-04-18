@@ -18,8 +18,6 @@ const client = new MongoClient(uri);
 
 let closePrices = [];
 let openPrices = [];
-let closePrices15 = [];
-let openPrices15 = [];
 let highPrices = [];
 let lowPrices = [];
 let position = null;
@@ -35,9 +33,7 @@ let stopLoss = null;
 let now = new Date();
 let openTime = 0;
 let openTime2 = 0;
-let trendUp15 = null;
-let trendDown15 = null;
-const sym = ["BOOM1000"];
+const sym = ["R_75"];
 
 app.use(cors());
 
@@ -201,7 +197,7 @@ ws.on("message", async (msg) => {
         ticks_history: s,
         style: "candles",
         count: 500,
-        granularity: 300,
+        granularity: 60,
         end: "latest",
         subscribe: 1,
       });
@@ -275,29 +271,65 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "ohlc") {
-    if (data.ohlc.granularity === 300) {
-      if (openTime !== data.ohlc.open_time) {
-        openTime = data.ohlc.open_time;
-        send({
-          ticks_history: data?.echo_req?.ticks_history,
-          style: "candles",
-          count: 500,
-          granularity: data?.echo_req?.granularity,
-          end: "latest",
-        });
+    closePrices[closePrices.length - 1] = Number(data.ohlc.close);
+    highPrices[highPrices.length - 1] = Number(data.ohlc.high);
+    lowPrices[lowPrices.length - 1] = Number(data.ohlc.low);
+
+    const len = closePrices.length;
+    const currIndex = len - 1;
+    const prevIndex = len - 1;
+
+    const ema14 = calculateEMA(closePrices, 14);
+    const ema14Now = ema14[currIndex];
+
+    const ema21 = calculateEMA(closePrices, 21);
+    const ema21Now = ema21[currIndex];
+
+    const trendUp = ema14Now > ema21Now;
+    const trendDown = ema21Now > ema14Now;
+
+    const timeDifference = data.ohlc.epoch - data.ohlc.open_time;
+
+    if (timeDifference % 10 === 0) {
+      if (
+        trendUp &&
+        candleCrossesEitherEMA(currIndex, ema14Now, ema21Now) &&
+        bullish(currIndex)
+      ) {
+        sendMessage("Bullish Cross");
+      }
+      if (
+        trendDown &&
+        candleCrossesEitherEMA(currIndex, ema14Now, ema21Now) &&
+        bearish(currIndex)
+      ) {
+        sendMessage("Bearish Cross");
       }
     }
-    if (data.ohlc.granularity === 900) {
-      if (openTime2 !== data.ohlc.open_time) {
-        openTime2 = data.ohlc.open_time;
-        send({
-          ticks_history: data?.echo_req?.ticks_history,
-          style: "candles",
-          count: 500,
-          granularity: data?.echo_req?.granularity,
-          end: "latest",
-        });
+
+    if (openTime !== data.ohlc.open_time) {
+      openTime = data.ohlc.open_time;
+      if (
+        trendUp &&
+        candleCrossesEitherEMA(prevIndex, ema14Now, ema21Now) &&
+        bullish(prevIndex)
+      ) {
+        sendMessage("Bullish Cross");
       }
+      if (
+        trendDown &&
+        candleCrossesEitherEMA(prevIndex, ema14Now, ema21Now) &&
+        bearish(prevIndex)
+      ) {
+        sendMessage("Bearish Cross");
+      }
+      send({
+        ticks_history: data?.echo_req?.ticks_history,
+        style: "candles",
+        count: 500,
+        granularity: data?.echo_req?.granularity,
+        end: "latest",
+      });
     }
   }
 
@@ -313,35 +345,6 @@ ws.on("message", async (msg) => {
         openPrices = data.candles.map((c) => c.open);
         highPrices = data.candles.map((c) => c.high);
         lowPrices = data.candles.map((c) => c.low);
-
-        const len = closePrices?.length;
-        const thirdIndex = len - 3;
-        const prevIndex = len - 2;
-        const currIndex = len - 1;
-
-        const ema14 = calculateEMA(closePrices, 14);
-        const ema14Prev = ema14[prevIndex];
-        const ema14Now = ema14[currIndex];
-
-        const ema21 = calculateEMA(closePrices, 21);
-        const ema21Prev = ema21[prevIndex];
-        const ema21Now = ema21[currIndex];
-
-        const trendUp = ema14Now > ema21Now;
-        const trendDown = ema21Now > ema14Now;
-
-        const crossType = recentEmaCross(ema14, ema21, 15);
-
-        if(data.echo_req.ticks_history.includes("BOOM")){
-          if (bullish(prevIndex)) {
-            sendMessage(data.echo_req.ticks_history); 
-          }
-        }
-        if(data.echo_req.ticks_history.includes("CRASH")){
-          if (bearish(prevIndex)) {
-            sendMessage(data.echo_req.ticks_history);
-          }
-        }
       } catch (err) {
         sendMessage(err);
       }
