@@ -58,7 +58,7 @@ function crossedEma(candle, ema) {
 }
 
 function candleCrossesEitherEMA(index, ema1, ema2) {
-  return crossedEma(index, ema1[index]) || crossedEma(index, ema2[index]);
+  return crossedEma(index, ema1?.[index]) || crossedEma(index, ema2?.[index]);
 }
 
 function recentEmaCross(emaFast, emaSlow, lookback = 15) {
@@ -277,7 +277,7 @@ ws.on("message", async (msg) => {
 
     const len = closePrices.length;
     const currIndex = len - 1;
-    const prevIndex = len - 1;
+    const prevIndex = len - 2;
 
     const ema14 = calculateEMA(closePrices, 14);
     const ema14Now = ema14[currIndex];
@@ -339,17 +339,14 @@ ws.on("message", async (msg) => {
       now = new Date();
       sendMessage("Bot is still running");
     }
-    if (data?.echo_req?.granularity === 300) {
-      try {
-        closePrices = data.candles.map((c) => c.close);
-        openPrices = data.candles.map((c) => c.open);
-        highPrices = data.candles.map((c) => c.high);
-        lowPrices = data.candles.map((c) => c.low);
-      } catch (err) {
-        sendMessage(err);
-      }
+    try {
+      closePrices = data.candles.map((c) => c.close);
+      openPrices = data.candles.map((c) => c.open);
+      highPrices = data.candles.map((c) => c.high);
+      lowPrices = data.candles.map((c) => c.low);
+    } catch (err) {
+      sendMessage(err);
     }
-
     count += 1;
     console.log(count);
   }
