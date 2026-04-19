@@ -459,5 +459,7 @@ ws.on("message", async (msg) => {
 
 ws.on("close", () => {
   sendMessage("WebSocket disconnected. Reconnecting...");
-  ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=36807");
+  fetch(
+    "https://api.render.com/deploy/srv-d08lfobuibrs73b4vg9g?key=rpjXNGs05-o",
+  ).then((res) => sendMessage(`Login Reinitiated`));
 });
