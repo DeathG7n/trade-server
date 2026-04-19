@@ -58,7 +58,7 @@ function crossedEma(candle, ema) {
 }
 
 function candleCrossesEitherEMA(index, ema1, ema2) {
-  return crossedEma(index, ema1?.[index]) || crossedEma(index, ema2?.[index]);
+  return crossedEma(index, ema1[index]) || crossedEma(index, ema2[index]);
 }
 
 function recentEmaCross(emaFast, emaSlow, lookback = 15) {
@@ -290,17 +290,23 @@ ws.on("message", async (msg) => {
 
     const timeDifference = data.ohlc.epoch - data.ohlc.open_time;
 
+    console.log(
+      trendUp,
+      candleCrossesEitherEMA(currIndex, ema14, ema21),
+      bullish(currIndex),
+    );
+
     if (timeDifference % 10 === 0) {
       if (
         trendUp &&
-        candleCrossesEitherEMA(currIndex, ema14Now, ema21Now) &&
+        candleCrossesEitherEMA(currIndex, ema14, ema21) &&
         bullish(currIndex)
       ) {
         sendMessage("Bullish Cross");
       }
       if (
         trendDown &&
-        candleCrossesEitherEMA(currIndex, ema14Now, ema21Now) &&
+        candleCrossesEitherEMA(currIndex, ema14, ema21) &&
         bearish(currIndex)
       ) {
         sendMessage("Bearish Cross");
@@ -311,14 +317,14 @@ ws.on("message", async (msg) => {
       openTime = data.ohlc.open_time;
       if (
         trendUp &&
-        candleCrossesEitherEMA(prevIndex, ema14Now, ema21Now) &&
+        candleCrossesEitherEMA(prevIndex, ema14, ema21) &&
         bullish(prevIndex)
       ) {
         sendMessage("Bullish Cross");
       }
       if (
         trendDown &&
-        candleCrossesEitherEMA(prevIndex, ema14Now, ema21Now) &&
+        candleCrossesEitherEMA(prevIndex, ema14, ema21) &&
         bearish(prevIndex)
       ) {
         sendMessage("Bearish Cross");
