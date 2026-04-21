@@ -18,6 +18,8 @@ const client = new MongoClient(uri);
 
 let closePrices = [];
 let openPrices = [];
+let closePrices15 = [];
+let openPrices15 = [];
 let highPrices = [];
 let lowPrices = [];
 let position = null;
@@ -33,6 +35,8 @@ let stopLoss = null;
 let now = new Date();
 let openTime = 0;
 let openTime2 = 0;
+let trendUp15;
+let trendDown15;
 const sym = ["R_75"];
 
 app.use(cors());
@@ -201,6 +205,14 @@ ws.on("message", async (msg) => {
         end: "latest",
         subscribe: 1,
       });
+      send({
+        ticks_history: s,
+        style: "candles",
+        count: 500,
+        granularity: 900,
+        end: "latest",
+        subscribe: 1,
+      });
     });
   }
 
@@ -271,71 +283,74 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "ohlc") {
-    closePrices[closePrices.length - 1] = Number(data.ohlc.close);
-    highPrices[highPrices.length - 1] = Number(data.ohlc.high);
-    lowPrices[lowPrices.length - 1] = Number(data.ohlc.low);
+    if (data?.echo_req?.granularity === 60) {
+      closePrices[closePrices.length - 1] = Number(data.ohlc.close);
+      highPrices[highPrices.length - 1] = Number(data.ohlc.high);
+      lowPrices[lowPrices.length - 1] = Number(data.ohlc.low);
 
-    const len = closePrices.length;
-    const currIndex = len - 1;
-    const prevIndex = len - 2;
+      const len = closePrices.length;
+      const currIndex = len - 1;
+      const prevIndex = len - 2;
 
-    const ema14 = calculateEMA(closePrices, 14);
-    const ema14Now = ema14[currIndex];
+      const ema50 = calculateEMA(closePrices, 50);
+      const ema50Now = ema50[currIndex];
 
-    const ema21 = calculateEMA(closePrices, 21);
-    const ema21Now = ema21[currIndex];
+      const timeDifference = data.ohlc.epoch - data.ohlc.open_time;
 
-    const trendUp = ema14Now > ema21Now;
-    const trendDown = ema21Now > ema14Now;
-
-    const timeDifference = data.ohlc.epoch - data.ohlc.open_time;
-
-    console.log(
-      trendUp,
-      candleCrossesEitherEMA(currIndex, ema14, ema21),
-      bullish(currIndex),
-    );
-
-    if (timeDifference % 10 === 0) {
-      if (
-        trendUp &&
-        candleCrossesEitherEMA(currIndex, ema14, ema21) &&
-        bullish(currIndex)
-      ) {
-        sendMessage("Bullish Cross");
+      if (timeDifference % 20 === 0) {
+        if (
+          trendUp15 &&
+          candleCrossesEitherEMA(currIndex, ema50, ema50) &&
+          bullish(currIndex)
+        ) {
+          sendMessage("Bullish Crossing");
+        }
+        if (
+          trendDown15 &&
+          candleCrossesEitherEMA(currIndex, ema50, ema50) &&
+          bearish(currIndex)
+        ) {
+          sendMessage("Bearish Crossing");
+        }
       }
-      if (
-        trendDown &&
-        candleCrossesEitherEMA(currIndex, ema14, ema21) &&
-        bearish(currIndex)
-      ) {
-        sendMessage("Bearish Cross");
+
+      if (openTime !== data.ohlc.open_time) {
+        openTime = data.ohlc.open_time;
+        send({
+          ticks_history: data?.echo_req?.ticks_history,
+          style: "candles",
+          count: 500,
+          granularity: data?.echo_req?.granularity,
+          end: "latest",
+        });
       }
     }
 
-    if (openTime !== data.ohlc.open_time) {
-      openTime = data.ohlc.open_time;
-      if (
-        trendUp &&
-        candleCrossesEitherEMA(prevIndex, ema14, ema21) &&
-        bullish(prevIndex)
-      ) {
-        sendMessage("Bullish Cross");
+    if (data?.echo_req?.granularity === 900) {
+      closePrices15[closePrices15.length - 1] = Number(data.ohlc.close);
+
+      const len = closePrices.length;
+      const currIndex = len - 1;
+
+      const ema14 = calculateEMA(closePrices15, 14);
+      const ema14Now = ema14[currIndex];
+
+      const ema21 = calculateEMA(closePrices15, 21);
+      const ema21Now = ema21[currIndex];
+
+      const trendUp15 = ema14Now > ema21Now;
+      const trendDown15 = ema21Now > ema14Now;
+
+      if (openTime2 !== data.ohlc.open_time) {
+        openTime2 = data.ohlc.open_time;
+        send({
+          ticks_history: data?.echo_req?.ticks_history,
+          style: "candles",
+          count: 500,
+          granularity: data?.echo_req?.granularity,
+          end: "latest",
+        });
       }
-      if (
-        trendDown &&
-        candleCrossesEitherEMA(prevIndex, ema14, ema21) &&
-        bearish(prevIndex)
-      ) {
-        sendMessage("Bearish Cross");
-      }
-      send({
-        ticks_history: data?.echo_req?.ticks_history,
-        style: "candles",
-        count: 500,
-        granularity: data?.echo_req?.granularity,
-        end: "latest",
-      });
     }
   }
 
@@ -346,10 +361,17 @@ ws.on("message", async (msg) => {
       sendMessage("Bot is still running");
     }
     try {
-      closePrices = data.candles.map((c) => c.close);
-      openPrices = data.candles.map((c) => c.open);
-      highPrices = data.candles.map((c) => c.high);
-      lowPrices = data.candles.map((c) => c.low);
+      if (data?.echo_req?.granularity === 900) {
+        closePrices = data.candles.map((c) => c.close);
+        openPrices = data.candles.map((c) => c.open);
+        highPrices = data.candles.map((c) => c.high);
+        lowPrices = data.candles.map((c) => c.low);
+      }
+
+      if (data?.echo_req?.granularity === 900) {
+        closePrices15 = data.candles.map((c) => c.close);
+        openPrices15 = data.candles.map((c) => c.open);
+      }
     } catch (err) {
       sendMessage(err);
     }
