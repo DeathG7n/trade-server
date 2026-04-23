@@ -16,6 +16,7 @@ const uri =
   "mongodb+srv://DeathG7n:if3anYichukwu@cluster0.gpfyqmb.mongodb.net/trading?retryWrites=true&w=majority";
 const client = new MongoClient(uri);
 
+let closePrices15 = [];
 let closePrices = [];
 let openPrices = [];
 let highPrices = [];
@@ -33,6 +34,8 @@ let stopLoss = null;
 let now = new Date();
 let openTime = 0;
 let openTime2 = 0;
+let trendUp15;
+let trendDown15;
 const sym = ["R_75"];
 
 app.use(cors());
@@ -100,8 +103,8 @@ function isNumberBetween(number, lowerBound, upperBound) {
 function calculateEMA(prices, period) {
   const k = 2 / (period + 1);
   let emaArray = [];
-  emaArray[0] = prices?.[0];
-  for (let i = 1; i < prices?.length; i++) {
+  emaArray[0] = prices.[0];
+  for (let i = 1; i < prices.length; i++) {
     emaArray[i] = prices[i] * k + emaArray[i - 1] * (1 - k);
   }
   return emaArray;
@@ -118,7 +121,7 @@ const sendMessage = async (message) => {
   } catch (error) {
     console.error(
       "Error sending message:",
-      error.response?.data || error.message,
+      error.response.data || error.message,
     );
   }
 };
@@ -156,7 +159,7 @@ async function connect() {
     const database = client.db("trading");
     const collection = database.collection("trade");
     const result = await collection.findOne({});
-    stopLoss = result?.stoploss;
+    stopLoss = result.stoploss;
   } catch (e) {
     console.error(e);
   }
@@ -205,7 +208,7 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "balance") {
-    let balance = data?.balance?.balance;
+    let balance = data.balance.balance;
     sendMessage(`💸 Balance is currently ${balance}`);
     console.log(`💸 Balance is currently ${balance}`);
     balance = Math.trunc(balance);
@@ -238,7 +241,7 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "portfolio") {
-    if (data?.portfolio?.contracts?.length === 0) {
+    if (data.portfolio.contracts.length === 0) {
       openPosition = null;
       openContractId = null;
       position = null;
@@ -253,10 +256,10 @@ ws.on("message", async (msg) => {
       }
     } else {
       openPosition =
-        data?.portfolio?.contracts[data?.portfolio?.contracts?.length - 1];
-      position = openPosition?.contract_type;
-      openContractId = openPosition?.contract_id;
-      if (data?.portfolio?.contracts?.length > 1) {
+        data.portfolio.contracts[data.portfolio.contracts.length - 1];
+      position = openPosition.contract_type;
+      openContractId = openPosition.contract_id;
+      if (data.portfolio.contracts.length > 1) {
         closePosition(openContractId, "too many positions");
       }
       if (subscribed === false) {
@@ -271,57 +274,79 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "ohlc") {
-    closePrices[closePrices.length - 1] = Number(data.ohlc.close);
-    highPrices[highPrices.length - 1] = Number(data.ohlc.high);
-    lowPrices[lowPrices.length - 1] = Number(data.ohlc.low);
+    if (data.echo_req.granularity === 60) {
+      closePrices[closePrices.length - 1] = Number(data.ohlc.close);
+      highPrices[highPrices.length - 1] = Number(data.ohlc.high);
+      lowPrices[lowPrices.length - 1] = Number(data.ohlc.low);
 
-    const len = closePrices.length;
-    const currIndex = len - 1;
-    const prevIndex = len - 2;
+      const len = closePrices.length;
+      const currIndex = len - 1;
+      const prevIndex = len - 2;
 
-    const ema50 = calculateEMA(closePrices, 50);
-    const ema50Now = ema50[currIndex];
+      const ema50 = calculateEMA(closePrices, 50);
+      const ema50Now = ema50[currIndex];
 
-    const ema200 = calculateEMA(closePrices, 200);
-    const ema200Now = ema200[currIndex];
+      const ema200 = calculateEMA(closePrices, 200);
+      const ema200Now = ema200[currIndex];
 
-    const trendUp = ema50Now > ema200Now;
-    const trendDown = ema200Now > ema50Now;
+      const trendUp = ema50Now > ema200Now;
+      const trendDown = ema200Now > ema50Now;
 
-    const timeDifference = data.ohlc.epoch - data.ohlc.open_time;
+      const timeDifference = data.ohlc.epoch - data.ohlc.open_time;
 
-    console.log(
-      trendUp,
-      candleCrossesEitherEMA(currIndex, ema50, ema200),
-      bullish(currIndex),
-    );
-
-    if (timeDifference % 20 === 0) {
-      if (
-        trendUp &&
-        candleCrossesEitherEMA(currIndex, ema50, ema200) &&
-        bullish(currIndex)
-      ) {
-        sendMessage("Bullish Cross");
+      if (timeDifference % 20 === 0) {
+        if (
+          trendUp &&
+          candleCrossesEitherEMA(currIndex, ema50, ema200) &&
+          bullish(currIndex)
+        ) {
+          sendMessage("Bullish Cross");
+        }
+        if (
+          trendDown &&
+          candleCrossesEitherEMA(currIndex, ema50, ema200) &&
+          bearish(currIndex)
+        ) {
+          sendMessage("Bearish Cross");
+        }
       }
-      if (
-        trendDown &&
-        candleCrossesEitherEMA(currIndex, ema50, ema200) &&
-        bearish(currIndex)
-      ) {
-        sendMessage("Bearish Cross");
+
+      if (openTime !== data.ohlc.open_time) {
+        openTime = data.ohlc.open_time;
+        send({
+          ticks_history: data.echo_req.ticks_history,
+          style: "candles",
+          count: 500,
+          granularity: data.echo_req.granularity,
+          end: "latest",
+        });
       }
     }
+    if (data.echo_req.granularity === 900) {
+      closePrices15[closePrices15.length - 1] = Number(data.ohlc.close);
 
-    if (openTime !== data.ohlc.open_time) {
-      openTime = data.ohlc.open_time;
-      send({
-        ticks_history: data?.echo_req?.ticks_history,
-        style: "candles",
-        count: 500,
-        granularity: data?.echo_req?.granularity,
-        end: "latest",
-      });
+      const len = closePrices15.length;
+      const currIndex = len - 1;
+
+      const ema50 = calculateEMA(closePrices15, 50);
+      const ema50Now = ema50[currIndex];
+
+      const ema200 = calculateEMA(closePrices15, 200);
+      const ema200Now = ema200[currIndex];
+
+      const trendUp15 = ema50Now > ema200Now;
+      const trendDown15 = ema200Now > ema50Now;
+
+      if (openTime2 !== data.ohlc.open_time) {
+        openTime2 = data.ohlc.open_time;
+        send({
+          ticks_history: data.echo_req.ticks_history,
+          style: "candles",
+          count: 500,
+          granularity: data.echo_req.granularity,
+          end: "latest",
+        });
+      }
     }
   }
 
@@ -332,10 +357,15 @@ ws.on("message", async (msg) => {
       sendMessage("Bot is still running");
     }
     try {
-      closePrices = data.candles.map((c) => c.close);
-      openPrices = data.candles.map((c) => c.open);
-      highPrices = data.candles.map((c) => c.high);
-      lowPrices = data.candles.map((c) => c.low);
+      if (data.echo_req.granularity === 60) {
+        closePrices = data.candles.map((c) => c.close);
+        openPrices = data.candles.map((c) => c.open);
+        highPrices = data.candles.map((c) => c.high);
+        lowPrices = data.candles.map((c) => c.low);
+      }
+      if (data.echo_req.granularity === 900) {
+        closePrices15 = data.candles.map((c) => c.close);
+      }
     } catch (err) {
       sendMessage(err);
     }
@@ -356,26 +386,26 @@ ws.on("message", async (msg) => {
         `${timePassed} minute${timePassed > 1 ? "s" : ""} has passed`,
       );
     }
-    const type = data?.proposal_open_contract?.contract_type;
-    const entrySpot = data?.proposal_open_contract?.entry_spot;
-    const currentSpot = data?.proposal_open_contract?.current_spot;
+    const type = data.proposal_open_contract.contract_type;
+    const entrySpot = data.proposal_open_contract.entry_spot;
+    const currentSpot = data.proposal_open_contract.current_spot;
     const orderAmount =
-      data?.proposal_open_contract?.limit_order?.stop_out?.order_amount;
+      data.proposal_open_contract.limit_order.stop_out.order_amount;
     const lossAmount =
-      data?.proposal_open_contract?.limit_order?.stop_loss?.order_amount;
+      data.proposal_open_contract.limit_order.stop_loss.order_amount;
     const profitAmount =
-      data?.proposal_open_contract?.limit_order?.take_profit?.order_amount;
-    const stopOut = data?.proposal_open_contract?.limit_order?.stop_out?.value;
-    const stop = data?.proposal_open_contract?.limit_order?.stop_loss?.value;
+      data.proposal_open_contract.limit_order.take_profit.order_amount;
+    const stopOut = data.proposal_open_contract.limit_order.stop_out.value;
+    const stop = data.proposal_open_contract.limit_order.stop_loss.value;
     const takeProfit =
-      data?.proposal_open_contract?.limit_order?.take_profit?.value;
+      data.proposal_open_contract.limit_order.take_profit.value;
     const pip =
       type === "MULTUP" ? currentSpot - entrySpot : entrySpot - currentSpot;
     const loss = type === "MULTUP" ? entrySpot - stopOut : stopOut - entrySpot;
     const risk = type === "MULTUP" ? entrySpot - stop : stop - entrySpot;
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
-    const profit = data?.proposal_open_contract?.profit;
+    const profit = data.proposal_open_contract.profit;
     if (pip >= 100 && stopLoss === 0) {
       update(20);
     }
@@ -401,8 +431,8 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "buy") {
-    position = data?.echo_req?.parameters?.contract_type;
-    openContractId = data?.buy?.contract_id;
+    position = data.echo_req.parameters.contract_type;
+    openContractId = data.buy.contract_id;
     sendMessage(`${position} position entered`);
     console.log(
       `🟢 Entered ${position} position, Contract ID: ${openContractId}`,
@@ -412,10 +442,10 @@ ws.on("message", async (msg) => {
 
   if (data.msg_type === "sell") {
     sendMessage(
-      `💸 Position closed at ${data?.sell?.sold_for} USD, because ${reason}`,
+      `💸 Position closed at ${data.sell.sold_for} USD, because ${reason}`,
     );
     console.log(
-      `💸 Position closed at ${data?.sell?.sold_for} USD, because ${reason}`,
+      `💸 Position closed at ${data.sell.sold_for} USD, because ${reason}`,
     );
     position = null;
     openContractId = null;
@@ -426,7 +456,7 @@ ws.on("message", async (msg) => {
   }
 
   if (data.error) {
-    const error = data?.error?.message;
+    const error = data.error.message;
     console.error("❗ Error: ", error);
     sendMessage(`❗ Error: ${error}`);
     if (error === "You have reached the rate limit for ticks_history.") {
