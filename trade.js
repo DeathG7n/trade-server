@@ -103,7 +103,7 @@ function isNumberBetween(number, lowerBound, upperBound) {
 function calculateEMA(prices, period) {
   const k = 2 / (period + 1);
   let emaArray = [];
-  emaArray[0] = prices.[0];
+  emaArray[0] = prices[0];
   for (let i = 1; i < prices.length; i++) {
     emaArray[i] = prices[i] * k + emaArray[i - 1] * (1 - k);
   }
