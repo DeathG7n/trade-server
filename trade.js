@@ -37,7 +37,7 @@ let openTime2 = 0;
 let trendUp15;
 let trendDown15;
 let entryEma = 0;
-const sym = ["R_75"];
+const sym = ["stpRNG"];
 
 app.use(cors());
 
@@ -122,7 +122,7 @@ const sendMessage = async (message) => {
   } catch (error) {
     console.error(
       "Error sending message:",
-      error.response.data || error.message,
+      error.response?.data || error?.message,
     );
   }
 };
@@ -138,8 +138,8 @@ function buyMultiplier(direction, sym, stake) {
       contract_type: direction,
       currency: "USD",
       symbol: sym,
-      multiplier: 50,
-      limit_order: { stop_loss: 0.18, take_profit: 0.14 },
+      multiplier: 750,
+      limit_order: { stop_loss: stake / 5, take_profit: stake / 2.5 },
     },
   });
 }
@@ -332,213 +332,50 @@ ws.on("message", async (msg) => {
       const timeDifference = data.ohlc.epoch - data.ohlc.open_time;
 
       if (canBuy === true) {
-        if (trendUp15 && bullish(prevIndex)) {
-          if (trendUp) {
-            //Single Exponetial Moving Average Crossed
-            if (
-              crossedEma(prevIndex, ema50Prev) &&
-              !crossedEma(prevIndex, ema200Prev) &&
-              closePrices[prevIndex] > ema50Prev
-            ) {
-              entryEma = 50;
-              buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-              canBuy = false;
-            }
-            if (
-              !crossedEma(prevIndex, ema50Prev) &&
-              crossedEma(prevIndex, ema200Prev) &&
-              closePrices[prevIndex] > ema200Prev
-            ) {
-              entryEma = 200;
-              buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-              canBuy = false;
-            }
-            //Double Exponetial Moving Averages Crossed
-            if (
-              crossedEma(prevIndex, ema50Prev) &&
-              crossedEma(prevIndex, ema200Prev)
-            ) {
-              if (
-                closePrices[prevIndex] > ema50Prev &&
-                closePrices[prevIndex] > ema200Prev
-              ) {
-                entryEma = 50;
-                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-                canBuy = false;
-              }
-              if (
-                closePrices[prevIndex] < ema50Prev &&
-                closePrices[prevIndex] > ema200Prev
-              ) {
-                entryEma = 200;
-                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-                canBuy = false;
-              }
-            }
+        if (trendUp && candleCrossesEitherEMA(prevIndex, ema50, ema200)) {
+          if (closePrices[prevIndex] > ema50Prev) {
+            entryEma = 50;
+            buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+            canBuy = false;
           }
-          if (trendDown) {
-            //Single Exponetial Moving Average Crossed
-            if (
-              crossedEma(prevIndex, ema50Prev) &&
-              !crossedEma(prevIndex, ema200Prev) &&
-              closePrices[prevIndex] > ema50Prev
-            ) {
-              entryEma = 50;
-              buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-              canBuy = false;
-            }
-            if (
-              !crossedEma(prevIndex, ema50Prev) &&
-              crossedEma(prevIndex, ema200Prev) &&
-              closePrices[prevIndex] > ema200Prev
-            ) {
-              entryEma = 200;
-              buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-              canBuy = false;
-            }
-            //Double Exponetial Moving Averages Crossed
-            if (
-              crossedEma(prevIndex, ema50Prev) &&
-              crossedEma(prevIndex, ema200Prev)
-            ) {
-              if (
-                closePrices[prevIndex] > ema50Prev &&
-                closePrices[prevIndex] > ema200Prev
-              ) {
-                entryEma = 200;
-                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-                canBuy = false;
-              }
-              if (
-                closePrices[prevIndex] > ema50Prev &&
-                closePrices[prevIndex] < ema200Prev
-              ) {
-                entryEma = 50;
-                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-                canBuy = false;
-              }
-            }
+          if (
+            closePrices[prevIndex] > ema200Prev &&
+            closePrices[prevIndex] < ema50Prev
+          ) {
+            entryEma = 200;
+            buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+            canBuy = false;
           }
         }
-
-        if (trendDown15 && bearish(prevIndex)) {
-          if (trendUp) {
-            //Single Exponetial Moving Average Crossed
-            if (
-              crossedEma(prevIndex, ema50Prev) &&
-              !crossedEma(prevIndex, ema200Prev) &&
-              closePrices[prevIndex] < ema50Prev
-            ) {
-              entryEma = 50;
-              buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
-              canBuy = false;
-            }
-            if (
-              !crossedEma(prevIndex, ema50Prev) &&
-              crossedEma(prevIndex, ema200Prev) &&
-              closePrices[prevIndex] < ema200Prev
-            ) {
-              entryEma = 200;
-              buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
-              canBuy = false;
-            }
-            //Double Exponetial Moving Averages Crossed
-            if (
-              crossedEma(prevIndex, ema50Prev) &&
-              crossedEma(prevIndex, ema200Prev)
-            ) {
-              if (
-                closePrices[prevIndex] < ema50Prev &&
-                closePrices[prevIndex] < ema200Prev
-              ) {
-                entryEma = 200;
-                buyMultiplier(
-                  "MULTDOWN",
-                  data?.echo_req?.ticks_history,
-                  amount,
-                );
-                canBuy = false;
-              }
-              if (
-                closePrices[prevIndex] < ema50Prev &&
-                closePrices[prevIndex] > ema200Prev
-              ) {
-                entryEma = 50;
-                buyMultiplier(
-                  "MULTDOWN",
-                  data?.echo_req?.ticks_history,
-                  amount,
-                );
-                canBuy = false;
-              }
-            }
+        if (trendDown && candleCrossesEitherEMA(prevIndex, ema50, ema200)) {
+          if (closePrices[prevIndex] < ema50Prev) {
+            entryEma = 50;
+            buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+            canBuy = false;
           }
-          if (trendDown) {
-            //Single Exponetial Moving Average Crossed
-            if (
-              crossedEma(prevIndex, ema50Prev) &&
-              !crossedEma(prevIndex, ema200Prev) &&
-              closePrices[prevIndex] < ema50Prev
-            ) {
-              entryEma = 50;
-              buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
-              canBuy = false;
-            }
-            if (
-              !crossedEma(prevIndex, ema50Prev) &&
-              crossedEma(prevIndex, ema200Prev) &&
-              closePrices[prevIndex] < ema200Prev
-            ) {
-              entryEma = 200;
-              buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
-              canBuy = false;
-            }
-            //Double Exponetial Moving Averages Crossed
-            if (
-              crossedEma(prevIndex, ema50Prev) &&
-              crossedEma(prevIndex, ema200Prev)
-            ) {
-              if (
-                closePrices[prevIndex] < ema50Prev &&
-                closePrices[prevIndex] < ema200Prev
-              ) {
-                entryEma = 50;
-                buyMultiplier(
-                  "MULTDOWN",
-                  data?.echo_req?.ticks_history,
-                  amount,
-                );
-                canBuy = false;
-              }
-              if (
-                closePrices[prevIndex] > ema50Prev &&
-                closePrices[prevIndex] < ema200Prev
-              ) {
-                entryEma = 200;
-                buyMultiplier(
-                  "MULTDOWN",
-                  data?.echo_req?.ticks_history,
-                  amount,
-                );
-                canBuy = false;
-              }
-            }
+          if (
+            closePrices[prevIndex] < ema200Prev &&
+            closePrices[prevIndex] > ema50Prev
+          ) {
+            entryEma = 200;
+            buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+            canBuy = false;
           }
         }
       } else {
-        if (position === "MULTUP"){
-          if(entryEma === 50 && closePrices[prevIndex] < ema50Prev){
+        if (position === "MULTUP") {
+          if (entryEma === 50 && closePrices[prevIndex] < ema50Prev) {
             closePosition(openContractId, `Opposite Signal`);
           }
-          if(entryEma === 200 && closePrices[prevIndex] < ema200Prev){
+          if (entryEma === 200 && closePrices[prevIndex] < ema200Prev) {
             closePosition(openContractId, `Opposite Signal`);
           }
         }
-        if (position === "MULTDOWN"){
-          if(entryEma === 50 && closePrices[prevIndex] > ema50Prev){
+        if (position === "MULTDOWN") {
+          if (entryEma === 50 && closePrices[prevIndex] > ema50Prev) {
             closePosition(openContractId, `Opposite Signal`);
           }
-          if(entryEma === 200 && closePrices[prevIndex] > ema200Prev){
+          if (entryEma === 200 && closePrices[prevIndex] > ema200Prev) {
             closePosition(openContractId, `Opposite Signal`);
           }
         }
@@ -630,15 +467,15 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract.profit;
-    if (entryEma === 0){
+    if (entryEma === 0) {
       closePosition(openContractId, `No Defined Exit`);
     }
-    if (pip >= 50 && stopLoss === 0) {
-      update(5);
+    if (pip >= 2 && stopLoss === 0) {
+      update(0.5);
     }
-    if (pip >= 100 && stopLoss === 0) {
-      closePosition(openContractId, `Take Profit Reached`);
-    }
+    // if (pip >= 100 && stopLoss === 0) {
+    //   closePosition(openContractId, `Take Profit Reached`);
+    // }
     if (stopLoss !== 0 && pip < stopLoss) {
       closePosition(openContractId, `Stop Loss Hit`);
     }
@@ -664,7 +501,7 @@ ws.on("message", async (msg) => {
       `🟢 Entered ${position} position, Contract ID: ${openContractId}`,
     );
     send({ portfolio: 1 });
-    canBuy = false
+    canBuy = false;
   }
 
   if (data.msg_type === "sell") {
@@ -680,7 +517,7 @@ ws.on("message", async (msg) => {
     subscribed = false;
     update(0);
     send({ portfolio: 1 });
-    entryEma = 0
+    entryEma = 0;
   }
 
   if (data.error) {
