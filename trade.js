@@ -138,7 +138,7 @@ function buyMultiplier(direction, sym, stake) {
       contract_type: direction,
       currency: "USD",
       symbol: sym,
-      multiplier: 500,
+      multiplier: 50,
       limit_order: { stop_loss: 0.18, take_profit: 0.14 },
     },
   });
@@ -295,8 +295,8 @@ ws.on("message", async (msg) => {
       const ema200 = calculateEMA(closePrices15, 200);
       const ema200Now = ema200[currIndex];
 
-      const trendUp15 = ema50Now > ema200Now;
-      const trendDown15 = ema200Now > ema50Now;
+      trendUp15 = ema50Now > ema200Now;
+      trendDown15 = ema200Now > ema50Now;
 
       if (openTime2 !== data.ohlc.open_time) {
         openTime2 = data.ohlc.open_time;
@@ -534,7 +534,7 @@ ws.on("message", async (msg) => {
             closePosition(openContractId, `Opposite Signal`);
           }
         }
-        if (position === "MULTDOWWN"){
+        if (position === "MULTDOWN"){
           if(entryEma === 50 && closePrices[prevIndex] > ema50Prev){
             closePosition(openContractId, `Opposite Signal`);
           }
@@ -605,7 +605,7 @@ ws.on("message", async (msg) => {
       data.proposal_open_contract.date_start;
     console.log(duration);
     if (duration % 60 == 0) {
-      timePassed = duration / 60;
+      let timePassed = duration / 60;
       sendMessage(
         `${timePassed} minute${timePassed > 1 ? "s" : ""} has passed`,
       );
@@ -631,7 +631,7 @@ ws.on("message", async (msg) => {
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract.profit;
     if (entryEma === 0){
-      //closePosition(openContractId, `No Defined Exit`);
+      closePosition(openContractId, `No Defined Exit`);
     }
     if (pip >= 50 && stopLoss === 0) {
       update(5);
