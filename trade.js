@@ -36,6 +36,7 @@ let openTime = 0;
 let openTime2 = 0;
 let trendUp15;
 let trendDown15;
+let entryEma = 0;
 const sym = ["R_75"];
 
 app.use(cors());
@@ -138,7 +139,7 @@ function buyMultiplier(direction, sym, stake) {
       currency: "USD",
       symbol: sym,
       multiplier: 500,
-      limit_order: { stop_loss: stake / 5, take_profit: stake },
+      limit_order: { stop_loss: 0.18, take_profit: 0.14 },
     },
   });
 }
@@ -201,6 +202,14 @@ ws.on("message", async (msg) => {
         style: "candles",
         count: 500,
         granularity: 60,
+        end: "latest",
+        subscribe: 1,
+      });
+      send({
+        ticks_history: s,
+        style: "candles",
+        count: 500,
+        granularity: 900,
         end: "latest",
         subscribe: 1,
       });
@@ -274,6 +283,32 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "ohlc") {
+    if (data.echo_req.granularity === 900) {
+      closePrices15[closePrices15.length - 1] = Number(data.ohlc.close);
+
+      const len = closePrices15.length;
+      const currIndex = len - 1;
+
+      const ema50 = calculateEMA(closePrices15, 50);
+      const ema50Now = ema50[currIndex];
+
+      const ema200 = calculateEMA(closePrices15, 200);
+      const ema200Now = ema200[currIndex];
+
+      const trendUp15 = ema50Now > ema200Now;
+      const trendDown15 = ema200Now > ema50Now;
+
+      if (openTime2 !== data.ohlc.open_time) {
+        openTime2 = data.ohlc.open_time;
+        send({
+          ticks_history: data.echo_req.ticks_history,
+          style: "candles",
+          count: 500,
+          granularity: data.echo_req.granularity,
+          end: "latest",
+        });
+      }
+    }
     if (data.echo_req.granularity === 60) {
       closePrices[closePrices.length - 1] = Number(data.ohlc.close);
       highPrices[highPrices.length - 1] = Number(data.ohlc.high);
@@ -285,14 +320,229 @@ ws.on("message", async (msg) => {
 
       const ema50 = calculateEMA(closePrices, 50);
       const ema50Now = ema50[currIndex];
+      const ema50Prev = ema50[prevIndex];
 
       const ema200 = calculateEMA(closePrices, 200);
       const ema200Now = ema200[currIndex];
+      const ema200Prev = ema200[prevIndex];
 
       const trendUp = ema50Now > ema200Now;
       const trendDown = ema200Now > ema50Now;
 
       const timeDifference = data.ohlc.epoch - data.ohlc.open_time;
+
+      if (canBuy === true) {
+        if (trendUp15 && bullish(prevIndex)) {
+          if (trendUp) {
+            //Single Exponetial Moving Average Crossed
+            if (
+              crossedEma(prevIndex, ema50Prev) &&
+              !crossedEma(prevIndex, ema200Prev) &&
+              closePrices[prevIndex] > ema50Prev
+            ) {
+              entryEma = 50;
+              buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+              canBuy = false;
+            }
+            if (
+              !crossedEma(prevIndex, ema50Prev) &&
+              crossedEma(prevIndex, ema200Prev) &&
+              closePrices[prevIndex] > ema200Prev
+            ) {
+              entryEma = 200;
+              buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+              canBuy = false;
+            }
+            //Double Exponetial Moving Averages Crossed
+            if (
+              crossedEma(prevIndex, ema50Prev) &&
+              crossedEma(prevIndex, ema200Prev)
+            ) {
+              if (
+                closePrices[prevIndex] > ema50Prev &&
+                closePrices[prevIndex] > ema200Prev
+              ) {
+                entryEma = 50;
+                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+                canBuy = false;
+              }
+              if (
+                closePrices[prevIndex] < ema50Prev &&
+                closePrices[prevIndex] > ema200Prev
+              ) {
+                entryEma = 200;
+                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+                canBuy = false;
+              }
+            }
+          }
+          if (trendDown) {
+            //Single Exponetial Moving Average Crossed
+            if (
+              crossedEma(prevIndex, ema50Prev) &&
+              !crossedEma(prevIndex, ema200Prev) &&
+              closePrices[prevIndex] > ema50Prev
+            ) {
+              entryEma = 50;
+              buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+              canBuy = false;
+            }
+            if (
+              !crossedEma(prevIndex, ema50Prev) &&
+              crossedEma(prevIndex, ema200Prev) &&
+              closePrices[prevIndex] > ema200Prev
+            ) {
+              entryEma = 200;
+              buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+              canBuy = false;
+            }
+            //Double Exponetial Moving Averages Crossed
+            if (
+              crossedEma(prevIndex, ema50Prev) &&
+              crossedEma(prevIndex, ema200Prev)
+            ) {
+              if (
+                closePrices[prevIndex] > ema50Prev &&
+                closePrices[prevIndex] > ema200Prev
+              ) {
+                entryEma = 200;
+                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+                canBuy = false;
+              }
+              if (
+                closePrices[prevIndex] > ema50Prev &&
+                closePrices[prevIndex] < ema200Prev
+              ) {
+                entryEma = 50;
+                buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+                canBuy = false;
+              }
+            }
+          }
+        }
+
+        if (trendDown15 && bearish(prevIndex)) {
+          if (trendUp) {
+            //Single Exponetial Moving Average Crossed
+            if (
+              crossedEma(prevIndex, ema50Prev) &&
+              !crossedEma(prevIndex, ema200Prev) &&
+              closePrices[prevIndex] < ema50Prev
+            ) {
+              entryEma = 50;
+              buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+              canBuy = false;
+            }
+            if (
+              !crossedEma(prevIndex, ema50Prev) &&
+              crossedEma(prevIndex, ema200Prev) &&
+              closePrices[prevIndex] < ema200Prev
+            ) {
+              entryEma = 200;
+              buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+              canBuy = false;
+            }
+            //Double Exponetial Moving Averages Crossed
+            if (
+              crossedEma(prevIndex, ema50Prev) &&
+              crossedEma(prevIndex, ema200Prev)
+            ) {
+              if (
+                closePrices[prevIndex] < ema50Prev &&
+                closePrices[prevIndex] < ema200Prev
+              ) {
+                entryEma = 200;
+                buyMultiplier(
+                  "MULTDOWN",
+                  data?.echo_req?.ticks_history,
+                  amount,
+                );
+                canBuy = false;
+              }
+              if (
+                closePrices[prevIndex] < ema50Prev &&
+                closePrices[prevIndex] > ema200Prev
+              ) {
+                entryEma = 50;
+                buyMultiplier(
+                  "MULTDOWN",
+                  data?.echo_req?.ticks_history,
+                  amount,
+                );
+                canBuy = false;
+              }
+            }
+          }
+          if (trendDown) {
+            //Single Exponetial Moving Average Crossed
+            if (
+              crossedEma(prevIndex, ema50Prev) &&
+              !crossedEma(prevIndex, ema200Prev) &&
+              closePrices[prevIndex] < ema50Prev
+            ) {
+              entryEma = 50;
+              buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+              canBuy = false;
+            }
+            if (
+              !crossedEma(prevIndex, ema50Prev) &&
+              crossedEma(prevIndex, ema200Prev) &&
+              closePrices[prevIndex] < ema200Prev
+            ) {
+              entryEma = 200;
+              buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+              canBuy = false;
+            }
+            //Double Exponetial Moving Averages Crossed
+            if (
+              crossedEma(prevIndex, ema50Prev) &&
+              crossedEma(prevIndex, ema200Prev)
+            ) {
+              if (
+                closePrices[prevIndex] < ema50Prev &&
+                closePrices[prevIndex] < ema200Prev
+              ) {
+                entryEma = 50;
+                buyMultiplier(
+                  "MULTDOWN",
+                  data?.echo_req?.ticks_history,
+                  amount,
+                );
+                canBuy = false;
+              }
+              if (
+                closePrices[prevIndex] > ema50Prev &&
+                closePrices[prevIndex] < ema200Prev
+              ) {
+                entryEma = 200;
+                buyMultiplier(
+                  "MULTDOWN",
+                  data?.echo_req?.ticks_history,
+                  amount,
+                );
+                canBuy = false;
+              }
+            }
+          }
+        }
+      } else {
+        if (position === "MULTUP"){
+          if(entryEma === 50 && closePrices[prevIndex] < ema50Prev){
+            closePosition(openContractId, `Opposite Signal`);
+          }
+          if(entryEma === 200 && closePrices[prevIndex] < ema200Prev){
+            closePosition(openContractId, `Opposite Signal`);
+          }
+        }
+        if (position === "MULTDOWWN"){
+          if(entryEma === 50 && closePrices[prevIndex] > ema50Prev){
+            closePosition(openContractId, `Opposite Signal`);
+          }
+          if(entryEma === 200 && closePrices[prevIndex] > ema200Prev){
+            closePosition(openContractId, `Opposite Signal`);
+          }
+        }
+      }
 
       if (timeDifference % 20 === 0) {
         if (
@@ -322,32 +572,6 @@ ws.on("message", async (msg) => {
         });
       }
     }
-    if (data.echo_req.granularity === 900) {
-      closePrices15[closePrices15.length - 1] = Number(data.ohlc.close);
-
-      const len = closePrices15.length;
-      const currIndex = len - 1;
-
-      const ema50 = calculateEMA(closePrices15, 50);
-      const ema50Now = ema50[currIndex];
-
-      const ema200 = calculateEMA(closePrices15, 200);
-      const ema200Now = ema200[currIndex];
-
-      const trendUp15 = ema50Now > ema200Now;
-      const trendDown15 = ema200Now > ema50Now;
-
-      if (openTime2 !== data.ohlc.open_time) {
-        openTime2 = data.ohlc.open_time;
-        send({
-          ticks_history: data.echo_req.ticks_history,
-          style: "candles",
-          count: 500,
-          granularity: data.echo_req.granularity,
-          end: "latest",
-        });
-      }
-    }
   }
 
   if (data.msg_type === "candles") {
@@ -357,14 +581,14 @@ ws.on("message", async (msg) => {
       sendMessage("Bot is still running");
     }
     try {
+      if (data.echo_req.granularity === 900) {
+        closePrices15 = data.candles.map((c) => c.close);
+      }
       if (data.echo_req.granularity === 60) {
         closePrices = data.candles.map((c) => c.close);
         openPrices = data.candles.map((c) => c.open);
         highPrices = data.candles.map((c) => c.high);
         lowPrices = data.candles.map((c) => c.low);
-      }
-      if (data.echo_req.granularity === 900) {
-        closePrices15 = data.candles.map((c) => c.close);
       }
     } catch (err) {
       sendMessage(err);
@@ -390,15 +614,15 @@ ws.on("message", async (msg) => {
     const entrySpot = data.proposal_open_contract.entry_spot;
     const currentSpot = data.proposal_open_contract.current_spot;
     const orderAmount =
-      data.proposal_open_contract.limit_order.stop_out.order_amount;
+      data.proposal_open_contract.limit_order?.stop_out?.order_amount;
     const lossAmount =
-      data.proposal_open_contract.limit_order.stop_loss.order_amount;
+      data.proposal_open_contract.limit_order?.stop_loss?.order_amount;
     const profitAmount =
-      data.proposal_open_contract.limit_order.take_profit.order_amount;
-    const stopOut = data.proposal_open_contract.limit_order.stop_out.value;
-    const stop = data.proposal_open_contract.limit_order.stop_loss.value;
+      data.proposal_open_contract.limit_order?.take_profit?.order_amount;
+    const stopOut = data.proposal_open_contract.limit_order?.stop_out?.value;
+    const stop = data.proposal_open_contract.limit_order?.stop_loss?.value;
     const takeProfit =
-      data.proposal_open_contract.limit_order.take_profit.value;
+      data.proposal_open_contract.limit_order?.take_profit?.value;
     const pip =
       type === "MULTUP" ? currentSpot - entrySpot : entrySpot - currentSpot;
     const loss = type === "MULTUP" ? entrySpot - stopOut : stopOut - entrySpot;
@@ -406,15 +630,17 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract.profit;
+    if (entryEma === 0){
+      //closePosition(openContractId, `No Defined Exit`);
+    }
+    if (pip >= 50 && stopLoss === 0) {
+      update(5);
+    }
     if (pip >= 100 && stopLoss === 0) {
-      update(20);
+      closePosition(openContractId, `Take Profit Reached`);
     }
     if (stopLoss !== 0 && pip < stopLoss) {
-      //closePosition(openContractId, `Stop Loss Hit`);
-    }
-    if (duration >= 300) {
       closePosition(openContractId, `Stop Loss Hit`);
-      console.log("5 minutes has passed");
     }
     const runningTrade = {
       pip: pip,
@@ -438,14 +664,15 @@ ws.on("message", async (msg) => {
       `🟢 Entered ${position} position, Contract ID: ${openContractId}`,
     );
     send({ portfolio: 1 });
+    canBuy = false
   }
 
   if (data.msg_type === "sell") {
     sendMessage(
-      `💸 Position closed at ${data.sell.sold_for} USD, because ${reason}`,
+      `💸 Position closed at ${data.sell?.sold_for} USD, because ${reason}`,
     );
     console.log(
-      `💸 Position closed at ${data.sell.sold_for} USD, because ${reason}`,
+      `💸 Position closed at ${data.sell?.sold_for} USD, because ${reason}`,
     );
     position = null;
     openContractId = null;
@@ -453,6 +680,7 @@ ws.on("message", async (msg) => {
     subscribed = false;
     update(0);
     send({ portfolio: 1 });
+    entryEma = 0
   }
 
   if (data.error) {
