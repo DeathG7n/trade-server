@@ -139,7 +139,7 @@ function buyMultiplier(direction, sym, stake) {
       currency: "USD",
       symbol: sym,
       multiplier: 750,
-      limit_order: { stop_loss: stake / 5, take_profit: stake / 2.5 },
+      limit_order: { stop_loss: stake / 20, take_profit: stake / 3.3 },
     },
   });
 }
@@ -334,7 +334,6 @@ ws.on("message", async (msg) => {
       if (canBuy === true) {
         if (trendUp && candleCrossesEitherEMA(prevIndex, ema50, ema200)) {
           if (closePrices[prevIndex] > ema50Prev) {
-            entryEma = 50;
             buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
             canBuy = false;
           }
@@ -342,14 +341,12 @@ ws.on("message", async (msg) => {
             closePrices[prevIndex] > ema200Prev &&
             closePrices[prevIndex] < ema50Prev
           ) {
-            entryEma = 200;
             buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
             canBuy = false;
           }
         }
         if (trendDown && candleCrossesEitherEMA(prevIndex, ema50, ema200)) {
           if (closePrices[prevIndex] < ema50Prev) {
-            entryEma = 50;
             buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
             canBuy = false;
           }
@@ -357,25 +354,18 @@ ws.on("message", async (msg) => {
             closePrices[prevIndex] < ema200Prev &&
             closePrices[prevIndex] > ema50Prev
           ) {
-            entryEma = 200;
             buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
             canBuy = false;
           }
         }
       } else {
         if (position === "MULTUP") {
-          if (entryEma === 50 && closePrices[prevIndex] < ema50Prev) {
-            closePosition(openContractId, `Opposite Signal`);
-          }
-          if (entryEma === 200 && closePrices[prevIndex] < ema200Prev) {
+          if (trendDown) {
             closePosition(openContractId, `Opposite Signal`);
           }
         }
         if (position === "MULTDOWN") {
-          if (entryEma === 50 && closePrices[prevIndex] > ema50Prev) {
-            closePosition(openContractId, `Opposite Signal`);
-          }
-          if (entryEma === 200 && closePrices[prevIndex] > ema200Prev) {
+          if (trendUp) {
             closePosition(openContractId, `Opposite Signal`);
           }
         }
@@ -467,9 +457,6 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract.profit;
-    if (entryEma === 0) {
-      closePosition(openContractId, `No Defined Exit`);
-    }
     if (pip >= 2 && stopLoss === 0) {
       update(0.5);
     }
@@ -517,7 +504,6 @@ ws.on("message", async (msg) => {
     subscribed = false;
     update(0);
     send({ portfolio: 1 });
-    entryEma = 0;
   }
 
   if (data.error) {
