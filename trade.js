@@ -139,7 +139,7 @@ function buyMultiplier(direction, sym, stake) {
       currency: "USD",
       symbol: sym,
       multiplier: 750,
-      limit_order: { stop_loss: stake / 20, take_profit: stake / 3.3 },
+      limit_order: { stop_loss: stake / 10, take_profit: stake / 3.3 },
     },
   });
 }
@@ -460,9 +460,15 @@ ws.on("message", async (msg) => {
     if (pip >= 2 && stopLoss === 0) {
       update(0.5);
     }
-    // if (pip >= 100 && stopLoss === 0) {
-    //   closePosition(openContractId, `Take Profit Reached`);
-    // }
+    if (pip >= 4 && stopLoss === 0) {
+      update(1);
+    }
+    if (pip >= 3) {
+      closePosition(openContractId, `Take Profit Reached`);
+    }
+    if(pip <= 0.5){
+      closePosition(openContractId, `Stop Loss Hit`);
+    }
     if (stopLoss !== 0 && pip < stopLoss) {
       closePosition(openContractId, `Stop Loss Hit`);
     }
