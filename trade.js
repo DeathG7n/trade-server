@@ -250,7 +250,7 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "portfolio") {
-    if (data.portfolio.contracts.length === 0) {
+    if (data?.portfolio?.contracts.length === 0) {
       openPosition = null;
       openContractId = null;
       position = null;
@@ -265,10 +265,10 @@ ws.on("message", async (msg) => {
       }
     } else {
       openPosition =
-        data.portfolio.contracts[data.portfolio.contracts.length - 1];
+        data?.portfolio?.contracts[data.portfolio?.contracts.length - 1];
       position = openPosition.contract_type;
       openContractId = openPosition.contract_id;
-      if (data.portfolio.contracts.length > 1) {
+      if (data?.portfolio?.contracts.length > 1) {
         closePosition(openContractId, "too many positions");
       }
       if (subscribed === false) {
