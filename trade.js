@@ -487,8 +487,8 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "buy") {
-    position = data.echo_req.parameters.contract_type;
-    openContractId = data.buy.contract_id;
+    position = data?.echo_req?.parameters?.contract_type;
+    openContractId = data?.buy?.contract_id;
     sendMessage(`${position} position entered`);
     console.log(
       `🟢 Entered ${position} position, Contract ID: ${openContractId}`,
@@ -513,7 +513,7 @@ ws.on("message", async (msg) => {
   }
 
   if (data.error) {
-    const error = data.error.message;
+    const error = data?.error?.message;
     console.error("❗ Error: ", error);
     sendMessage(`❗ Error: ${error}`);
     if (error === "You have reached the rate limit for ticks_history.") {
