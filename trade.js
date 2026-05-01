@@ -368,12 +368,12 @@ ws.on("message", async (msg) => {
         }
       } else {
         if (position === "MULTUP") {
-          if (crossover === "bearish" || trendDown) {
+          if (crossover === "bearish") {
             closePosition(openContractId, `Opposite Signal`);
           }
         }
         if (position === "MULTDOWN") {
-          if (crossover === "bullish" || trendUp) {
+          if (crossover === "bullish") {
             closePosition(openContractId, `Opposite Signal`);
           }
         }
