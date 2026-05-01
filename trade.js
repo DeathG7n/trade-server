@@ -438,15 +438,15 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract.profit;
-    // if (pip >= 2 && stopLoss === 0) {
-    //   update(0.5);
-    // }
+    if (pip >= 2 && stopLoss === 0) {
+      update(0.5);
+    }
     // if (pip >= 4 && stopLoss === 0) {
     //   update(1);
     // }
-    // if (stopLoss !== 0 && pip < stopLoss) {
-    //   closePosition(openContractId, `Stop Loss Hit`);
-    // }
+    if (stopLoss !== 0 && pip < stopLoss) {
+      closePosition(openContractId, `Stop Loss Hit`);
+    }
     const runningTrade = {
       pip: pip,
       profit: profit,
