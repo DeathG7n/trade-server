@@ -161,7 +161,7 @@ function buyMultiplier(direction, sym, stake) {
       currency: "USD",
       symbol: sym,
       multiplier: 750,
-      limit_order: { stop_loss: stake / 10, take_profit: stake / 2 },
+      limit_order: { stop_loss: stake / 5, take_profit: stake / 5 },
     },
   });
 }
@@ -354,6 +354,7 @@ ws.on("message", async (msg) => {
       const crossover = detectCrossover(ema5, ema9);
 
       if (canBuy === true) {
+        console.log(crossover)
         // ✅ Bullish crossover → Buy UP
         if (crossover === "bullish") {
           buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
