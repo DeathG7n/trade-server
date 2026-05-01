@@ -64,6 +64,28 @@ function crossedEma(candle, ema) {
 function candleCrossesEitherEMA(index, ema1, ema2) {
   return crossedEma(index, ema1[index]) || crossedEma(index, ema2[index]);
 }
+function detectCrossover(emaFast, emaSlow) {
+  const len = emaFast.length;
+
+  if (len < 2) return null;
+
+  const prevFast = emaFast[len - 2];
+  const prevSlow = emaSlow[len - 2];
+  const currFast = emaFast[len - 1];
+  const currSlow = emaSlow[len - 1];
+
+  // Bullish crossover
+  if (prevFast <= prevSlow && currFast > currSlow) {
+    return "bullish";
+  }
+
+  // Bearish crossover
+  if (prevFast >= prevSlow && currFast < currSlow) {
+    return "bearish";
+  }
+
+  return null;
+}
 
 function recentEmaCross(emaFast, emaSlow, lookback = 15) {
   const len = emaFast.length;
@@ -266,8 +288,8 @@ ws.on("message", async (msg) => {
     } else {
       openPosition =
         data?.portfolio?.contracts[data.portfolio?.contracts.length - 1];
-      position = openPosition.contract_type;
-      openContractId = openPosition.contract_id;
+      position = openPosition?.contract_type;
+      openContractId = openPosition?.contract_id; 
       if (data?.portfolio?.contracts.length > 1) {
         closePosition(openContractId, "too many positions");
       }
@@ -318,73 +340,41 @@ ws.on("message", async (msg) => {
       const currIndex = len - 1;
       const prevIndex = len - 2;
 
-      const ema50 = calculateEMA(closePrices, 50);
-      const ema50Now = ema50[currIndex];
-      const ema50Prev = ema50[prevIndex];
+      const ema5 = calculateEMA(closePrices, 5);
+      const ema5Now = ema5[currIndex];
+      const ema5Prev = ema5[prevIndex];
 
-      const ema200 = calculateEMA(closePrices, 200);
-      const ema200Now = ema200[currIndex];
-      const ema200Prev = ema200[prevIndex];
+      const ema9 = calculateEMA(closePrices, 9);
+      const ema9Now = ema9[currIndex];
+      const ema9Prev = ema9[prevIndex];
 
-      const trendUp = ema50Now > ema200Now;
-      const trendDown = ema200Now > ema50Now;
+      const trendUp = ema5Now > ema9Now;
+      const trendDown = ema9Now > ema5Now;
 
-      const timeDifference = data.ohlc.epoch - data.ohlc.open_time;
+      const crossover = detectCrossover(ema5, ema9);
 
       if (canBuy === true) {
-        if (trendUp && candleCrossesEitherEMA(prevIndex, ema50, ema200)) {
-          if (closePrices[prevIndex] > ema50Prev) {
-            buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-            canBuy = false;
-          }
-          if (
-            closePrices[prevIndex] > ema200Prev &&
-            closePrices[prevIndex] < ema50Prev
-          ) {
-            buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-            canBuy = false;
-          }
+        // ✅ Bullish crossover → Buy UP
+        if (crossover === "bullish") {
+          buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
+          canBuy = false;
         }
-        if (trendDown && candleCrossesEitherEMA(prevIndex, ema50, ema200)) {
-          if (closePrices[prevIndex] < ema50Prev) {
-            buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
-            canBuy = false;
-          }
-          if (
-            closePrices[prevIndex] < ema200Prev &&
-            closePrices[prevIndex] > ema50Prev
-          ) {
-            buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
-            canBuy = false;
-          }
+
+        // ✅ Bearish crossover → Buy DOWN
+        if (crossover === "bearish") {
+          buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
+          canBuy = false;
         }
       } else {
         if (position === "MULTUP") {
-          if (trendDown) {
+          if (crossover === "bearish" || trendDown) {
             closePosition(openContractId, `Opposite Signal`);
           }
         }
         if (position === "MULTDOWN") {
-          if (trendUp) {
+          if (crossover === "bullish" || trendUp) {
             closePosition(openContractId, `Opposite Signal`);
           }
-        }
-      }
-
-      if (timeDifference % 20 === 0) {
-        if (
-          trendUp &&
-          candleCrossesEitherEMA(currIndex, ema50, ema200) &&
-          bullish(currIndex)
-        ) {
-          sendMessage("Bullish Cross");
-        }
-        if (
-          trendDown &&
-          candleCrossesEitherEMA(currIndex, ema50, ema200) &&
-          bearish(currIndex)
-        ) {
-          sendMessage("Bearish Cross");
         }
       }
 
@@ -427,16 +417,6 @@ ws.on("message", async (msg) => {
   if (data.msg_type === "proposal_open_contract") {
     canBuy = false;
     subscribed = true;
-    const duration =
-      data.proposal_open_contract.current_spot_time -
-      data.proposal_open_contract.date_start;
-    console.log(duration);
-    if (duration % 60 == 0) {
-      let timePassed = duration / 60;
-      sendMessage(
-        `${timePassed} minute${timePassed > 1 ? "s" : ""} has passed`,
-      );
-    }
     const type = data.proposal_open_contract.contract_type;
     const entrySpot = data.proposal_open_contract.entry_spot;
     const currentSpot = data.proposal_open_contract.current_spot;
@@ -457,15 +437,15 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract.profit;
-    if (pip >= 2 && stopLoss === 0) {
-      update(0.5);
-    }
-    if (pip >= 4 && stopLoss === 0) {
-      update(1);
-    }
-    if (stopLoss !== 0 && pip < stopLoss) {
-      closePosition(openContractId, `Stop Loss Hit`);
-    }
+    // if (pip >= 2 && stopLoss === 0) {
+    //   update(0.5);
+    // }
+    // if (pip >= 4 && stopLoss === 0) {
+    //   update(1);
+    // }
+    // if (stopLoss !== 0 && pip < stopLoss) {
+    //   closePosition(openContractId, `Stop Loss Hit`);
+    // }
     const runningTrade = {
       pip: pip,
       profit: profit,
@@ -477,6 +457,18 @@ ws.on("message", async (msg) => {
       risk: risk,
       stopLoss: stopLoss,
     };
+    const duration =
+      data.proposal_open_contract.current_spot_time -
+      data.proposal_open_contract.date_start;
+    if (duration % 60 == 0) {
+      let timePassed = duration / 60;
+      sendMessage(
+        `${timePassed} minute${timePassed > 1 ? "s" : ""} has passed`,
+      );
+    }
+    if (duration === 2) {
+      sendMessage(runningTrade);
+    }
     console.log(runningTrade);
   }
 
