@@ -16,15 +16,9 @@ const uri =
   "mongodb+srv://DeathG7n:if3anYichukwu@cluster0.gpfyqmb.mongodb.net/trading?retryWrites=true&w=majority";
 const client = new MongoClient(uri);
 
-let closePrices15 = [];
-let closePrices = [];
-let openPrices = [];
-let highPrices = [];
-let lowPrices = [];
 let position = null;
 let openContractId = null;
 let openPosition = null;
-let canBuy = false;
 let subscribed = false;
 let count = 0;
 let reason = "";
@@ -32,12 +26,25 @@ let previousCandle = 0;
 let amount = null;
 let stopLoss = null;
 let now = new Date();
-let openTime = 0;
-let openTime2 = 0;
-let trendUp15;
-let trendDown15;
-let entryEma = 0;
-const sym = ["stpRNG"];
+
+const symbols = ["stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5", "R_75"];
+let marketData = {};
+symbols.forEach((s) => {
+  marketData[s] = {
+    close: [],
+    high: [],
+    low: [],
+    open: [],
+    close15: [],
+    openTime: 0,
+    openTime15: 0,
+    trendUp15: false,
+    trendDown15: false,
+    multiplier_range: [],
+  };
+});
+
+console.log(marketData);
 
 app.use(cors());
 
@@ -50,6 +57,9 @@ app.listen(3000, () => {
 });
 
 //Functions
+function canOpenTrade() {
+  return openContractId === null;
+}
 function bearish(candle) {
   return openPrices[candle] > closePrices[candle];
 }
@@ -149,7 +159,7 @@ const sendMessage = async (message) => {
   }
 };
 
-function buyMultiplier(direction, sym, stake) {
+function buyMultiplier(direction, symbol, stake, multiplier) {
   console.log(`📈 Buying ${direction} multiplier...`);
   send({
     buy: 1,
@@ -159,8 +169,8 @@ function buyMultiplier(direction, sym, stake) {
       basis: "stake",
       contract_type: direction,
       currency: "USD",
-      symbol: sym,
-      multiplier: 750,
+      symbol: symbol,
+      multiplier: multiplier,
       limit_order: { stop_loss: stake / 5, take_profit: stake / 5 },
     },
   });
@@ -218,7 +228,8 @@ ws.on("message", async (msg) => {
   if (data.msg_type === "authorize") {
     console.log("✅ Authorized");
     send({ balance: 1, subscribe: 1 });
-    sym.forEach((s) => {
+    symbols.forEach((s) => {
+      send({ contracts_for: s });
       send({
         ticks_history: s,
         style: "candles",
@@ -277,7 +288,6 @@ ws.on("message", async (msg) => {
       openContractId = null;
       position = null;
       subscribed = false;
-      canBuy = true;
       if (stopLoss !== null) {
         if (stopLoss === 0) {
           return;
@@ -289,7 +299,7 @@ ws.on("message", async (msg) => {
       openPosition =
         data?.portfolio?.contracts[data.portfolio?.contracts.length - 1];
       position = openPosition?.contract_type;
-      openContractId = openPosition?.contract_id; 
+      openContractId = openPosition?.contract_id;
       if (data?.portfolio?.contracts.length > 1) {
         closePosition(openContractId, "too many positions");
       }
@@ -305,23 +315,25 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "ohlc") {
+    const symbol = data.echo_req.ticks_history;
+    const md = marketData[symbol];
     if (data.echo_req.granularity === 900) {
-      closePrices15[closePrices15.length - 1] = Number(data.ohlc.close);
+      md.close15[md.close15.length - 1] = Number(data.ohlc.close);
 
-      const len = closePrices15.length;
+      const len = md.close15.length;
       const currIndex = len - 1;
 
-      const ema50 = calculateEMA(closePrices15, 50);
+      const ema50 = calculateEMA(md.close15, 50);
       const ema50Now = ema50[currIndex];
 
-      const ema200 = calculateEMA(closePrices15, 200);
+      const ema200 = calculateEMA(md.close15, 200);
       const ema200Now = ema200[currIndex];
 
-      trendUp15 = ema50Now > ema200Now;
-      trendDown15 = ema200Now > ema50Now;
+      md.trendUp15 = ema50Now > ema200Now;
+      md.trendDown15 = ema200Now > ema50Now;
 
-      if (openTime2 !== data.ohlc.open_time) {
-        openTime2 = data.ohlc.open_time;
+      if (md.openTime15 !== data.ohlc.open_time) {
+        md.openTime15 = data.ohlc.open_time;
         send({
           ticks_history: data.echo_req.ticks_history,
           style: "candles",
@@ -332,55 +344,57 @@ ws.on("message", async (msg) => {
       }
     }
     if (data.echo_req.granularity === 60) {
-      closePrices[closePrices.length - 1] = Number(data.ohlc.close);
-      highPrices[highPrices.length - 1] = Number(data.ohlc.high);
-      lowPrices[lowPrices.length - 1] = Number(data.ohlc.low);
+      md.close[md.close.length - 1] = Number(data.ohlc.close);
+      md.high[md.high.length - 1] = Number(data.ohlc.high);
+      md.low[md.low.length - 1] = Number(data.ohlc.low);
 
-      const len = closePrices.length;
+      const len = md.close.length;
       const currIndex = len - 1;
       const prevIndex = len - 2;
 
-      const ema5 = calculateEMA(closePrices, 5);
-      const ema5Now = ema5[currIndex];
-      const ema5Prev = ema5[prevIndex];
-
-      const ema9 = calculateEMA(closePrices, 9);
-      const ema9Now = ema9[currIndex];
-      const ema9Prev = ema9[prevIndex];
-
-      const trendUp = ema5Now > ema9Now;
-      const trendDown = ema9Now > ema5Now;
+      const ema5 = calculateEMA(md.close, 5);
+      const ema9 = calculateEMA(md.close, 9);
 
       const crossover = detectCrossover(ema5, ema9);
 
-      if (canBuy === true) {
-        console.log(crossover)
-        // ✅ Bullish crossover → Buy UP
-        if (crossover === "bullish") {
-          buyMultiplier("MULTUP", data?.echo_req?.ticks_history, amount);
-          canBuy = false;
-        }
+      if (md.openTime !== data.ohlc.open_time) {
+        md.openTime = data.ohlc.open_time;
 
-        // ✅ Bearish crossover → Buy DOWN
-        if (crossover === "bearish") {
-          buyMultiplier("MULTDOWN", data?.echo_req?.ticks_history, amount);
-          canBuy = false;
-        }
-      } else {
-        if (position === "MULTUP") {
-          if (crossover === "bearish") {
-            closePosition(openContractId, `Opposite Signal`);
-          }
-        }
-        if (position === "MULTDOWN") {
+        if (canOpenTrade()) {
+          // ✅ Bullish crossover → Buy UP
           if (crossover === "bullish") {
-            closePosition(openContractId, `Opposite Signal`);
+            openContractId = "PENDING";
+            buyMultiplier(
+              "MULTUP",
+              data?.echo_req?.ticks_history,
+              amount,
+              md.multiplier_range[0],
+            );
+          }
+
+          // ✅ Bearish crossover → Buy DOWN
+          if (crossover === "bearish") {
+            openContractId = "PENDING";
+            buyMultiplier(
+              "MULTDOWN",
+              data?.echo_req?.ticks_history,
+              amount,
+              md.multiplier_range[0],
+            );
+          }
+        } else {
+          if (position === "MULTUP") {
+            if (crossover === "bearish") {
+              closePosition(openContractId, `Opposite Signal`);
+            }
+          }
+          if (position === "MULTDOWN") {
+            if (crossover === "bullish") {
+              closePosition(openContractId, `Opposite Signal`);
+            }
           }
         }
-      }
 
-      if (openTime !== data.ohlc.open_time) {
-        openTime = data.ohlc.open_time;
         send({
           ticks_history: data.echo_req.ticks_history,
           style: "candles",
@@ -391,8 +405,26 @@ ws.on("message", async (msg) => {
       }
     }
   }
+  if (data.msg_type === "contracts_for") {
+    const symbol = data.echo_req.contracts_for;
+    const md = marketData[symbol];
+    for (
+      let index = 0;
+      index < data?.contracts_for?.available.length;
+      index++
+    ) {
+      if (
+        data?.contracts_for?.available[index].contract_category === "multiplier"
+      )
+        md.multiplier_range =
+          data?.contracts_for?.available[index]?.multiplier_range;
+    }
+    console.log(marketData);
+  }
 
   if (data.msg_type === "candles") {
+    const symbol = data.echo_req.ticks_history;
+    const md = marketData[symbol];
     const current = new Date();
     if (now.getHours() != current.getHours()) {
       now = new Date();
@@ -400,13 +432,13 @@ ws.on("message", async (msg) => {
     }
     try {
       if (data.echo_req.granularity === 900) {
-        closePrices15 = data.candles.map((c) => c.close);
+        md.close15 = data.candles.map((c) => c.close);
       }
       if (data.echo_req.granularity === 60) {
-        closePrices = data.candles.map((c) => c.close);
-        openPrices = data.candles.map((c) => c.open);
-        highPrices = data.candles.map((c) => c.high);
-        lowPrices = data.candles.map((c) => c.low);
+        md.close = data.candles.map((c) => c.close);
+        md.open = data.candles.map((c) => c.open);
+        md.high = data.candles.map((c) => c.high);
+        md.low = data.candles.map((c) => c.low);
       }
     } catch (err) {
       sendMessage(err);
@@ -416,7 +448,6 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "proposal_open_contract") {
-    canBuy = false;
     subscribed = true;
     const type = data.proposal_open_contract.contract_type;
     const entrySpot = data.proposal_open_contract.entry_spot;
@@ -474,14 +505,14 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "buy") {
+    console.log(data);
     position = data?.echo_req?.parameters?.contract_type;
     openContractId = data?.buy?.contract_id;
-    sendMessage(`${position} position entered`);
+    sendMessage(`${position} position entered on ${data?.echo_req?.parameters?.symbol}`);
     console.log(
       `🟢 Entered ${position} position, Contract ID: ${openContractId}`,
     );
     send({ portfolio: 1 });
-    canBuy = false;
   }
 
   if (data.msg_type === "sell") {
@@ -493,7 +524,6 @@ ws.on("message", async (msg) => {
     );
     position = null;
     openContractId = null;
-    canBuy = true;
     subscribed = false;
     update(0);
     send({ portfolio: 1 });
@@ -505,13 +535,24 @@ ws.on("message", async (msg) => {
     sendMessage(`❗ Error: ${error}`);
     if (error === "You have reached the rate limit for ticks_history.") {
       await run(30000);
-      send({
-        ticks_history: "CRASH1000",
-        style: "candles",
-        count: 500,
-        granularity: 300,
-        end: "latest",
-        subscribe: 1,
+      symbols.forEach((s) => {
+        send({ contracts_for: s });
+        send({
+          ticks_history: s,
+          style: "candles",
+          count: 500,
+          granularity: 60,
+          end: "latest",
+          subscribe: 1,
+        });
+        send({
+          ticks_history: s,
+          style: "candles",
+          count: 500,
+          granularity: 900,
+          end: "latest",
+          subscribe: 1,
+        });
       });
       sendMessage(`Candles Resubscribed`);
     }
