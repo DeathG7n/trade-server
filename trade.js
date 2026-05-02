@@ -326,7 +326,11 @@ ws.on("message", async (msg) => {
     const symbol = data.echo_req.ticks_history;
     const md = marketData[symbol];
     if (data.echo_req.granularity === 900) {
-      md.close15[md.close15.length - 1] = Number(data.ohlc.close);
+      if (md.close15.length === 0) {
+        md.close15.push(Number(data.ohlc.close));
+      } else {
+        md.close15[md.close15.length - 1] = Number(data.ohlc.close);
+      }
 
       const len = md.close15.length;
       const currIndex = len - 1;
@@ -352,9 +356,15 @@ ws.on("message", async (msg) => {
       }
     }
     if (data.echo_req.granularity === 60) {
-      md.close[md.close.length - 1] = Number(data.ohlc.close);
-      md.high[md.high.length - 1] = Number(data.ohlc.high);
-      md.low[md.low.length - 1] = Number(data.ohlc.low);
+      if (md.close.length === 0) {
+        md.close.push(Number(data.ohlc.close));
+        md.high.push(Number(data.ohlc.high));
+        md.low.push(Number(data.ohlc.low));
+      } else {
+        md.close[md.close.length - 1] = Number(data.ohlc.close);
+        md.high[md.high.length - 1] = Number(data.ohlc.high);
+        md.low[md.low.length - 1] = Number(data.ohlc.low);
+      }
 
       const len = md.close.length;
       const currIndex = len - 1;
@@ -396,7 +406,7 @@ ws.on("message", async (msg) => {
               closePosition(openContractId, `Opposite Signal`);
             }
           }
-          if (position === "MULTDOWN" && position.symbol === symbol) {
+          if (position.type === "MULTDOWN" && position.symbol === symbol) {
             if (crossover === "bullish") {
               closePosition(openContractId, `Opposite Signal`);
             }
@@ -496,7 +506,7 @@ ws.on("message", async (msg) => {
       risk: risk,
       stopLoss: stopLoss,
       symbol: position.symbol,
-      type: position.type
+      type: position.type,
     };
     const duration =
       data.proposal_open_contract.current_spot_time -
@@ -518,9 +528,7 @@ ws.on("message", async (msg) => {
     position.type = data?.echo_req?.parameters?.contract_type;
     position.symbol = data?.echo_req?.parameters?.symbol;
     openContractId = data?.buy?.contract_id;
-    sendMessage(
-      `${position.type} position entered on ${position.symbol}`,
-    );
+    sendMessage(`${position.type} position entered on ${position.symbol}`);
     console.log(
       `🟢 Entered ${position.type} position on ${position.symbol}, Contract ID: ${openContractId}`,
     );
@@ -536,7 +544,7 @@ ws.on("message", async (msg) => {
     );
     position = {
       type: null,
-      symbol: null
+      symbol: null,
     };
     openContractId = null;
     subscribed = false;
