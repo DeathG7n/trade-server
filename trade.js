@@ -16,7 +16,10 @@ const uri =
   "mongodb+srv://DeathG7n:if3anYichukwu@cluster0.gpfyqmb.mongodb.net/trading?retryWrites=true&w=majority";
 const client = new MongoClient(uri);
 
-let position = null;
+let position = {
+  type: null,
+  symbol: null,
+};
 let openContractId = null;
 let openPosition = null;
 let subscribed = false;
@@ -27,7 +30,7 @@ let amount = null;
 let stopLoss = null;
 let now = new Date();
 
-const symbols = ["stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5", "R_75"];
+const symbols = ["stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5"];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -286,7 +289,10 @@ ws.on("message", async (msg) => {
     if (data?.portfolio?.contracts.length === 0) {
       openPosition = null;
       openContractId = null;
-      position = null;
+      position = {
+        type: null,
+        symbol: null,
+      };
       subscribed = false;
       if (stopLoss !== null) {
         if (stopLoss === 0) {
@@ -298,7 +304,9 @@ ws.on("message", async (msg) => {
     } else {
       openPosition =
         data?.portfolio?.contracts[data.portfolio?.contracts.length - 1];
-      position = openPosition?.contract_type;
+      console.log(openPosition);
+      position.type = openPosition?.contract_type;
+      position.symbol = openPosition?.symbol;
       openContractId = openPosition?.contract_id;
       if (data?.portfolio?.contracts.length > 1) {
         closePosition(openContractId, "too many positions");
@@ -383,12 +391,12 @@ ws.on("message", async (msg) => {
             );
           }
         } else {
-          if (position === "MULTUP") {
+          if (position.type === "MULTUP" && position.symbol === symbol) {
             if (crossover === "bearish") {
               closePosition(openContractId, `Opposite Signal`);
             }
           }
-          if (position === "MULTDOWN") {
+          if (position === "MULTDOWN" && position.symbol === symbol) {
             if (crossover === "bullish") {
               closePosition(openContractId, `Opposite Signal`);
             }
@@ -419,7 +427,6 @@ ws.on("message", async (msg) => {
         md.multiplier_range =
           data?.contracts_for?.available[index]?.multiplier_range;
     }
-    console.log(marketData);
   }
 
   if (data.msg_type === "candles") {
@@ -488,6 +495,8 @@ ws.on("message", async (msg) => {
       gain: gain,
       risk: risk,
       stopLoss: stopLoss,
+      symbol: position.symbol,
+      type: position.type
     };
     const duration =
       data.proposal_open_contract.current_spot_time -
@@ -506,11 +515,14 @@ ws.on("message", async (msg) => {
 
   if (data.msg_type === "buy") {
     console.log(data);
-    position = data?.echo_req?.parameters?.contract_type;
+    position.type = data?.echo_req?.parameters?.contract_type;
+    position.symbol = data?.echo_req?.parameters?.symbol;
     openContractId = data?.buy?.contract_id;
-    sendMessage(`${position} position entered on ${data?.echo_req?.parameters?.symbol}`);
+    sendMessage(
+      `${position.type} position entered on ${position.symbol}`,
+    );
     console.log(
-      `🟢 Entered ${position} position, Contract ID: ${openContractId}`,
+      `🟢 Entered ${position.type} position on ${position.symbol}, Contract ID: ${openContractId}`,
     );
     send({ portfolio: 1 });
   }
@@ -522,7 +534,10 @@ ws.on("message", async (msg) => {
     console.log(
       `💸 Position closed at ${data.sell?.sold_for} USD, because ${reason}`,
     );
-    position = null;
+    position = {
+      type: null,
+      symbol: null
+    };
     openContractId = null;
     subscribed = false;
     update(0);
