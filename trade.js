@@ -370,10 +370,10 @@ ws.on("message", async (msg) => {
       const currIndex = len - 1;
       const prevIndex = len - 2;
 
-      const ema1 = calculateEMA(md.close, 1);
-      const ema2 = calculateEMA(md.close, 2);
+      const ema5 = calculateEMA(md.close, 5);
+      const ema9 = calculateEMA(md.close, 9);
 
-      const crossover = detectCrossover(ema1, ema2);
+      const crossover = detectCrossover(ema5, ema9);
 
       if (md.openTime !== data.ohlc.open_time) {
         md.openTime = data.ohlc.open_time;
