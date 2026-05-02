@@ -30,7 +30,7 @@ let amount = null;
 let stopLoss = null;
 let now = new Date();
 
-const symbols = ["stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5"];
+const symbols = ["stpRNG"];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -370,10 +370,10 @@ ws.on("message", async (msg) => {
       const currIndex = len - 1;
       const prevIndex = len - 2;
 
-      const ema5 = calculateEMA(md.close, 5);
-      const ema9 = calculateEMA(md.close, 9);
+      const ema1 = calculateEMA(md.close, 1);
+      const ema2 = calculateEMA(md.close, 2);
 
-      const crossover = detectCrossover(ema5, ema9);
+      const crossover = detectCrossover(ema1, ema2);
 
       if (md.openTime !== data.ohlc.open_time) {
         md.openTime = data.ohlc.open_time;
