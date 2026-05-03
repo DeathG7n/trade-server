@@ -39,10 +39,14 @@ symbols.forEach((s) => {
     low: [],
     open: [],
     close15: [],
+    close60: [],
     openTime: 0,
     openTime15: 0,
+    openTime60: 0,
     trendUp15: false,
     trendDown15: false,
+    trendUp60: false,
+    trendDown60: false,
     multiplier_range: [],
   };
 });
@@ -247,6 +251,14 @@ ws.on("message", async (msg) => {
         end: "latest",
         subscribe: 1,
       });
+      send({
+        ticks_history: s,
+        style: "candles",
+        count: 500,
+        granularity: 3600,
+        end: "latest",
+        subscribe: 1,
+      });
     });
   }
 
@@ -345,6 +357,9 @@ ws.on("message", async (msg) => {
       sendMessage("Bot is still running");
     }
     try {
+      if (data.echo_req.granularity === 3600) {
+        md.close60 = data.candles.map((c) => c.close);
+      }
       if (data.echo_req.granularity === 900) {
         md.close15 = data.candles.map((c) => c.close);
       }
@@ -364,6 +379,36 @@ ws.on("message", async (msg) => {
   if (data.msg_type === "ohlc") {
     const symbol = data.echo_req.ticks_history;
     const md = marketData[symbol];
+    if (data.echo_req.granularity === 3600) {
+      if (md.close60.length === 0) {
+        md.close60.push(Number(data.ohlc.close));
+      } else {
+        md.close60[md.close60.length - 1] = Number(data.ohlc.close);
+      }
+
+      const len = md.close60.length;
+      const currIndex = len - 1;
+
+      const ema5 = calculateEMA(md.close60, 5);
+      const ema5Now = ema5[currIndex];
+
+      const ema9 = calculateEMA(md.close60, 9);
+      const ema9Now = ema9[currIndex];
+
+      md.trendUp60 = ema5Now > ema9Now;
+      md.trendDown60 = ema9Now > ema5Now;
+
+      if (md.openTime60 !== data.ohlc.open_time) {
+        md.openTime60 = data.ohlc.open_time;
+        send({
+          ticks_history: data.echo_req.ticks_history,
+          style: "candles",
+          count: 500,
+          granularity: data.echo_req.granularity,
+          end: "latest",
+        });
+      }
+    }
     if (data.echo_req.granularity === 900) {
       if (md.close15.length === 0) {
         md.close15.push(Number(data.ohlc.close));
@@ -419,7 +464,7 @@ ws.on("message", async (msg) => {
 
         if (canOpenTrade()) {
           // ✅ Bullish crossover → Buy UP
-          if (md.trendUp15 && crossover === "bullish") {
+          if (md.trendUp60 && md.trendUp15 && crossover === "bullish") {
             openContractId = "PENDING";
             buyMultiplier(
               "MULTUP",
@@ -430,7 +475,7 @@ ws.on("message", async (msg) => {
           }
 
           // ✅ Bearish crossover → Buy DOWN
-          if (md.trendDown15 && crossover === "bearish") {
+          if (md.trendDown60 && md.trendDown15 && crossover === "bearish") {
             openContractId = "PENDING";
             buyMultiplier(
               "MULTDOWN",
@@ -485,7 +530,6 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract.profit;
-    console.log(data)
     if(profit > Math.abs(lossAmount) && stopLoss === 0){
       update(risk/ 4)
     }
