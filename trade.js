@@ -27,7 +27,7 @@ let count = 0;
 let reason = "";
 let previousCandle = 0;
 let amount = null;
-let stopLoss = null;
+let stopLoss = 0;
 let now = new Date();
 
 const symbols = ["stpRNG"];
@@ -46,8 +46,6 @@ symbols.forEach((s) => {
     multiplier_range: [],
   };
 });
-
-console.log(marketData);
 
 app.use(cors());
 
@@ -174,7 +172,7 @@ function buyMultiplier(direction, symbol, stake, multiplier) {
       currency: "USD",
       symbol: symbol,
       multiplier: multiplier,
-      limit_order: { stop_loss: stake / 5, take_profit: stake / 5 },
+      limit_order: { stop_loss: stake / 5, take_profit: stake },
     },
   });
 }
@@ -322,107 +320,6 @@ ws.on("message", async (msg) => {
     }
   }
 
-  if (data.msg_type === "ohlc") {
-    const symbol = data.echo_req.ticks_history;
-    const md = marketData[symbol];
-    if (data.echo_req.granularity === 900) {
-      if (md.close15.length === 0) {
-        md.close15.push(Number(data.ohlc.close));
-      } else {
-        md.close15[md.close15.length - 1] = Number(data.ohlc.close);
-      }
-
-      const len = md.close15.length;
-      const currIndex = len - 1;
-
-      const ema50 = calculateEMA(md.close15, 50);
-      const ema50Now = ema50[currIndex];
-
-      const ema200 = calculateEMA(md.close15, 200);
-      const ema200Now = ema200[currIndex];
-
-      md.trendUp15 = ema50Now > ema200Now;
-      md.trendDown15 = ema200Now > ema50Now;
-
-      if (md.openTime15 !== data.ohlc.open_time) {
-        md.openTime15 = data.ohlc.open_time;
-        send({
-          ticks_history: data.echo_req.ticks_history,
-          style: "candles",
-          count: 500,
-          granularity: data.echo_req.granularity,
-          end: "latest",
-        });
-      }
-    }
-    if (data.echo_req.granularity === 60) {
-      if (md.close.length === 0) {
-        md.close.push(Number(data.ohlc.close));
-        md.high.push(Number(data.ohlc.high));
-        md.low.push(Number(data.ohlc.low));
-      } else {
-        md.close[md.close.length - 1] = Number(data.ohlc.close);
-        md.high[md.high.length - 1] = Number(data.ohlc.high);
-        md.low[md.low.length - 1] = Number(data.ohlc.low);
-      }
-
-      const len = md.close.length;
-      const currIndex = len - 1;
-      const prevIndex = len - 2;
-
-      const ema5 = calculateEMA(md.close, 5);
-      const ema9 = calculateEMA(md.close, 9);
-
-      const crossover = detectCrossover(ema5, ema9);
-
-      if (md.openTime !== data.ohlc.open_time) {
-        md.openTime = data.ohlc.open_time;
-
-        if (canOpenTrade()) {
-          // ✅ Bullish crossover → Buy UP
-          if (crossover === "bullish") {
-            openContractId = "PENDING";
-            buyMultiplier(
-              "MULTUP",
-              data?.echo_req?.ticks_history,
-              amount,
-              md.multiplier_range[0],
-            );
-          }
-
-          // ✅ Bearish crossover → Buy DOWN
-          if (crossover === "bearish") {
-            openContractId = "PENDING";
-            buyMultiplier(
-              "MULTDOWN",
-              data?.echo_req?.ticks_history,
-              amount,
-              md.multiplier_range[0],
-            );
-          }
-        } else {
-          if (position.type === "MULTUP" && position.symbol === symbol) {
-            if (crossover === "bearish") {
-              closePosition(openContractId, `Opposite Signal`);
-            }
-          }
-          if (position.type === "MULTDOWN" && position.symbol === symbol) {
-            if (crossover === "bullish") {
-              closePosition(openContractId, `Opposite Signal`);
-            }
-          }
-        }
-
-        send({
-          ticks_history: data.echo_req.ticks_history,
-          style: "candles",
-          count: 500,
-          granularity: data.echo_req.granularity,
-          end: "latest",
-        });
-      }
-    }
-  }
   if (data.msg_type === "contracts_for") {
     const symbol = data.echo_req.contracts_for;
     const md = marketData[symbol];
@@ -464,6 +361,108 @@ ws.on("message", async (msg) => {
     console.log(count);
   }
 
+  if (data.msg_type === "ohlc") {
+    const symbol = data.echo_req.ticks_history;
+    const md = marketData[symbol];
+    if (data.echo_req.granularity === 900) {
+      if (md.close15.length === 0) {
+        md.close15.push(Number(data.ohlc.close));
+      } else {
+        md.close15[md.close15.length - 1] = Number(data.ohlc.close);
+      }
+
+      const len = md.close15.length;
+      const currIndex = len - 1;
+
+      const ema5 = calculateEMA(md.close15, 5);
+      const ema5Now = ema5[currIndex];
+
+      const ema9 = calculateEMA(md.close15, 9);
+      const ema9Now = ema9[currIndex];
+
+      md.trendUp15 = ema5Now > ema9Now;
+      md.trendDown15 = ema9Now > ema5Now;
+
+      if (md.openTime15 !== data.ohlc.open_time) {
+        md.openTime15 = data.ohlc.open_time;
+        send({
+          ticks_history: data.echo_req.ticks_history,
+          style: "candles",
+          count: 500,
+          granularity: data.echo_req.granularity,
+          end: "latest",
+        });
+      }
+    }
+    if (data.echo_req.granularity === 60) {
+      if (md.close.length === 0) {
+        md.close.push(Number(data.ohlc.close));
+        md.high.push(Number(data.ohlc.high));
+        md.low.push(Number(data.ohlc.low));
+      } else {
+        md.close[md.close.length - 1] = Number(data.ohlc.close);
+        md.high[md.high.length - 1] = Number(data.ohlc.high);
+        md.low[md.low.length - 1] = Number(data.ohlc.low);
+      }
+
+      const len = md.close.length;
+      const currIndex = len - 1;
+      const prevIndex = len - 2;
+
+      const ema5 = calculateEMA(md.close, 5);
+      const ema9 = calculateEMA(md.close, 9);
+
+      const crossover = detectCrossover(ema5, ema9);
+
+      if (md.openTime !== data.ohlc.open_time) {
+        md.openTime = data.ohlc.open_time;
+
+        if (canOpenTrade()) {
+          // ✅ Bullish crossover → Buy UP
+          if (md.trendUp15 && crossover === "bullish") {
+            openContractId = "PENDING";
+            buyMultiplier(
+              "MULTUP",
+              data?.echo_req?.ticks_history,
+              amount,
+              md.multiplier_range[0],
+            );
+          }
+
+          // ✅ Bearish crossover → Buy DOWN
+          if (md.trendDown15 && crossover === "bearish") {
+            openContractId = "PENDING";
+            buyMultiplier(
+              "MULTDOWN",
+              data?.echo_req?.ticks_history,
+              amount,
+              md.multiplier_range[0],
+            );
+          }
+        } else {
+          if (position.type === "MULTUP" && position.symbol === symbol) {
+            if (md.trendDown15) {
+              closePosition(openContractId, `Opposite Signal`);
+            }
+          }
+          if (position.type === "MULTDOWN" && position.symbol === symbol) {
+            if (md.trendUp15) {
+              closePosition(openContractId, `Opposite Signal`);
+            }
+          }
+        }
+
+        send({
+          ticks_history: data.echo_req.ticks_history,
+          style: "candles",
+          count: 500,
+          granularity: data.echo_req.granularity,
+          end: "latest",
+        });
+      }
+    }
+  }
+  
   if (data.msg_type === "proposal_open_contract") {
     subscribed = true;
     const type = data.proposal_open_contract.contract_type;
@@ -486,15 +485,19 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract.profit;
+    console.log(data)
+    if(profit > Math.abs(lossAmount) && stopLoss === 0){
+      update(risk/ 4)
+    }
     // if (pip >= 2 && stopLoss === 0) {
     //   update(0.5);
     // }
     // if (pip >= 4 && stopLoss === 0) {
     //   update(1);
     // }
-    // if (stopLoss !== 0 && pip < stopLoss) {
-    //   closePosition(openContractId, `Stop Loss Hit`);
-    // }
+    if (stopLoss !== 0 && pip < stopLoss) {
+      closePosition(openContractId, `Stop Loss Hit`);
+    }
     const runningTrade = {
       pip: pip,
       profit: profit,
