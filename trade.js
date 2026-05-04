@@ -176,7 +176,7 @@ function buyMultiplier(direction, symbol, stake, multiplier) {
       currency: "USD",
       symbol: symbol,
       multiplier: multiplier,
-      limit_order: { stop_loss: stake / 5, take_profit: stake },
+      limit_order: { stop_loss: stake / 5, take_profit: stake / 5 },
     },
   });
 }
@@ -464,7 +464,7 @@ ws.on("message", async (msg) => {
 
         if (canOpenTrade()) {
           // ✅ Bullish crossover → Buy UP
-          if (md.trendUp60 && md.trendUp15 && crossover === "bullish") {
+          if (crossover === "bullish") {
             openContractId = "PENDING";
             buyMultiplier(
               "MULTUP",
@@ -475,7 +475,7 @@ ws.on("message", async (msg) => {
           }
 
           // ✅ Bearish crossover → Buy DOWN
-          if (md.trendDown60 && md.trendDown15 && crossover === "bearish") {
+          if (crossover === "bearish") {
             openContractId = "PENDING";
             buyMultiplier(
               "MULTDOWN",
@@ -486,12 +486,12 @@ ws.on("message", async (msg) => {
           }
         } else {
           if (position.type === "MULTUP" && position.symbol === symbol) {
-            if (md.trendDown15) {
+            if (crossover === "bearish") {
               closePosition(openContractId, `Opposite Signal`);
             }
           }
           if (position.type === "MULTDOWN" && position.symbol === symbol) {
-            if (md.trendUp15) {
+            if (crossover === "bullish") {
               closePosition(openContractId, `Opposite Signal`);
             }
           }
@@ -530,18 +530,18 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract.profit;
-    if(profit > Math.abs(lossAmount) && stopLoss === 0){
-      update(risk/ 4)
-    }
+    // if(profit > Math.abs(lossAmount) && stopLoss === 0){
+    //   update(risk/ 4)
+    // }
     // if (pip >= 2 && stopLoss === 0) {
     //   update(0.5);
     // }
     // if (pip >= 4 && stopLoss === 0) {
     //   update(1);
     // }
-    if (stopLoss !== 0 && pip < stopLoss) {
-      closePosition(openContractId, `Stop Loss Hit`);
-    }
+    // if (stopLoss !== 0 && pip < stopLoss) {
+    //   closePosition(openContractId, `Stop Loss Hit`);
+    // }
     const runningTrade = {
       pip: pip,
       profit: profit,
