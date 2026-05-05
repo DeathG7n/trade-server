@@ -39,6 +39,7 @@ symbols.forEach((s) => {
     low: [],
     open: [],
     close15: [],
+    open15: [],
     close60: [],
     openTime: 0,
     openTime15: 0,
@@ -65,11 +66,11 @@ app.listen(3000, () => {
 function canOpenTrade() {
   return openContractId === null;
 }
-function bearish(candle) {
-  return openPrices[candle] > closePrices[candle];
+function bearish(open, close, candle) {
+  return open[candle] > close[candle];
 }
-function bullish(candle) {
-  return closePrices[candle] > openPrices[candle];
+function bullish(open, close, candle) {
+  return close[candle] > open[candle];
 }
 
 function crossedEma(candle, ema) {
@@ -362,6 +363,7 @@ ws.on("message", async (msg) => {
       }
       if (data.echo_req.granularity === 900) {
         md.close15 = data.candles.map((c) => c.close);
+        md.open15 = data.candles.map((c) => c.open);
       }
       if (data.echo_req.granularity === 60) {
         md.close = data.candles.map((c) => c.close);
@@ -464,34 +466,38 @@ ws.on("message", async (msg) => {
 
         if (canOpenTrade()) {
           // ✅ Bullish crossover → Buy UP
-          if (crossover === "bullish") {
-            openContractId = "PENDING";
-            buyMultiplier(
-              "MULTUP",
-              data?.echo_req?.ticks_history,
-              amount,
-              md.multiplier_range[0],
-            );
+          if (md.trendUp15 && bearish(md.open15, md.close15, prevIndex)) {
+            if (crossover === "bullish") {
+              openContractId = "PENDING";
+              buyMultiplier(
+                "MULTUP",
+                data?.echo_req?.ticks_history,
+                amount,
+                md.multiplier_range[0],
+              );
+            }
           }
 
           // ✅ Bearish crossover → Buy DOWN
-          if (crossover === "bearish") {
-            openContractId = "PENDING";
-            buyMultiplier(
-              "MULTDOWN",
-              data?.echo_req?.ticks_history,
-              amount,
-              md.multiplier_range[0],
-            );
+          if (md.trendDown15 && bullish(md.open15, md.close15, prevIndex)) {
+            if (crossover === "bearish") {
+              openContractId = "PENDING";
+              buyMultiplier(
+                "MULTDOWN",
+                data?.echo_req?.ticks_history,
+                amount,
+                md.multiplier_range[0],
+              );
+            }
           }
         } else {
           if (position.type === "MULTUP" && position.symbol === symbol) {
-            if (crossover === "bearish") {
+            if (md.trendDown15) {
               closePosition(openContractId, `Opposite Signal`);
             }
           }
           if (position.type === "MULTDOWN" && position.symbol === symbol) {
-            if (crossover === "bullish") {
+            if (md.trendUp15) {
               closePosition(openContractId, `Opposite Signal`);
             }
           }
@@ -507,7 +513,7 @@ ws.on("message", async (msg) => {
       }
     }
   }
-  
+
   if (data.msg_type === "proposal_open_contract") {
     subscribed = true;
     const type = data.proposal_open_contract.contract_type;
