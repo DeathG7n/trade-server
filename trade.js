@@ -25,15 +25,11 @@ let stopLoss = 0;
 let now = new Date();
 
 const symbols = [
-  "stpRNG",
-  "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
-  "stpRNG5",
   "JD10",
   "JD100",
   "JD50",
   "JD75",
+  "JD25"
 ];
 let marketData = {};
 symbols.forEach((s) => {
@@ -258,28 +254,28 @@ ws.on("message", async (msg) => {
     sendMessage(`💸 Balance is currently ${balance}`);
     console.log(`💸 Balance is currently ${balance}`);
     balance = Math.trunc(balance);
-    if (isNumberBetween(balance, 0, 5)) {
+     if (isNumberBetween(balance, 0, 11)) {
       amount = 1;
-    } else if (isNumberBetween(balance, 6, 11)) {
-      amount = 2;
     } else if (isNumberBetween(balance, 12, 23)) {
-      amount = 4;
+      amount = 2;
     } else if (isNumberBetween(balance, 24, 47)) {
-      amount = 8;
+      amount = 4;
     } else if (isNumberBetween(balance, 48, 95)) {
-      amount = 16;
+      amount = 8;
     } else if (isNumberBetween(balance, 96, 191)) {
-      amount = 32;
+      amount = 16;
     } else if (isNumberBetween(balance, 192, 383)) {
-      amount = 64;
+      amount = 32;
     } else if (isNumberBetween(balance, 384, 767)) {
-      amount = 128;
+      amount = 64;
     } else if (isNumberBetween(balance, 768, 1535)) {
-      amount = 256;
+      amount = 128;
     } else if (isNumberBetween(balance, 1536, 3071)) {
-      amount = 512;
+      amount = 256;
     } else if (isNumberBetween(balance, 3072, 5120)) {
-      amount = 1000;
+      amount = 512;
+    } else if (isNumberBetween(balance, 6144, 10000)) {
+      amount = 512;
     } else {
       amount = 2000;
     }
@@ -298,10 +294,6 @@ ws.on("message", async (msg) => {
       positions[contract.symbol] = {
         contractId: contract.contract_id,
         type: contract.contract_type,
-        stopLoss,
-        reason,
-        amount,
-        subscribed: false,
       };
 
       if (!positions[contract.symbol].subscribed) {
