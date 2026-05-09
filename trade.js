@@ -386,20 +386,20 @@ ws.on("message", async (msg) => {
       const currIndex = len - 1;
       const prevIndex = len - 2;
 
-      const ema5 = calculateEMA(md.close, 5);
-      const ema5Then = ema5[prevIndex];
+      const ema14 = calculateEMA(md.close, 14);
+      const ema14Then = ema14[prevIndex];
 
-      const ema9 = calculateEMA(md.close, 9);
-      const ema9Then = ema9[prevIndex];
+      const ema21 = calculateEMA(md.close, 21);
+      const ema21Then = ema21[prevIndex];
 
-      md.trendUp = ema5Then > ema9Then
-      md.trendDown = ema5Then < ema9Then
+      md.trendUp = ema14Then > ema21Then
+      md.trendDown = ema14Then < ema21Then
       if (canOpenTrade(symbol)) {
         if (
           md.trendUp &&
           bullish(md.open, md.close, prevIndex) &&
-          crossedEma(md.high, md.low, prevIndex, ema9[prevIndex]) &&
-          recentEmaCross(ema5, ema9, 15) === "bullish"
+          crossedEma(md.high, md.low, prevIndex, ema21[prevIndex]) &&
+          recentEmaCross(ema14, ema21, 15) === "bullish"
         ) {
           position.contractId = "PENDING";
           buyMultiplier(
@@ -418,8 +418,8 @@ ws.on("message", async (msg) => {
         if (
           md.trendDown &&
           bearish(md.open, md.close, prevIndex) &&
-          crossedEma(md.high, md.low, prevIndex, ema9[prevIndex]) &&
-          recentEmaCross(ema5, ema9, 15) === "bearish"
+          crossedEma(md.high, md.low, prevIndex, ema21[prevIndex]) &&
+          recentEmaCross(ema14, ema21, 15) === "bearish"
         ) {
           position.contractId = "PENDING";
           buyMultiplier(
