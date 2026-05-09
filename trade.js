@@ -15,13 +15,14 @@ const uri =
   "mongodb+srv://DeathG7n:if3anYichukwu@cluster0.gpfyqmb.mongodb.net/trading?retryWrites=true&w=majority";
 const client = new MongoClient(uri);
 
+let stopLoss = 0;
 let positions = {};
 let count = 0;
 let reason = "";
 let amount = null;
 let now = new Date();
 
-const symbols = ["JD10", "JD100", "JD50", "JD75", "JD25"];
+const symbols = ["JD100"];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -182,23 +183,29 @@ async function connect() {
     const database = client.db("trading");
     const collection = database.collection("trade");
     const result = await collection.findOne({});
+    stopLoss = result.stoploss;
   } catch (e) {
     console.error(e);
   }
 }
 
 async function update(stop, symbol) {
-  let position = positions[symbol];
   try {
     const database = client.db("trading");
     const collection = database.collection("trade");
+
     await collection.findOneAndUpdate(
       { trade: true },
       { $set: { stoploss: stop } },
-      { returnNewDocument: true },
     );
+
     sendMessage(`💸 Stop Loss trailed to ${stop}`);
-    position.stoploss = stop;
+
+    if (symbol && positions[symbol]) {
+      positions[symbol].stoploss = stop;
+    }
+
+    stopLoss = stop;
   } catch (e) {
     console.error(e);
   }
@@ -266,28 +273,30 @@ ws.on("message", async (msg) => {
   if (data.msg_type === "portfolio") {
     const activeSymbols = new Set();
 
-    for (const contract of data?.portfolio?.contracts) {
-      activeSymbols.add(contract.symbol);
+    if (data?.portfolio?.contracts.length !== 0) {
+      for (const contract of data?.portfolio?.contracts) {
+        activeSymbols.add(contract.symbol);
 
-      if (!positions[contract.symbol]) {
-        positions[contract.symbol] = {};
-      }
+        if (!positions[contract.symbol]) {
+          positions[contract.symbol] = {};
+        }
 
-      positions[contract.symbol] = {
-        ...positions[contract.symbol],
-        contractId: contract.contract_id,
-        type: contract.contract_type,
-        stoploss: positions[contract.symbol]?.stoploss || 0,
-      };
+        positions[contract.symbol] = {
+          ...positions[contract.symbol],
+          contractId: contract.contract_id,
+          type: contract.contract_type,
+          stoploss: stopLoss,
+        };
 
-      if (!positions[contract.symbol].subscribed) {
-        send({
-          proposal_open_contract: 1,
-          contract_id: contract.contract_id,
-          subscribe: 1,
-        });
+        if (!positions[contract.symbol].subscribed) {
+          send({
+            proposal_open_contract: 1,
+            contract_id: contract.contract_id,
+            subscribe: 1,
+          });
 
-        positions[contract.symbol].subscribed = true;
+          positions[contract.symbol].subscribed = true;
+        }
       }
     }
 
@@ -349,6 +358,7 @@ ws.on("message", async (msg) => {
       positions[symbol] = {
         contractId: null,
         type: null,
+        stoploss: stopLoss,
       };
     }
     let position = positions[symbol];
@@ -416,9 +426,8 @@ ws.on("message", async (msg) => {
             }
           }, 15000);
         }
-
         // ✅ Bearish crossover → Buy DOWN
-        if (crossover === "bearish") {
+        else if (crossover === "bearish") {
           position.contractId = "PENDING";
           buyMultiplier(
             "MULTDOWN",
@@ -506,7 +515,6 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract?.profit;
-    console.log(commission);
     if (profit > orderAmount / 10 && position.stoploss === 0) {
       update(commission, symbol);
     }
@@ -518,7 +526,7 @@ ws.on("message", async (msg) => {
     // }
     if (position.stoploss !== 0 && profit <= position.stoploss) {
       closePosition(position.contractId, `Stop Loss Hit`);
-      position.stoploss = 0
+      position.stoploss = 0;
     }
     const runningTrade = {
       multiplier: multiplier,
