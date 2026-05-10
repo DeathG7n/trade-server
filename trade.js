@@ -491,16 +491,16 @@ ws.on("message", async (msg) => {
     // if (profit > orderAmount / 10 && position.stoploss === 0) {
     //   update(commission, symbol);
     // }
-    // if (pip >= 2 && stopLoss === 0) {
-    //   update(0.5);
-    // }
+    if (pip >= 2 && position.stoploss === 0) {
+      update(0.5);
+    }
     // if (pip >= 4 && stopLoss === 0) {
     //   update(1);
     // }
-    // if (position.stoploss !== 0 && profit <= position.stoploss) {
-    //   closePosition(position.contractId, `Stop Loss Hit`);
-    //   position.stoploss = 0;
-    // }
+    if (position.stoploss !== 0 && pip <= position.stoploss) {
+      closePosition(position.contractId, `Stop Loss Hit`);
+      position.stoploss = 0;
+    }
     const runningTrade = {
       multiplier: multiplier,
       pip: pip,
