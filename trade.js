@@ -398,8 +398,7 @@ ws.on("message", async (msg) => {
         if (
           md.trendUp &&
           bullish(md.open, md.close, prevIndex) &&
-          crossedEma(md.high, md.low, prevIndex, ema21[prevIndex]) &&
-          recentEmaCross(ema14, ema21, 15) === "bullish"
+          crossedEma(md.high, md.low, prevIndex, ema21[prevIndex])
         ) {
           position.contractId = "PENDING";
           buyMultiplier(
@@ -418,8 +417,7 @@ ws.on("message", async (msg) => {
         if (
           md.trendDown &&
           bearish(md.open, md.close, prevIndex) &&
-          crossedEma(md.high, md.low, prevIndex, ema21[prevIndex]) &&
-          recentEmaCross(ema14, ema21, 15) === "bearish"
+          crossedEma(md.high, md.low, prevIndex, ema21[prevIndex])
         ) {
           position.contractId = "PENDING";
           buyMultiplier(
