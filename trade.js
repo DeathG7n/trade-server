@@ -22,7 +22,7 @@ let reason = "";
 let amount = null;
 let now = new Date();
 
-const symbols = ["stpRNG"];
+const symbols = ["stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5", "R_75"]; 
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -220,7 +220,7 @@ async function update(stop, symbol) {
   }
 }
 
-connect();
+//connect();
 
 ws.on("open", () => {
   console.log("🔌 Connected");
@@ -302,7 +302,7 @@ ws.on("message", async (msg) => {
           ...positions[contract.symbol],
           contractId: contract.contract_id,
           type: contract.contract_type,
-          stoploss: stopLoss,
+          stoploss: 0,
           lastTradeCandle:
             positions[contract.symbol]?.lastTradeCandle ||
             Math.floor(contract.purchase_time / 60) * 60,
@@ -360,6 +360,10 @@ ws.on("message", async (msg) => {
       sendMessage("Bot is still running");
     }
     try {
+      if (data.echo_req.granularity === 900) {
+        md.close15 = data.candles.map((c) => c.close);
+        md.open15 = data.candles.map((c) => c.open);
+      }
       if (data.echo_req.granularity === 60) {
         md.close = data.candles.map((c) => c.close);
         md.open = data.candles.map((c) => c.open);
@@ -380,7 +384,7 @@ ws.on("message", async (msg) => {
       positions[symbol] = {
         contractId: null,
         type: null,
-        stoploss: stopLoss,
+        stoploss: 0,
       };
     }
     let position = positions[symbol];
