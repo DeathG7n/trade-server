@@ -279,29 +279,31 @@ ws.on("message", async (msg) => {
     sendMessage(`💸 Balance is currently ${balance}`);
     console.log(`💸 Balance is currently ${balance}`);
     balance = Math.trunc(balance);
-    if (isNumberBetween(balance, 0, 11)) {
+    if (isNumberBetween(balance, 1, 6)) {
       amount = 1;
-    } else if (isNumberBetween(balance, 12, 23)) {
+    } else if (isNumberBetween(balance, 7, 13)) {
       amount = 2;
-    } else if (isNumberBetween(balance, 24, 47)) {
+    } else if (isNumberBetween(balance, 14, 47)) {
       amount = 4;
     } else if (isNumberBetween(balance, 48, 95)) {
       amount = 8;
     } else if (isNumberBetween(balance, 96, 191)) {
       amount = 16;
-    } else if (isNumberBetween(balance, 192, 383)) {
+    } else if (isNumberBetween(balance, 192, 703)) {
       amount = 32;
-    } else if (isNumberBetween(balance, 384, 767)) {
+    } else if (isNumberBetween(balance, 704, 1379)) {
       amount = 64;
-    } else if (isNumberBetween(balance, 768, 1535)) {
-      amount = 128;
-    } else if (isNumberBetween(balance, 1536, 3071)) {
-      amount = 256;
-    } else if (isNumberBetween(balance, 3072, 5120)) {
-      amount = 512;
-    } else if (isNumberBetween(balance, 6144, 10000)) {
-      amount = 1024;
-    } else {
+    } else if (isNumberBetween(balance, 1380, 5319)) {
+      amount = 100;
+    } else if (isNumberBetween(balance, 5320, 10639)) {
+      amount = 200;
+    } else if (isNumberBetween(balance, 10640, 21279)) {
+      amount = 400;
+    } else if (isNumberBetween(balance, 21280, 42559)) {
+      amount = 800;
+    }  else if (isNumberBetween(balance, 42560, 83919)) {
+      amount = 1600;
+    } else if (balance >= 83920){
       amount = 2000;
     }
     send({ portfolio: 1 });
