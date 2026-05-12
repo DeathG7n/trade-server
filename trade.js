@@ -22,7 +22,7 @@ let reason = "";
 let amount = null;
 let now = new Date();
 
-const symbols = ["stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5", "R_75"]; 
+const symbols = ["stpRNG", "R_75"]; 
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -587,19 +587,20 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract?.profit;
-    // if (profit > orderAmount / 10 && position.stoploss === 0) {
-    //   update(commission, symbol);
-    // }
+    if (profit >= gain / 2 && position.stoploss === 0) {
+      position.stoploss = Math.abs(commission);
+      sendMessage(`💸 Stop Loss trailed to ${position.stoploss} on ${symbol}`);
+    }
     // if (pip >= 2 && position.stoploss === 0) {
     //   update(0.5, symbol);
     // }
     // if (pip >= 4 && stopLoss === 0) {
     //   update(1);
     // }
-    // if (position.stoploss !== 0 && pip <= position.stoploss) {
-    //   closePosition(symbol, position.contractId, `Stop Loss Hit`);
-    //   position.stoploss = 0;
-    // }
+    if (position.stoploss !== 0 && profit <= position.stoploss) {
+      closePosition(symbol, position.contractId, `Stop Loss Hit`);
+      position.stoploss = 0;
+    }
     const runningTrade = {
       multiplier: multiplier,
       pip: pip,
