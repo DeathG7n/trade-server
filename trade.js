@@ -15,14 +15,13 @@ const uri =
   "mongodb+srv://DeathG7n:if3anYichukwu@cluster0.gpfyqmb.mongodb.net/trading?retryWrites=true&w=majority";
 const client = new MongoClient(uri);
 
-let stopLoss = 0;
 let positions = {};
 let count = 0;
 let reason = "";
 let amount = null;
 let now = new Date();
 
-const symbols = ["stpRNG", "R_75"]; 
+const symbols = ["stpRNG", "R_75"];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -38,6 +37,7 @@ symbols.forEach((s) => {
     openTime15: 0,
     trendUp15: false,
     trendDown15: false,
+    canOpenTrade: true,
     multiplier_range: [],
   };
 });
@@ -53,9 +53,6 @@ app.listen(3000, () => {
 });
 
 //Functions
-function canOpenTrade(symbol) {
-  return !positions[symbol]?.contractId && !positions[symbol]?.pendingOrder;
-}
 function bearish(open, close, candle) {
   return open[candle] > close[candle];
 }
@@ -169,7 +166,7 @@ function buyMultiplier(direction, symbol, stake, multiplier) {
       currency: "USD",
       symbol: symbol,
       multiplier: multiplier,
-      limit_order: { stop_loss: stake / 5, take_profit: stake / 2 },
+      limit_order: { stop_loss: stake / 5, take_profit: stake * 2 },
     },
   });
 }
@@ -191,8 +188,32 @@ async function connect() {
     console.log("Connected successfully to MongoDB");
     const database = client.db("trading");
     const collection = database.collection("trade");
-    const result = await collection.findOne({});
-    stopLoss = result.stoploss;
+    const assets = await collection.find({}).toArray();
+
+    for (let i = 0; i < assets.length; i++) {
+      if (symbols.includes(assets[i].name)) {
+        if (positions[assets[i].name]) {
+          positions[assets[i].name].stoploss = assets[i].stoploss;
+        }
+      } else {
+        await collection.deleteOne({ name: assets[i].name });
+      }
+    }
+
+    for (let i = 0; i < symbols.length; i++) {
+      const asset = {
+        name: symbols[i],
+        stoploss: 0,
+      };
+
+      const exists = await collection.findOne({ name: symbols[i] });
+      if (exists) {
+        return;
+      } else {
+        const result = await collection.insertOne(asset);
+        console.log(`Document created with _id: ${result.insertedId}`);
+      }
+    }
   } catch (e) {
     console.error(e);
   }
@@ -204,7 +225,7 @@ async function update(stop, symbol) {
     const collection = database.collection("trade");
 
     await collection.findOneAndUpdate(
-      { trade: true },
+      { name: symbol },
       { $set: { stoploss: stop } },
     );
 
@@ -213,14 +234,12 @@ async function update(stop, symbol) {
     if (symbol && positions[symbol]) {
       positions[symbol].stoploss = stop;
     }
-
-    stopLoss = stop;
   } catch (e) {
     console.error(e);
   }
 }
 
-//connect();
+connect();
 
 ws.on("open", () => {
   console.log("🔌 Connected");
@@ -297,15 +316,11 @@ ws.on("message", async (msg) => {
         if (!positions[contract.symbol]) {
           positions[contract.symbol] = {};
         }
-        console.log(contract.purchase_time);
         positions[contract.symbol] = {
           ...positions[contract.symbol],
           contractId: contract.contract_id,
           type: contract.contract_type,
           stoploss: 0,
-          lastTradeCandle:
-            positions[contract.symbol]?.lastTradeCandle ||
-            Math.floor(contract.purchase_time / 60) * 60,
         };
 
         if (!positions[contract.symbol].subscribed) {
@@ -380,14 +395,7 @@ ws.on("message", async (msg) => {
   if (data.msg_type === "ohlc") {
     const symbol = data.echo_req.ticks_history;
     const md = marketData[symbol];
-    if (!positions[symbol]) {
-      positions[symbol] = {
-        contractId: null,
-        type: null,
-        stoploss: 0,
-      };
-    }
-    let position = positions[symbol];
+    const position = positions[symbol];
 
     if (data.echo_req.granularity === 900) {
       if (md.openTime15 === 0) {
@@ -429,6 +437,9 @@ ws.on("message", async (msg) => {
       if (md.openTime === 0) {
         md.openTime = data.ohlc.open_time;
       }
+      if (!positions[symbol]) {
+        md.canOpenTrade = true;
+      }
       if (md.close.length === 0) {
         md.close.push(Number(data.ohlc.close));
         md.open.push(Number(data.ohlc.open));
@@ -453,7 +464,7 @@ ws.on("message", async (msg) => {
 
       md.trendUp = ema14Then > ema21Then;
       md.trendDown = ema14Then < ema21Then;
-      if (canOpenTrade(symbol) && position.lastTradeCandle !== md.openTime) {
+      if (md.canOpenTrade) {
         if (
           md.trendUp15 &&
           ((bearish(md.open15, md.close15, len15 - 4) &&
@@ -474,23 +485,13 @@ ws.on("message", async (msg) => {
             bullish(md.open, md.close, prevIndex) &&
             crossedEma(md.high, md.low, prevIndex, ema21[prevIndex])
           ) {
-            const pendingId = Date.now();
-            position.pendingOrder = pendingId;
             buyMultiplier(
               "MULTUP",
               data?.echo_req?.ticks_history,
               amount,
               md.multiplier_range[0],
             );
-            position.lastTradeCandle = md.openTime;
-            setTimeout(() => {
-              if (
-                positions[symbol] &&
-                positions[symbol].pendingOrder === pendingId
-              ) {
-                positions[symbol].pendingOrder = false;
-              }
-            }, 15000);
+            md.canOpenTrade = false;
           }
         }
         if (
@@ -513,32 +514,22 @@ ws.on("message", async (msg) => {
             bearish(md.open, md.close, prevIndex) &&
             crossedEma(md.high, md.low, prevIndex, ema21[prevIndex])
           ) {
-            const pendingId = Date.now();
-            position.pendingOrder = pendingId;
             buyMultiplier(
               "MULTDOWN",
               data?.echo_req?.ticks_history,
               amount,
               md.multiplier_range[0],
             );
-            position.lastTradeCandle = md.openTime;
-            setTimeout(() => {
-              if (
-                positions[symbol] &&
-                positions[symbol].pendingOrder === pendingId
-              ) {
-                positions[symbol].pendingOrder = false;
-              }
-            }, 15000);
+            md.canOpenTrade = false;
           }
         }
       } else {
-        if (position.type === "MULTUP") {
+        if (position?.type === "MULTUP") {
           if (md.trendDown15) {
             closePosition(symbol, position.contractId, `Opposite Signal`);
           }
         }
-        if (position.type === "MULTDOWN") {
+        if (position?.type === "MULTDOWN") {
           if (md.trendUp15) {
             closePosition(symbol, position.contractId, `Opposite Signal`);
           }
@@ -564,6 +555,7 @@ ws.on("message", async (msg) => {
       positions[symbol] = {};
     }
     let position = positions[symbol];
+    const md = marketData?.[symbol];
     position.subscribed = true;
     const commission = data.proposal_open_contract?.commission;
     const multiplier = data.proposal_open_contract?.multiplier;
@@ -587,16 +579,21 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract?.profit;
-    if (profit >= gain / 2 && position.stoploss === 0) {
-      position.stoploss = Math.abs(commission);
-      sendMessage(`💸 Stop Loss trailed to ${position.stoploss} on ${symbol}`);
+    if (position.stoploss === 0) {
+      md.canOpenTrade = false;
     }
-    // if (pip >= 2 && position.stoploss === 0) {
-    //   update(0.5, symbol);
-    // }
-    // if (pip >= 4 && stopLoss === 0) {
-    //   update(1);
-    // }
+    if (profit >= profitAmount / 4 && position.stoploss === 0) {
+      position.stoploss = Math.abs(commission);
+      update(position.stoploss, symbol)
+      md.canOpenTrade = true;
+    }
+    if (
+      profit >= profitAmount / 2 &&
+      position.stoploss === Math.abs(commission)
+    ) {
+      position.stoploss = profitAmount / 4;
+      update(position.stoploss, symbol)
+    }
     if (position.stoploss !== 0 && profit <= position.stoploss) {
       closePosition(symbol, position.contractId, `Stop Loss Hit`);
       position.stoploss = 0;
@@ -634,7 +631,6 @@ ws.on("message", async (msg) => {
     const position = positions[symbol];
 
     position.type = data.echo_req.parameters.contract_type;
-    position.pendingOrder = false;
     position.contractId = data.buy.contract_id;
 
     sendMessage(`${positions[symbol].type} position entered on ${symbol}`);
@@ -661,8 +657,10 @@ ws.on("message", async (msg) => {
     if (symbol) {
       positions[symbol].type = null;
       positions[symbol].contractId = null;
+      positions[symbol].stoploss = 0;
     }
-    update(0, symbol);
+
+    update(0, symbol)
   }
 
   if (data.error) {
