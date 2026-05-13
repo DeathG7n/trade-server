@@ -197,7 +197,7 @@ async function connect() {
           positions[assets[i].name].stoploss = assets[i].stoploss;
         }
       } else {
-        await collection.deleteOne({ name: assets[i].name });
+        const result = await collection.deleteOne({ name: assets[i].name });
       }
     }
 
@@ -209,11 +209,10 @@ async function connect() {
 
       const exists = await collection.findOne({ name: symbols[i] });
       if (exists) {
-        return;
-      } else {
-        const result = await collection.insertOne(asset);
-        console.log(`Document created with _id: ${result.insertedId}`);
+        continue;
       }
+      const result = await collection.insertOne(asset);
+      console.log(`Document created with _id: ${result.insertedId}`);
     }
   } catch (e) {
     console.error(e);
@@ -230,7 +229,7 @@ async function update(stop, symbol) {
       { $set: { stoploss: stop } },
     );
 
-    sendMessage(`💸 Stop Loss trailed to ${stop}`);
+    sendMessage(`💸 Stop Loss trailed to ${stop} on ${symbol}`);
 
     if (symbol && positions[symbol]) {
       positions[symbol].stoploss = stop;
@@ -346,13 +345,6 @@ ws.on("message", async (msg) => {
         delete positions[symbol];
       }
     }
-
-    // Reset stop loss if no open trades
-    for (const symbol in positions) {
-      if (activeSymbols.size === 0 && positions[symbol].stoploss !== 0) {
-        update(0, symbol);
-      }
-    }
   }
 
   if (data.msg_type === "contracts_for") {
@@ -444,6 +436,8 @@ ws.on("message", async (msg) => {
       }
       if (!positions[symbol]) {
         md.canOpenTrade = true;
+      } else{
+        md.canOpenTrade = false;
       }
       if (md.close.length === 0) {
         md.close.push(Number(data.ohlc.close));
@@ -515,6 +509,7 @@ ws.on("message", async (msg) => {
               md.multiplier_range[0],
             );
             md.canOpenTrade = false;
+            send({ portfolio: 1 });
           }
         }
         if (
@@ -544,6 +539,7 @@ ws.on("message", async (msg) => {
               md.multiplier_range[0],
             );
             md.canOpenTrade = false;
+            send({ portfolio: 1 });
           }
         }
       } else {
@@ -575,9 +571,6 @@ ws.on("message", async (msg) => {
 
   if (data.msg_type === "proposal_open_contract") {
     const symbol = data.proposal_open_contract?.underlying;
-    if (!positions[symbol]) {
-      positions[symbol] = {};
-    }
     let position = positions[symbol];
     const md = marketData?.[symbol];
     position.subscribed = true;
@@ -611,12 +604,20 @@ ws.on("message", async (msg) => {
       profit >= profitAmount / 4 &&
       position.stoploss === Math.abs(commission)
     ) {
-      position.stoploss = profitAmount / 2;
+      position.stoploss = profitAmount / 8;
+      update(position.stoploss, symbol);
+    }
+    if (
+      profit >= profitAmount / 2 &&
+      position.stoploss === profitAmount / 8
+    ) {
+      position.stoploss = profitAmount / 4;
       update(position.stoploss, symbol);
     }
     if (position.stoploss !== 0 && profit <= position.stoploss) {
       closePosition(symbol, position.contractId, `Stop Loss Hit`);
       position.stoploss = 0;
+      update(position.stoploss, symbol);
     }
     const runningTrade = {
       multiplier: multiplier,
