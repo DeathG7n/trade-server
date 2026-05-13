@@ -283,29 +283,31 @@ ws.on("message", async (msg) => {
       amount = 1;
     } else if (isNumberBetween(balance, 7, 13)) {
       amount = 2;
-    } else if (isNumberBetween(balance, 14, 47)) {
+    } else if (isNumberBetween(balance, 14, 27)) {
       amount = 4;
-    } else if (isNumberBetween(balance, 48, 95)) {
+    } else if (isNumberBetween(balance, 28, 59)) {
       amount = 8;
-    } else if (isNumberBetween(balance, 96, 191)) {
-      amount = 16;
-    } else if (isNumberBetween(balance, 192, 703)) {
-      amount = 32;
-    } else if (isNumberBetween(balance, 704, 1379)) {
-      amount = 64;
-    } else if (isNumberBetween(balance, 1380, 5319)) {
+    } else if (isNumberBetween(balance, 60, 119)) {
+      amount = 10;
+    } else if (isNumberBetween(balance, 120, 239)) {
+      amount = 20;
+    } else if (isNumberBetween(balance, 240, 479)) {
+      amount = 40;
+    } else if (isNumberBetween(balance, 480, 599)) {
+      amount = 80;
+    } else if (isNumberBetween(balance, 600, 1199)) {
       amount = 100;
-    } else if (isNumberBetween(balance, 5320, 10639)) {
+    } else if (isNumberBetween(balance, 1200, 2399)) {
       amount = 200;
-    } else if (isNumberBetween(balance, 10640, 21279)) {
+    } else if (isNumberBetween(balance, 2400, 4799)) {
       amount = 400;
-    } else if (isNumberBetween(balance, 21280, 42559)) {
+    }  else if (isNumberBetween(balance, 4800, 5999)) {
       amount = 800;
-    }  else if (isNumberBetween(balance, 42560, 83919)) {
-      amount = 1600;
-    } else if (balance >= 83920){
+    }  else if (isNumberBetween(balance, 6000, 11999)) {
+      amount = 1000;
+    }else if (balance >= 12000){
       amount = 2000;
-    }
+    } 
     send({ portfolio: 1 });
   }
   if (data.msg_type === "portfolio") {
@@ -581,13 +583,9 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract?.profit;
-    if (position.stoploss === 0) {
-      md.canOpenTrade = false;
-    }
     if (profit >= profitAmount / 4 && position.stoploss === 0) {
       position.stoploss = Math.abs(commission);
       update(position.stoploss, symbol)
-      md.canOpenTrade = true;
     }
     if (
       profit >= profitAmount / 2 &&
