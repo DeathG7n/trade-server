@@ -436,7 +436,7 @@ ws.on("message", async (msg) => {
       }
       if (!positions[symbol]) {
         md.canOpenTrade = true;
-      } else{
+      } else {
         md.canOpenTrade = false;
       }
       if (md.close.length === 0) {
@@ -470,7 +470,7 @@ ws.on("message", async (msg) => {
           recentEmaCross(ema14, ema21, 15) === "bullish"
         ) {
           sendMessage(`Bullish Signal on ${symbol}`);
-          md.canAlert = false
+          md.canAlert = false;
         }
         if (
           md.trendDown &&
@@ -478,7 +478,7 @@ ws.on("message", async (msg) => {
           recentEmaCross(ema14, ema21, 15) === "bearish"
         ) {
           sendMessage(`Bearish Signal on ${symbol}`);
-          md.canAlert = false
+          md.canAlert = false;
         }
       }
       if (md.canOpenTrade) {
@@ -557,7 +557,7 @@ ws.on("message", async (msg) => {
 
       if (md.openTime !== data.ohlc.open_time) {
         md.openTime = data.ohlc.open_time;
-        md.canAlert = true
+        md.canAlert = true;
         send({
           ticks_history: data.echo_req.ticks_history,
           style: "candles",
@@ -607,10 +607,7 @@ ws.on("message", async (msg) => {
       position.stoploss = profitAmount / 8;
       update(position.stoploss, symbol);
     }
-    if (
-      profit >= profitAmount / 2 &&
-      position.stoploss === profitAmount / 8
-    ) {
+    if (profit >= profitAmount / 2 && position.stoploss === profitAmount / 8) {
       position.stoploss = profitAmount / 4;
       update(position.stoploss, symbol);
     }
