@@ -21,7 +21,7 @@ let reason = "";
 let amount = null;
 let now = new Date();
 
-const symbols = ["stpRNG", "R_75"];
+const symbols = ["stpRNG", "R_75", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5"];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -38,6 +38,7 @@ symbols.forEach((s) => {
     trendUp15: false,
     trendDown15: false,
     canOpenTrade: true,
+    canAlert: true,
     multiplier_range: [],
   };
 });
@@ -301,13 +302,13 @@ ws.on("message", async (msg) => {
       amount = 200;
     } else if (isNumberBetween(balance, 2400, 4799)) {
       amount = 400;
-    }  else if (isNumberBetween(balance, 4800, 5999)) {
+    } else if (isNumberBetween(balance, 4800, 5999)) {
       amount = 800;
-    }  else if (isNumberBetween(balance, 6000, 11999)) {
+    } else if (isNumberBetween(balance, 6000, 11999)) {
       amount = 1000;
-    }else if (balance >= 12000){
+    } else if (balance >= 12000) {
       amount = 2000;
-    } 
+    }
     send({ portfolio: 1 });
   }
   if (data.msg_type === "portfolio") {
@@ -468,6 +469,24 @@ ws.on("message", async (msg) => {
 
       md.trendUp = ema14Then > ema21Then;
       md.trendDown = ema14Then < ema21Then;
+      if (md.canAlert) {
+        if (
+          md.trendUp &&
+          crossedEma(md.high, md.low, currIndex, ema21[currIndex]) &&
+          recentEmaCross(ema14, ema21, 15) === "bullish"
+        ) {
+          sendMessage(`Bullish Signal on ${symbol}`);
+          md.canAlert = false
+        }
+        if (
+          md.trendDown &&
+          crossedEma(md.high, md.low, currIndex, ema21[currIndex]) &&
+          recentEmaCross(ema14, ema21, 15) === "bearish"
+        ) {
+          sendMessage(`Bearish Signal on ${symbol}`);
+          md.canAlert = false
+        }
+      }
       if (md.canOpenTrade) {
         if (
           md.trendUp15 &&
@@ -542,6 +561,7 @@ ws.on("message", async (msg) => {
 
       if (md.openTime !== data.ohlc.open_time) {
         md.openTime = data.ohlc.open_time;
+        md.canAlert = true
         send({
           ticks_history: data.echo_req.ticks_history,
           style: "candles",
@@ -585,14 +605,14 @@ ws.on("message", async (msg) => {
     const profit = data.proposal_open_contract?.profit;
     if (profit >= profitAmount / 8 && position.stoploss === 0) {
       position.stoploss = Math.abs(commission);
-      update(position.stoploss, symbol)
+      update(position.stoploss, symbol);
     }
     if (
       profit >= profitAmount / 4 &&
       position.stoploss === Math.abs(commission)
     ) {
       position.stoploss = profitAmount / 2;
-      update(position.stoploss, symbol)
+      update(position.stoploss, symbol);
     }
     if (position.stoploss !== 0 && profit <= position.stoploss) {
       closePosition(symbol, position.contractId, `Stop Loss Hit`);
@@ -660,7 +680,7 @@ ws.on("message", async (msg) => {
       positions[symbol].stoploss = 0;
     }
 
-    update(0, symbol)
+    update(0, symbol);
   }
 
   if (data.error) {
