@@ -583,15 +583,15 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract?.profit;
-    if (profit >= profitAmount / 4 && position.stoploss === 0) {
+    if (profit >= profitAmount / 8 && position.stoploss === 0) {
       position.stoploss = Math.abs(commission);
       update(position.stoploss, symbol)
     }
     if (
-      profit >= profitAmount / 2 &&
+      profit >= profitAmount / 4 &&
       position.stoploss === Math.abs(commission)
     ) {
-      position.stoploss = profitAmount / 4;
+      position.stoploss = profitAmount / 2;
       update(position.stoploss, symbol)
     }
     if (position.stoploss !== 0 && profit <= position.stoploss) {
