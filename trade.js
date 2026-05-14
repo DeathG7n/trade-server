@@ -685,10 +685,10 @@ ws.on("message", async (msg) => {
     );
 
     sendMessage(
-      `💸 Position closed at ${data.sell?.sold_for} USD, because ${positions[symbol]?.reason}`,
+      `💸 Position closed at ${data.sell?.sold_for} USD on ${symbol}, because ${positions[symbol]?.reason}`,
     );
     console.log(
-      `💸 Position closed at ${data.sell?.sold_for} USD, because ${positions[symbol]?.reason}`,
+      `💸 Position closed at ${data.sell?.sold_for} USD on ${symbol}, because ${positions[symbol]?.reason}`,
     );
 
     if (symbol) {
