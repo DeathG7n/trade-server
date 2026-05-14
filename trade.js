@@ -20,6 +20,7 @@ let count = 0;
 let reason = "";
 let amount = null;
 let now = new Date();
+let connection = false;
 
 const symbols = ["stpRNG", "R_75", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5"];
 let marketData = {};
@@ -214,6 +215,7 @@ async function connect() {
       const result = await collection.insertOne(asset);
       console.log(`Document created with _id: ${result.insertedId}`);
     }
+    connection = true;
   } catch (e) {
     console.error(e);
   }
@@ -317,9 +319,9 @@ ws.on("message", async (msg) => {
       for (const contract of data?.portfolio?.contracts) {
         const md = marketData?.[contract?.symbol];
 
-        if(positions[contract.symbol]){
+        if (positions[contract.symbol]) {
           md.canOpenTrade = false;
-        } else{
+        } else {
           md.canOpenTrade = true;
         }
         activeSymbols.add(contract.symbol);
@@ -441,11 +443,11 @@ ws.on("message", async (msg) => {
       if (md.openTime === 0) {
         md.openTime = data.ohlc.open_time;
       }
-      if(positions[symbol]){
-          md.canOpenTrade = false;
-        } else{
-          md.canOpenTrade = true;
-        }
+      if (positions[symbol]) {
+        md.canOpenTrade = false;
+      } else {
+        md.canOpenTrade = true;
+      }
       if (md.close.length === 0) {
         md.close.push(Number(data.ohlc.close));
         md.open.push(Number(data.ohlc.open));
@@ -606,26 +608,33 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract?.profit;
-    if (profit >= profitAmount / 8 && position.stoploss === 0) {
-      position.stoploss = Math.abs(commission);
-      update(position.stoploss, symbol);
+
+    if (connection) {
+      if (profit >= profitAmount / 8 && position.stoploss === 0) {
+        position.stoploss = Math.abs(commission);
+        update(position.stoploss, symbol);
+      }
+      if (
+        profit >= profitAmount / 4 &&
+        position.stoploss === Math.abs(commission)
+      ) {
+        position.stoploss = profitAmount / 8;
+        update(position.stoploss, symbol);
+      }
+      if (
+        profit >= profitAmount / 2 &&
+        position.stoploss === profitAmount / 8
+      ) {
+        position.stoploss = profitAmount / 4;
+        update(position.stoploss, symbol);
+      }
+      if (position.stoploss !== 0 && profit <= position.stoploss) {
+        closePosition(symbol, position.contractId, `Stop Loss Hit`);
+        position.stoploss = 0;
+        update(position.stoploss, symbol);
+      }
     }
-    if (
-      profit >= profitAmount / 4 &&
-      position.stoploss === Math.abs(commission)
-    ) {
-      position.stoploss = profitAmount / 8;
-      update(position.stoploss, symbol);
-    }
-    if (profit >= profitAmount / 2 && position.stoploss === profitAmount / 8) {
-      position.stoploss = profitAmount / 4;
-      update(position.stoploss, symbol);
-    }
-    if (position.stoploss !== 0 && profit <= position.stoploss) {
-      closePosition(symbol, position.contractId, `Stop Loss Hit`);
-      position.stoploss = 0;
-      update(position.stoploss, symbol);
-    }
+
     const runningTrade = {
       multiplier: multiplier,
       pip: pip,
