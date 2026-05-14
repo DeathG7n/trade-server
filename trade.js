@@ -21,6 +21,7 @@ let reason = "";
 let amount = null;
 let now = new Date();
 let connection = false;
+let authorized = false;
 
 const symbols = ["stpRNG", "R_75", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5"];
 let marketData = {};
@@ -168,7 +169,7 @@ function buyMultiplier(direction, symbol, stake, multiplier) {
       currency: "USD",
       symbol: symbol,
       multiplier: multiplier,
-      limit_order: { stop_loss: stake / 5, take_profit: stake * 2 },
+      limit_order: { stop_loss: stake / 5, take_profit: stake },
     },
   });
 }
@@ -216,6 +217,7 @@ async function connect() {
       console.log(`Document created with _id: ${result.insertedId}`);
     }
     connection = true;
+    authorized = true;
   } catch (e) {
     console.error(e);
   }
@@ -245,7 +247,12 @@ connect();
 
 ws.on("open", () => {
   console.log("🔌 Connected");
-  send({ authorize: API_TOKEN });
+  setInterval(() => {
+    if (authorized) {
+      send({ authorize: API_TOKEN });
+      authorized = false;
+    }
+  }, 1000);
 });
 
 //Websocket
@@ -506,8 +513,7 @@ ws.on("message", async (msg) => {
                 bearish(md.open15, md.close15, len15 - 4) &&
                 bullish(md.open15, md.close15, len15 - 3) &&
                 bullish(md.open15, md.close15, len15 - 2)) ||
-              (bearish(md.open15, md.close15, len15 - 6) &&
-                bearish(md.open15, md.close15, len15 - 5) &&
+              (bearish(md.open15, md.close15, len15 - 5) &&
                 bullish(md.open15, md.close15, len15 - 4) &&
                 bearish(md.open15, md.close15, len15 - 3) &&
                 bullish(md.open15, md.close15, len15 - 2)))
@@ -536,8 +542,7 @@ ws.on("message", async (msg) => {
                 bullish(md.open15, md.close15, len15 - 4) &&
                 bearish(md.open15, md.close15, len15 - 3) &&
                 bearish(md.open15, md.close15, len15 - 2)) ||
-              (bullish(md.open15, md.close15, len15 - 6) &&
-                bullish(md.open15, md.close15, len15 - 5) &&
+              (bullish(md.open15, md.close15, len15 - 5) &&
                 bearish(md.open15, md.close15, len15 - 4) &&
                 bullish(md.open15, md.close15, len15 - 3) &&
                 bearish(md.open15, md.close15, len15 - 2)))
@@ -611,20 +616,13 @@ ws.on("message", async (msg) => {
     const profit = data.proposal_open_contract?.profit;
 
     if (connection) {
-      if (profit >= profitAmount / 8 && position.stoploss === 0) {
+      if (profit >= profitAmount / 4 && position.stoploss === 0) {
         position.stoploss = Math.abs(commission);
         update(position.stoploss, symbol);
       }
       if (
-        profit >= profitAmount / 4 &&
-        position.stoploss === Math.abs(commission)
-      ) {
-        position.stoploss = profitAmount / 8;
-        update(position.stoploss, symbol);
-      }
-      if (
         profit >= profitAmount / 2 &&
-        position.stoploss === profitAmount / 8
+        position.stoploss === Math.abs(commission)
       ) {
         position.stoploss = profitAmount / 4;
         update(position.stoploss, symbol);
