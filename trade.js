@@ -315,6 +315,13 @@ ws.on("message", async (msg) => {
 
     if (data?.portfolio?.contracts.length !== 0) {
       for (const contract of data?.portfolio?.contracts) {
+        const md = marketData?.[contract?.symbol];
+
+        if(positions[contract.symbol]){
+          md.canOpenTrade = false;
+        } else{
+          md.canOpenTrade = true;
+        }
         activeSymbols.add(contract.symbol);
 
         if (!positions[contract.symbol]) {
@@ -434,11 +441,11 @@ ws.on("message", async (msg) => {
       if (md.openTime === 0) {
         md.openTime = data.ohlc.open_time;
       }
-      if (!positions[symbol]) {
-        md.canOpenTrade = true;
-      } else {
-        md.canOpenTrade = false;
-      }
+      if(positions[symbol]){
+          md.canOpenTrade = false;
+        } else{
+          md.canOpenTrade = true;
+        }
       if (md.close.length === 0) {
         md.close.push(Number(data.ohlc.close));
         md.open.push(Number(data.ohlc.open));
@@ -575,6 +582,7 @@ ws.on("message", async (msg) => {
     const symbol = data.proposal_open_contract?.underlying;
     let position = positions[symbol];
     const md = marketData?.[symbol];
+    md.canOpenTrade = false;
     position.subscribed = true;
     const commission = data.proposal_open_contract?.commission;
     const multiplier = data.proposal_open_contract?.multiplier;
