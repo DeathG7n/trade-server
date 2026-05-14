@@ -465,6 +465,7 @@ ws.on("message", async (msg) => {
       md.trendDown = ema14Then < ema21Then;
       if (md.canAlert) {
         if (
+          md.trendUp15 &&
           md.trendUp &&
           crossedEma(md.high, md.low, currIndex, ema21[currIndex]) &&
           recentEmaCross(ema14, ema21, 15) === "bullish"
@@ -473,6 +474,7 @@ ws.on("message", async (msg) => {
           md.canAlert = false;
         }
         if (
+          md.trendDown15 &&
           md.trendDown &&
           crossedEma(md.high, md.low, currIndex, ema21[currIndex]) &&
           recentEmaCross(ema14, ema21, 15) === "bearish"
