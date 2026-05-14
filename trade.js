@@ -492,82 +492,83 @@ ws.on("message", async (msg) => {
           md.canAlert = false;
         }
       }
-      if (md.canOpenTrade) {
-        if (
-          md.trendUp15 &&
-          ((bearish(md.open15, md.close15, len15 - 4) &&
-            bearish(md.open15, md.close15, len15 - 3) &&
-            bullish(md.open15, md.close15, len15 - 2)) ||
-            (bearish(md.open15, md.close15, len15 - 5) &&
-              bearish(md.open15, md.close15, len15 - 4) &&
-              bullish(md.open15, md.close15, len15 - 3) &&
-              bullish(md.open15, md.close15, len15 - 2)) ||
-            (bearish(md.open15, md.close15, len15 - 6) &&
-              bearish(md.open15, md.close15, len15 - 5) &&
-              bullish(md.open15, md.close15, len15 - 4) &&
-              bearish(md.open15, md.close15, len15 - 3) &&
-              bullish(md.open15, md.close15, len15 - 2)))
-        ) {
-          if (
-            md.trendUp &&
-            bullish(md.open, md.close, prevIndex) &&
-            crossedEma(md.high, md.low, prevIndex, ema21[prevIndex])
-          ) {
-            buyMultiplier(
-              "MULTUP",
-              data?.echo_req?.ticks_history,
-              amount,
-              md.multiplier_range[0],
-            );
-            md.canOpenTrade = false;
-            send({ portfolio: 1 });
-          }
-        }
-        if (
-          md.trendDown15 &&
-          ((bullish(md.open15, md.close15, len15 - 4) &&
-            bullish(md.open15, md.close15, len15 - 3) &&
-            bearish(md.open15, md.close15, len15 - 2)) ||
-            (bullish(md.open15, md.close15, len15 - 5) &&
-              bullish(md.open15, md.close15, len15 - 4) &&
-              bearish(md.open15, md.close15, len15 - 3) &&
-              bearish(md.open15, md.close15, len15 - 2)) ||
-            (bullish(md.open15, md.close15, len15 - 6) &&
-              bullish(md.open15, md.close15, len15 - 5) &&
-              bearish(md.open15, md.close15, len15 - 4) &&
-              bullish(md.open15, md.close15, len15 - 3) &&
-              bearish(md.open15, md.close15, len15 - 2)))
-        ) {
-          if (
-            md.trendDown &&
-            bearish(md.open, md.close, prevIndex) &&
-            crossedEma(md.high, md.low, prevIndex, ema21[prevIndex])
-          ) {
-            buyMultiplier(
-              "MULTDOWN",
-              data?.echo_req?.ticks_history,
-              amount,
-              md.multiplier_range[0],
-            );
-            md.canOpenTrade = false;
-            send({ portfolio: 1 });
-          }
-        }
-      } else {
-        if (position?.type === "MULTUP") {
-          if (md.trendDown15) {
-            closePosition(symbol, position.contractId, `Opposite Signal`);
-          }
-        }
-        if (position?.type === "MULTDOWN") {
-          if (md.trendUp15) {
-            closePosition(symbol, position.contractId, `Opposite Signal`);
-          }
-        }
-      }
 
       if (md.openTime !== data.ohlc.open_time) {
         md.openTime = data.ohlc.open_time;
+
+        if (md.canOpenTrade) {
+          if (
+            md.trendUp15 &&
+            ((bearish(md.open15, md.close15, len15 - 4) &&
+              bearish(md.open15, md.close15, len15 - 3) &&
+              bullish(md.open15, md.close15, len15 - 2)) ||
+              (bearish(md.open15, md.close15, len15 - 5) &&
+                bearish(md.open15, md.close15, len15 - 4) &&
+                bullish(md.open15, md.close15, len15 - 3) &&
+                bullish(md.open15, md.close15, len15 - 2)) ||
+              (bearish(md.open15, md.close15, len15 - 6) &&
+                bearish(md.open15, md.close15, len15 - 5) &&
+                bullish(md.open15, md.close15, len15 - 4) &&
+                bearish(md.open15, md.close15, len15 - 3) &&
+                bullish(md.open15, md.close15, len15 - 2)))
+          ) {
+            if (
+              md.trendUp &&
+              bullish(md.open, md.close, prevIndex) &&
+              crossedEma(md.high, md.low, prevIndex, ema21[prevIndex])
+            ) {
+              buyMultiplier(
+                "MULTUP",
+                data?.echo_req?.ticks_history,
+                amount,
+                md.multiplier_range[0],
+              );
+              md.canOpenTrade = false;
+              send({ portfolio: 1 });
+            }
+          }
+          if (
+            md.trendDown15 &&
+            ((bullish(md.open15, md.close15, len15 - 4) &&
+              bullish(md.open15, md.close15, len15 - 3) &&
+              bearish(md.open15, md.close15, len15 - 2)) ||
+              (bullish(md.open15, md.close15, len15 - 5) &&
+                bullish(md.open15, md.close15, len15 - 4) &&
+                bearish(md.open15, md.close15, len15 - 3) &&
+                bearish(md.open15, md.close15, len15 - 2)) ||
+              (bullish(md.open15, md.close15, len15 - 6) &&
+                bullish(md.open15, md.close15, len15 - 5) &&
+                bearish(md.open15, md.close15, len15 - 4) &&
+                bullish(md.open15, md.close15, len15 - 3) &&
+                bearish(md.open15, md.close15, len15 - 2)))
+          ) {
+            if (
+              md.trendDown &&
+              bearish(md.open, md.close, prevIndex) &&
+              crossedEma(md.high, md.low, prevIndex, ema21[prevIndex])
+            ) {
+              buyMultiplier(
+                "MULTDOWN",
+                data?.echo_req?.ticks_history,
+                amount,
+                md.multiplier_range[0],
+              );
+              md.canOpenTrade = false;
+              send({ portfolio: 1 });
+            }
+          }
+        } else {
+          if (position?.type === "MULTUP") {
+            if (md.trendDown15) {
+              closePosition(symbol, position.contractId, `Opposite Signal`);
+            }
+          }
+          if (position?.type === "MULTDOWN") {
+            if (md.trendUp15) {
+              closePosition(symbol, position.contractId, `Opposite Signal`);
+            }
+          }
+        }
         md.canAlert = true;
         send({
           ticks_history: data.echo_req.ticks_history,
