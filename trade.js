@@ -31,14 +31,21 @@ symbols.forEach((s) => {
     open: [],
     high: [],
     low: [],
+    haOpen: [],
+    haClose: [],
+    haHigh: [],
+    haLow: [],
     openTime: 0,
     trendUp: false,
     trendDown: false,
     close15: [],
     open15: [],
+    high15: [],
+    low15: [],
     openTime15: 0,
     trendUp15: false,
     trendDown15: false,
+    ema15: 0,
     canOpenTrade: true,
     canAlert: true,
     multiplier_range: [],
@@ -61,6 +68,30 @@ function bearish(open, close, candle) {
 }
 function bullish(open, close, candle) {
   return close[candle] > open[candle];
+}
+
+function haBullish(haOpen, haClose, candle) {
+  return haClose[candle] > haOpen[candle];
+}
+
+function haBearish(haOpen, haClose, candle) {
+  return haOpen[candle] > haClose[candle];
+}
+
+function strongHaBullish(haOpen, haClose, haLow, candle) {
+  return haClose[candle] > haOpen[candle] && haLow[candle] === haOpen[candle];
+}
+
+function strongHaBearish(haOpen, haClose, haHigh, candle) {
+  return haOpen[candle] > haClose[candle] && haHigh[candle] === haOpen[candle];
+}
+
+function weakHaBullish(haOpen, haClose, haLow, candle) {
+  return haClose[candle] > haOpen[candle] && haLow[candle] !== haOpen[candle];
+}
+
+function weakHaBearish(haOpen, haClose, haHigh, candle) {
+  return haOpen[candle] > haClose[candle] && haHigh[candle] !== haOpen[candle];
 }
 
 function crossedEma(high, low, candle, ema) {
@@ -139,6 +170,38 @@ function calculateEMA(prices, period) {
     emaArray[i] = prices[i] * k + emaArray[i - 1] * (1 - k);
   }
   return emaArray;
+}
+
+function calculateHeikinAshi(open, high, low, close) {
+  let haOpen = [];
+  let haClose = [];
+  let haHigh = [];
+  let haLow = [];
+
+  for (let i = 0; i < close.length; i++) {
+    // HA Close
+    haClose[i] = (open[i] + high[i] + low[i] + close[i]) / 4;
+
+    // HA Open
+    if (i === 0) {
+      haOpen[i] = (open[i] + close[i]) / 2;
+    } else {
+      haOpen[i] = (haOpen[i - 1] + haClose[i - 1]) / 2;
+    }
+
+    // HA High
+    haHigh[i] = Math.max(high[i], haOpen[i], haClose[i]);
+
+    // HA Low
+    haLow[i] = Math.min(low[i], haOpen[i], haClose[i]);
+  }
+
+  return {
+    haOpen,
+    haClose,
+    haHigh,
+    haLow,
+  };
 }
 
 const sendMessage = async (message) => {
@@ -417,10 +480,15 @@ ws.on("message", async (msg) => {
       if (md.close15.length === 0) {
         md.close15.push(Number(data.ohlc.close));
         md.open15.push(Number(data.ohlc.open));
+        md.high15.push(Number(data.ohlc.high));
+        md.low15.push(Number(data.ohlc.low));
       } else {
         md.close15[md.close15.length - 1] = Number(data.ohlc.close);
         md.open15[md.open15.length - 1] = Number(data.ohlc.open);
+        md.high15[md.high15.length - 1] = Number(data.ohlc.high);
+        md.low15[md.low15.length - 1] = Number(data.ohlc.low);
       }
+
       const len = md.close15.length;
       const currIndex = len - 1;
       const prevIndex = len - 2;
@@ -430,6 +498,8 @@ ws.on("message", async (msg) => {
 
       const ema21 = calculateEMA(md.close15, 21);
       const ema21Then = ema21[prevIndex];
+
+      md.ema15 = ema21Then;
 
       md.trendUp15 = ema14Then > ema21Then;
       md.trendDown15 = ema14Then < ema21Then;
@@ -466,10 +536,19 @@ ws.on("message", async (msg) => {
         md.high[md.high.length - 1] = Number(data.ohlc.high);
         md.low[md.low.length - 1] = Number(data.ohlc.low);
       }
+
+      const ha = calculateHeikinAshi(md.open, md.high, md.low, md.close);
+
+      md.haOpen = ha.haOpen;
+      md.haClose = ha.haClose;
+      md.haHigh = ha.haHigh;
+      md.haLow = ha.haLow;
+
       const len = md.close.length;
       const len15 = md.close15.length;
       const currIndex = len - 1;
       const prevIndex = len - 2;
+      const thirdIndex = len - 3;
 
       const ema14 = calculateEMA(md.close, 14);
       const ema14Then = ema14[prevIndex];
@@ -482,21 +561,27 @@ ws.on("message", async (msg) => {
       if (md.canAlert) {
         if (
           md.trendUp15 &&
-          md.trendUp &&
-          crossedEma(md.high, md.low, currIndex, ema21[currIndex]) &&
-          recentEmaCross(ema14, ema21, 15) === "bullish"
+          crossedEma(md.high15, md.low15, len15 - 2, md.ema15)
         ) {
-          sendMessage(`Bullish Signal on ${symbol}`);
-          md.canAlert = false;
+          if (
+            bearish(md.open, md.close, prevIndex) &&
+            bullish(md.open, md.close, currIndex)
+          ) {
+            sendMessage(`Bullish Signal on ${symbol}`);
+            md.canAlert = false;
+          }
         }
         if (
           md.trendDown15 &&
-          md.trendDown &&
-          crossedEma(md.high, md.low, currIndex, ema21[currIndex]) &&
-          recentEmaCross(ema14, ema21, 15) === "bearish"
+          crossedEma(md.high15, md.low15, len15 - 2, md.ema15)
         ) {
-          sendMessage(`Bearish Signal on ${symbol}`);
-          md.canAlert = false;
+          if (
+            bullish(md.open, md.close, prevIndex) &&
+            bearish(md.open, md.close, currIndex)
+          ) {
+            sendMessage(`Bearish Signal on ${symbol}`);
+            md.canAlert = false;
+          }
         }
       }
 
@@ -506,22 +591,11 @@ ws.on("message", async (msg) => {
         if (md.canOpenTrade) {
           if (
             md.trendUp15 &&
-            ((bearish(md.open15, md.close15, len15 - 4) &&
-              bearish(md.open15, md.close15, len15 - 3) &&
-              bullish(md.open15, md.close15, len15 - 2)) ||
-              (bearish(md.open15, md.close15, len15 - 5) &&
-                bearish(md.open15, md.close15, len15 - 4) &&
-                bullish(md.open15, md.close15, len15 - 3) &&
-                bullish(md.open15, md.close15, len15 - 2)) ||
-              (bearish(md.open15, md.close15, len15 - 5) &&
-                bullish(md.open15, md.close15, len15 - 4) &&
-                bearish(md.open15, md.close15, len15 - 3) &&
-                bullish(md.open15, md.close15, len15 - 2)))
+            crossedEma(md.high15, md.low15, len15 - 2, md.ema15)
           ) {
             if (
-              md.trendUp &&
-              bullish(md.open, md.close, prevIndex) &&
-              crossedEma(md.high, md.low, prevIndex, ema21[prevIndex])
+              bearish(md.open, md.close, thirdIndex) &&
+              bullish(md.open, md.close, prevIndex)
             ) {
               buyMultiplier(
                 "MULTUP",
@@ -535,22 +609,11 @@ ws.on("message", async (msg) => {
           }
           if (
             md.trendDown15 &&
-            ((bullish(md.open15, md.close15, len15 - 4) &&
-              bullish(md.open15, md.close15, len15 - 3) &&
-              bearish(md.open15, md.close15, len15 - 2)) ||
-              (bullish(md.open15, md.close15, len15 - 5) &&
-                bullish(md.open15, md.close15, len15 - 4) &&
-                bearish(md.open15, md.close15, len15 - 3) &&
-                bearish(md.open15, md.close15, len15 - 2)) ||
-              (bullish(md.open15, md.close15, len15 - 5) &&
-                bearish(md.open15, md.close15, len15 - 4) &&
-                bullish(md.open15, md.close15, len15 - 3) &&
-                bearish(md.open15, md.close15, len15 - 2)))
+            crossedEma(md.high15, md.low15, len15 - 2, md.ema15)
           ) {
             if (
-              md.trendDown &&
-              bearish(md.open, md.close, prevIndex) &&
-              crossedEma(md.high, md.low, prevIndex, ema21[prevIndex])
+              bullish(md.open, md.close, thirdIndex) &&
+              bearish(md.open, md.close, prevIndex)
             ) {
               buyMultiplier(
                 "MULTDOWN",
@@ -567,9 +630,21 @@ ws.on("message", async (msg) => {
             if (md.trendDown15) {
               closePosition(symbol, position.contractId, `Opposite Signal`);
             }
+            if (
+              position.stoploss === 0 &&
+              haBearish(md.haOpen, md.haClose, prevIndex)
+            ) {
+              closePosition(symbol, position.contractId, `Opposite Signal`);
+            }
           }
           if (position?.type === "MULTDOWN") {
             if (md.trendUp15) {
+              closePosition(symbol, position.contractId, `Opposite Signal`);
+            }
+            if (
+              position.stoploss === 0 &&
+              haBullish(md.haOpen, md.haClose, prevIndex)
+            ) {
               closePosition(symbol, position.contractId, `Opposite Signal`);
             }
           }
@@ -589,6 +664,7 @@ ws.on("message", async (msg) => {
   if (data.msg_type === "proposal_open_contract") {
     const symbol = data.proposal_open_contract?.underlying;
     let position = positions[symbol];
+    if (!position) return;
     const md = marketData?.[symbol];
     md.canOpenTrade = false;
     position.subscribed = true;
