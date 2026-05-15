@@ -454,6 +454,8 @@ ws.on("message", async (msg) => {
       if (data.echo_req.granularity === 900) {
         md.close15 = data.candles.map((c) => c.close);
         md.open15 = data.candles.map((c) => c.open);
+        md.high15 = data.candles.map((c) => c.high);
+        md.low15 = data.candles.map((c) => c.low);
       }
       if (data.echo_req.granularity === 60) {
         md.close = data.candles.map((c) => c.close);
@@ -591,7 +593,8 @@ ws.on("message", async (msg) => {
         if (md.canOpenTrade) {
           if (
             md.trendUp15 &&
-            crossedEma(md.high15, md.low15, len15 - 2, md.ema15)
+            crossedEma(md.high15, md.low15, len15 - 2, md.ema15) &&
+            bullish(md.open15, md.close15, len15 - 2 )
           ) {
             if (
               bearish(md.open, md.close, thirdIndex) &&
@@ -609,7 +612,8 @@ ws.on("message", async (msg) => {
           }
           if (
             md.trendDown15 &&
-            crossedEma(md.high15, md.low15, len15 - 2, md.ema15)
+            crossedEma(md.high15, md.low15, len15 - 2, md.ema15) &&
+            bearish(md.open15, md.close15, len15 - 2 )
           ) {
             if (
               bullish(md.open, md.close, thirdIndex) &&
