@@ -637,6 +637,8 @@ ws.on("message", async (msg) => {
               closePosition(symbol, position.contractId, `Opposite Signal`);
             }
             if (
+              position.profit !== 0 &&
+              position.profit !== Math.abs(position.profit) &&
               position.stoploss === 0 &&
               haBearish(md.haOpen, md.haClose, prevIndex)
             ) {
@@ -648,6 +650,8 @@ ws.on("message", async (msg) => {
               closePosition(symbol, position.contractId, `Opposite Signal`);
             }
             if (
+              position.profit !== 0 &&
+              position.profit !== Math.abs(position.profit) &&
               position.stoploss === 0 &&
               haBullish(md.haOpen, md.haClose, prevIndex)
             ) {
@@ -696,6 +700,7 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract?.profit;
+    position.profit = profit;
 
     if (connection) {
       if (profit >= profitAmount / 4 && position.stoploss === 0) {
