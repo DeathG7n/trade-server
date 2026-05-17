@@ -22,6 +22,7 @@ let amount = null;
 let now = new Date();
 let connection = false;
 let authorized = false;
+let loading = true;
 
 const symbols = ["stpRNG", "R_75", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5"];
 let marketData = {};
@@ -243,8 +244,11 @@ function closePosition(symbol, contract_id, why) {
     sell: contract_id,
     price: 0,
   });
-  if (positions[symbol]) {
-    positions[symbol].reason = why;
+  const position = positions.find((p) => p.contract_id === contract_id);
+  if (position) {
+    position.reason = why;
+  } else {
+    console.warn("Position not found for close:", contract_id);
   }
   console.log(`❌ Closing position: ${contract_id}`);
 }
@@ -355,6 +359,7 @@ ws.on("message", async (msg) => {
     send({ portfolio: 1 });
   }
   if (data.msg_type === "portfolio") {
+    loading = true;
     const database = client.db("trading");
     const collection = database.collection("trade");
     let assets = await collection.find({}).toArray();
@@ -377,51 +382,50 @@ ws.on("message", async (msg) => {
     }
 
     if (data?.portfolio?.contracts.length !== 0) {
-      for (const contract of data?.portfolio?.contracts) {
-        //closePosition(contract.symbol, contract.contract_id, `Opposite Signal`);
-        const asset = {
-          name: contract.symbol,
-          contract_id: contract.contract_id,
-          stoploss: 0,
-          date_start: contract.date_start,
-          type: contract.contract_type,
-        };
+      try {
+        for (const contract of data?.portfolio?.contracts) {
+          //closePosition(contract.symbol, contract.contract_id, `Opposite Signal`);
+          const asset = {
+            name: contract.symbol,
+            contract_id: contract.contract_id,
+            stoploss: 0,
+            date_start: contract.date_start,
+            type: contract.contract_type,
+          };
 
-        const exists = await collection.findOne({
-          contract_id: contract.contract_id,
-        });
-
-        if (!exists) {
-          const result = await collection.insertOne(asset);
-
-          console.log(`Document created with _id: ${result.insertedId}`);
-        }
-        assets = await collection.find({}).toArray();
-        positions = assets;
-
-        // Check if already exists in positions array
-        let position = positions.find(
-          (p) => p.contract_id === contract.contract_id,
-        );
-
-        // Add if missing
-        if (!position) {
-          positions.push(asset);
-
-          position = asset;
-        }
-      }
-      for (let i = 0; i < positions.length; i++) {
-        // Subscribe once
-        if (!positions[i].subscribed) {
-          send({
-            proposal_open_contract: 1,
-            contract_id: positions[i].contract_id,
-            subscribe: 1,
+          const exists = await collection.findOne({
+            contract_id: contract.contract_id,
           });
 
-          positions[i].subscribed = true;
+          if (!exists) {
+            const result = await collection.insertOne(asset);
+
+            console.log(`Document created with _id: ${result.insertedId}`);
+          }
+          assets = await collection.find({}).toArray();
+          positions = assets;
+
+          // Check if already exists in positions array
+          let position = positions.find(
+            (p) => p.contract_id === contract.contract_id,
+          );
         }
+        for (let i = 0; i < positions.length; i++) {
+          // Subscribe once
+          if (!positions[i].subscribed) {
+            send({
+              proposal_open_contract: 1,
+              contract_id: positions[i].contract_id,
+              subscribe: 1,
+            });
+
+            positions[i].subscribed = true;
+          }
+        }
+        loading = false;
+      } catch (err) {
+        console.error(err);
+        loading = false;
       }
     } else {
       for (let i = 0; i < positions.length; i++) {
@@ -478,9 +482,10 @@ ws.on("message", async (msg) => {
     console.log(count);
   }
 
-  if (data.msg_type === "ohlc") {
+  if (data.msg_type === "ohlc" && !loading) {
     const symbol = data.echo_req.ticks_history;
     const md = marketData[symbol];
+    console.log(loading);
 
     if (data.echo_req.granularity === 900) {
       if (md.openTime15 === 0) {
@@ -526,7 +531,7 @@ ws.on("message", async (msg) => {
     }
 
     if (data.echo_req.granularity === 60) {
-      const matchingPositions = positions.filter((p) => p.name === symbol);
+      const matchingPositions = positions.filter((p) => p?.name === symbol);
       const riskyPosition = matchingPositions.find((p) => p.stoploss === 0);
       riskyPosition && console.log("Risky Position", matchingPositions);
       if (md.openTime === 0) {
@@ -610,14 +615,7 @@ ws.on("message", async (msg) => {
               amount,
               md.multiplier_range[0],
             );
-            const asset = {
-              name: symbol,
-              contract_id: 0,
-              stoploss: 0,
-              date_start: md.openTime,
-              type: "MULTUP",
-            };
-            positions.push(asset);
+            loading = true;
           }
         }
         if (
@@ -635,26 +633,19 @@ ws.on("message", async (msg) => {
               amount,
               md.multiplier_range[0],
             );
-            const asset = {
-              name: symbol,
-              contract_id: 0,
-              stoploss: 0,
-              date_start: md.openTime,
-              type: "MULTDOWN",
-            };
-            positions.push(asset);
+            loading = true;
           }
         }
       } else {
         for (const contract of matchingPositions) {
           if (contract?.type === "MULTUP") {
             if (md.trendDown15) {
-              closePosition(symbol, contract.contractId, `Opposite Signal`);
+              closePosition(symbol, contract.contract_id, `Opposite Signal`);
             }
           }
           if (contract?.type === "MULTDOWN") {
             if (md.trendUp15) {
-              closePosition(symbol, contract.contractId, `Opposite Signal`);
+              closePosition(symbol, contract.contract_id, `Opposite Signal`);
             }
           }
         }
@@ -674,13 +665,13 @@ ws.on("message", async (msg) => {
     }
   }
 
-  if (data.msg_type === "proposal_open_contract") {
-    const id = data?.echo_req?.contract_id
-    const position = positions.find(
-      (p) => p.contract_id === id,
-    );
+  if (data.msg_type === "proposal_open_contract" && !loading) {
+    const id = data?.echo_req?.contract_id;
+    const position = positions.find((p) => p.contract_id === id);
     const symbol = data.proposal_open_contract?.underlying;
-    position.subscribed = true;
+    if (position) {
+      position.subscribed = true;
+    }
     const commission = data.proposal_open_contract?.commission;
     const multiplier = data.proposal_open_contract?.multiplier;
     const type = data.proposal_open_contract?.contract_type;
@@ -717,8 +708,8 @@ ws.on("message", async (msg) => {
         position.stoploss = profitAmount / 4;
         update(position.stoploss, id, symbol);
       }
-      if (position.stoploss !== 0 && profit <= position.stoploss) {
-        closePosition(symbol, position.contractId, `Stop Loss Hit`);
+      if (position && position.stoploss !== 0 && profit <= position.stoploss) {
+        closePosition(symbol, position.contract_id, `Stop Loss Hit`);
         position.stoploss = 0;
         update(position.stoploss, id, symbol);
       }
@@ -744,7 +735,7 @@ ws.on("message", async (msg) => {
     if (duration === 2) {
       sendMessage(JSON.stringify(runningTrade, null, 2));
     }
-    //console.log(runningTrade);
+    console.log(runningTrade);
   }
 
   if (data.msg_type === "buy") {
@@ -760,37 +751,31 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "sell") {
-    const contractId = data.echo_req.sell;
     const database = client.db("trading");
     const collection = database.collection("trade");
+    const contract_id = data.sell?.contract_id || data.echo_req?.sell;
 
-    const symbol = Object.keys(positions).find(
-      (s) => positions[s]?.contractId === contractId,
-    );
+    const position = positions.find((p) => p.contract_id === contract_id);
+
+    if (!position) return;
 
     sendMessage(
-      `💸 Position closed at ${data.sell?.sold_for} USD on ${symbol}, because ${positions[symbol]?.reason}`,
+      `💸 Position closed at ${data.sell?.sold_for} USD on ${position.name}, because ${position.reason}`,
     );
+
     console.log(
-      `💸 Position closed at ${data.sell?.sold_for} USD on ${symbol}, because ${positions[symbol]?.reason}`,
+      `💸 Position closed at ${data.sell?.sold_for} USD on ${position.name}, because ${position.reason}`,
     );
 
-    await collection.deleteOne({
-      contract_id: contractId,
-    });
+    await collection.deleteOne({ contract_id: contract_id });
 
-    console.log(`Deleted closed contract ${contractId}`);
+    console.log(`Deleted closed contract ${contract_id}`);
   }
 
   if (data.error) {
     const error = data?.error?.message;
     console.error("❗ Error: ", error);
     sendMessage(`❗ Error: ${error}`);
-    for (const symbol in positions) {
-      if (positions[symbol]?.contractId === "PENDING") {
-        positions[symbol].contractId = null;
-      }
-    }
     if (error === "You have reached the rate limit for ticks_history.") {
       await run(30000);
       symbols.forEach((s) => {
