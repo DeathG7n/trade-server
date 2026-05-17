@@ -382,50 +382,51 @@ ws.on("message", async (msg) => {
     }
 
     if (data?.portfolio?.contracts.length !== 0) {
-      try {
-        for (const contract of data?.portfolio?.contracts) {
-          //closePosition(contract.symbol, contract.contract_id, `Opposite Signal`);
-          const asset = {
-            name: contract.symbol,
-            contract_id: contract.contract_id,
-            stoploss: 0,
-            date_start: contract.date_start,
-            type: contract.contract_type,
-          };
+      let ticker = 0;
+      for (const contract of data?.portfolio?.contracts) {
+        //closePosition(contract.symbol, contract.contract_id, `Opposite Signal`);
+        const asset = {
+          name: contract.symbol,
+          contract_id: contract.contract_id,
+          stoploss: 0,
+          date_start: contract.date_start,
+          type: contract.contract_type,
+        };
 
-          const exists = await collection.findOne({
-            contract_id: contract.contract_id,
+        const exists = await collection.findOne({
+          contract_id: contract.contract_id,
+        });
+
+        if (!exists) {
+          const result = await collection.insertOne(asset);
+
+          console.log(`Document created with _id: ${result.insertedId}`);
+        }
+        assets = await collection.find({}).toArray();
+        positions = assets;
+
+        // Check if already exists in positions array
+        let position = positions.find(
+          (p) => p.contract_id === contract.contract_id,
+        );
+        ticker += 1;
+        if (ticker === data?.portfolio?.contracts.length) {
+          loading = false;
+        } else {
+          loading = true;
+        }
+      }
+      for (let i = 0; i < positions.length; i++) {
+        // Subscribe once
+        if (!positions[i].subscribed) {
+          send({
+            proposal_open_contract: 1,
+            contract_id: positions[i].contract_id,
+            subscribe: 1,
           });
 
-          if (!exists) {
-            const result = await collection.insertOne(asset);
-
-            console.log(`Document created with _id: ${result.insertedId}`);
-          }
-          assets = await collection.find({}).toArray();
-          positions = assets;
-
-          // Check if already exists in positions array
-          let position = positions.find(
-            (p) => p.contract_id === contract.contract_id,
-          );
+          positions[i].subscribed = true;
         }
-        for (let i = 0; i < positions.length; i++) {
-          // Subscribe once
-          if (!positions[i].subscribed) {
-            send({
-              proposal_open_contract: 1,
-              contract_id: positions[i].contract_id,
-              subscribe: 1,
-            });
-
-            positions[i].subscribed = true;
-          }
-        }
-        loading = false;
-      } catch (err) {
-        console.error(err);
-        loading = false;
       }
     } else {
       for (let i = 0; i < positions.length; i++) {
@@ -485,7 +486,6 @@ ws.on("message", async (msg) => {
   if (data.msg_type === "ohlc" && !loading) {
     const symbol = data.echo_req.ticks_history;
     const md = marketData[symbol];
-    console.log(loading);
 
     if (data.echo_req.granularity === 900) {
       if (md.openTime15 === 0) {
@@ -533,7 +533,6 @@ ws.on("message", async (msg) => {
     if (data.echo_req.granularity === 60) {
       const matchingPositions = positions.filter((p) => p?.name === symbol);
       const riskyPosition = matchingPositions.find((p) => p.stoploss === 0);
-      riskyPosition && console.log("Risky Position", matchingPositions);
       if (md.openTime === 0) {
         md.openTime = data.ohlc.open_time;
       }
@@ -570,7 +569,7 @@ ws.on("message", async (msg) => {
 
       md.trendUp = ema14Then > ema21Then;
       md.trendDown = ema14Then < ema21Then;
-      // Currently you are trying to allow multiple trades of the symbol as long as they are atleast 15 minutes apart
+
       if (md.canAlert) {
         if (
           md.trendUp15 &&
