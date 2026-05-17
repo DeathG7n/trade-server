@@ -599,8 +599,8 @@ ws.on("message", async (msg) => {
             bullish(md.open15, md.close15, len15 - 2)
           ) {
             if (
-              bearish(md.open, md.close, thirdIndex) &&
-              bullish(md.open, md.close, prevIndex)
+              bearish(md.open, md.close, prevIndex) &&
+              bullish(md.open, md.close, currIndex)
             ) {
               buyMultiplier(
                 "MULTUP",
@@ -618,8 +618,8 @@ ws.on("message", async (msg) => {
             bearish(md.open15, md.close15, len15 - 2)
           ) {
             if (
-              bullish(md.open, md.close, thirdIndex) &&
-              bearish(md.open, md.close, prevIndex)
+              bullish(md.open, md.close, prevIndex) &&
+              bearish(md.open, md.close, currIndex)
             ) {
               buyMultiplier(
                 "MULTDOWN",
@@ -636,25 +636,9 @@ ws.on("message", async (msg) => {
             if (md.trendDown15) {
               closePosition(symbol, position.contractId, `Opposite Signal`);
             }
-            if (
-              position.profit !== 0 &&
-              position.profit !== Math.abs(position.profit) &&
-              position.stoploss === 0 &&
-              haBearish(md.haOpen, md.haClose, prevIndex)
-            ) {
-              closePosition(symbol, position.contractId, `Opposite Signal`);
-            }
           }
           if (position?.type === "MULTDOWN") {
             if (md.trendUp15) {
-              closePosition(symbol, position.contractId, `Opposite Signal`);
-            }
-            if (
-              position.profit !== 0 &&
-              position.profit !== Math.abs(position.profit) &&
-              position.stoploss === 0 &&
-              haBullish(md.haOpen, md.haClose, prevIndex)
-            ) {
               closePosition(symbol, position.contractId, `Opposite Signal`);
             }
           }
