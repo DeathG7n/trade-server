@@ -429,6 +429,7 @@ ws.on("message", async (msg) => {
         }
       }
     } else {
+      loading = false
       for (let i = 0; i < positions.length; i++) {
         await collection.deleteOne({
           contract_id: positions[i].contract_id,
@@ -437,6 +438,7 @@ ws.on("message", async (msg) => {
         console.log(`Deleted closed contract ${positions[i].contract_id}`);
       }
     }
+    console.log(loading)
   }
 
   if (data.msg_type === "contracts_for") {
