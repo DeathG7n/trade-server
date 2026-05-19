@@ -703,7 +703,7 @@ ws.on("message", async (msg) => {
     }
 
     if (connection) {
-      if (lossAmount === profitAmount / 5 && profit >= profitAmount / 10) {
+      if (Math.abs(lossAmount) === profitAmount / 5 && profit >= profitAmount / 10) {
         send({
           contract_update: 1,
           contract_id: id,
@@ -712,7 +712,7 @@ ws.on("message", async (msg) => {
           },
         });
       }
-      if (profit >= lossAmount && position.stoploss === 0) {
+      if (profit >= Math.abs(lossAmount) && position.stoploss === 0) {
         send({
           contract_update: 1,
           contract_id: id,
