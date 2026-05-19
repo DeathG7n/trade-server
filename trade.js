@@ -307,7 +307,7 @@ ws.on("message", async (msg) => {
         ticks_history: s,
         style: "candles",
         count: 500,
-        granularity: 60,
+        granularity: 120,
         end: "latest",
         subscribe: 1,
       });
@@ -384,7 +384,6 @@ ws.on("message", async (msg) => {
     if (data?.portfolio?.contracts.length !== 0) {
       let ticker = 0;
       for (const contract of data?.portfolio?.contracts) {
-        //closePosition(contract.symbol, contract.contract_id, `Opposite Signal`);
         const asset = {
           name: contract.symbol,
           contract_id: contract.contract_id,
@@ -429,7 +428,7 @@ ws.on("message", async (msg) => {
         }
       }
     } else {
-      loading = false
+      loading = false;
       for (let i = 0; i < positions.length; i++) {
         await collection.deleteOne({
           contract_id: positions[i].contract_id,
@@ -438,7 +437,7 @@ ws.on("message", async (msg) => {
         console.log(`Deleted closed contract ${positions[i].contract_id}`);
       }
     }
-    console.log(loading)
+    console.log(loading);
   }
 
   if (data.msg_type === "contracts_for") {
@@ -472,7 +471,7 @@ ws.on("message", async (msg) => {
         md.high15 = data.candles.map((c) => c.high);
         md.low15 = data.candles.map((c) => c.low);
       }
-      if (data.echo_req.granularity === 60) {
+      if (data.echo_req.granularity === 120) {
         md.close = data.candles.map((c) => c.close);
         md.open = data.candles.map((c) => c.open);
         md.high = data.candles.map((c) => c.high);
@@ -532,7 +531,7 @@ ws.on("message", async (msg) => {
       }
     }
 
-    if (data.echo_req.granularity === 60) {
+    if (data.echo_req.granularity === 120) {
       const matchingPositions = positions.filter((p) => p?.name === symbol);
       const riskyPosition = matchingPositions.find((p) => p.stoploss === 0);
       if (md.openTime === 0) {
@@ -562,6 +561,7 @@ ws.on("message", async (msg) => {
       const currIndex = len - 1;
       const prevIndex = len - 2;
       const thirdIndex = len - 3;
+      const fourthIndex = len - 4;
 
       const ema14 = calculateEMA(md.close, 14);
       const ema14Then = ema14[prevIndex];
@@ -579,6 +579,7 @@ ws.on("message", async (msg) => {
           bullish(md.open15, md.close15, len15 - 2)
         ) {
           if (
+            bearish(md.open, md.close, thirdIndex) &&
             bearish(md.open, md.close, prevIndex) &&
             bullish(md.open, md.close, currIndex)
           ) {
@@ -592,6 +593,7 @@ ws.on("message", async (msg) => {
           bearish(md.open15, md.close15, len15 - 2)
         ) {
           if (
+            bullish(md.open, md.close, thirdIndex) &&
             bullish(md.open, md.close, prevIndex) &&
             bearish(md.open, md.close, currIndex)
           ) {
@@ -607,6 +609,7 @@ ws.on("message", async (msg) => {
           bullish(md.open15, md.close15, len15 - 2)
         ) {
           if (
+            bearish(md.open, md.close, fourthIndex) &&
             bearish(md.open, md.close, thirdIndex) &&
             bullish(md.open, md.close, prevIndex)
           ) {
@@ -625,6 +628,7 @@ ws.on("message", async (msg) => {
           bearish(md.open15, md.close15, len15 - 2)
         ) {
           if (
+            bullish(md.open, md.close, fourthIndex) &&
             bullish(md.open, md.close, thirdIndex) &&
             bearish(md.open, md.close, prevIndex)
           ) {
@@ -667,12 +671,10 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "proposal_open_contract" && !loading) {
+    //console.log(data)
     const id = data?.echo_req?.contract_id;
     const position = positions.find((p) => p.contract_id === id);
     const symbol = data.proposal_open_contract?.underlying;
-    if (position) {
-      position.subscribed = true;
-    }
     const commission = data.proposal_open_contract?.commission;
     const multiplier = data.proposal_open_contract?.multiplier;
     const type = data.proposal_open_contract?.contract_type;
@@ -695,10 +697,29 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract?.profit;
-    position.profit = profit;
+    if (position) {
+      position.subscribed = true;
+      position.profit = profit;
+    }
 
     if (connection) {
-      if (profit >= profitAmount / 4 && position.stoploss === 0) {
+      if (lossAmount === profitAmount / 5 && profit >= profitAmount / 10) {
+        send({
+          contract_update: 1,
+          contract_id: id,
+          limit_order: {
+            stop_loss: profitAmount / 10,
+          },
+        });
+      }
+      if (profit >= lossAmount && position.stoploss === 0) {
+        send({
+          contract_update: 1,
+          contract_id: id,
+          limit_order: {
+            stop_loss: Math.abs(commission),
+          },
+        });
         position.stoploss = Math.abs(commission);
         update(position.stoploss, id, symbol);
       }
@@ -772,6 +793,12 @@ ws.on("message", async (msg) => {
 
     console.log(`Deleted closed contract ${contract_id}`);
   }
+  if (data.msg_type === "contract_update") {
+    const position = positions.find(
+      (p) => p.contract_id === data.echo_req.contract_id,
+    );
+    sendMessage(`💸 Position updated on ${position.name}`);
+  }
 
   if (data.error) {
     const error = data?.error?.message;
@@ -785,7 +812,7 @@ ws.on("message", async (msg) => {
           ticks_history: s,
           style: "candles",
           count: 500,
-          granularity: 60,
+          granularity: 120,
           end: "latest",
           subscribe: 1,
         });
