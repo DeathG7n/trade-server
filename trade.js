@@ -24,7 +24,7 @@ let connection = false;
 let authorized = false;
 let loading = true;
 
-const symbols = ["stpRNG", "R_75", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5"];
+const symbols = ["stpRNG"];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -47,7 +47,8 @@ symbols.forEach((s) => {
     openTime15: 0,
     trendUp15: false,
     trendDown15: false,
-    ema15: 0,
+    ema15_14: [],
+    ema15_21: [],
     canOpenTrade: true,
     canAlert: true,
     multiplier_range: [],
@@ -437,7 +438,6 @@ ws.on("message", async (msg) => {
         console.log(`Deleted closed contract ${positions[i].contract_id}`);
       }
     }
-    console.log(loading);
   }
 
   if (data.msg_type === "contracts_for") {
@@ -514,7 +514,8 @@ ws.on("message", async (msg) => {
       const ema21 = calculateEMA(md.close15, 21);
       const ema21Then = ema21[prevIndex];
 
-      md.ema15 = ema21Then;
+      md.ema15_14 = ema14;
+      md.ema15_21 = ema21;
 
       md.trendUp15 = ema14Then > ema21Then;
       md.trendDown15 = ema14Then < ema21Then;
@@ -575,7 +576,13 @@ ws.on("message", async (msg) => {
       if (md.canAlert) {
         if (
           md.trendUp15 &&
-          crossedEma(md.high15, md.low15, len15 - 2, md.ema15) &&
+          candleCrossesEitherEMA(
+            len15 - 2,
+            md.ema15_14,
+            md.ema15_21,
+            md.high15,
+            md.low15,
+          ) &&
           bullish(md.open15, md.close15, len15 - 2)
         ) {
           if (
@@ -589,7 +596,13 @@ ws.on("message", async (msg) => {
         }
         if (
           md.trendDown15 &&
-          crossedEma(md.high15, md.low15, len15 - 2, md.ema15) &&
+          candleCrossesEitherEMA(
+            len15 - 2,
+            md.ema15_14,
+            md.ema15_21,
+            md.high15,
+            md.low15,
+          ) &&
           bearish(md.open15, md.close15, len15 - 2)
         ) {
           if (
@@ -605,7 +618,13 @@ ws.on("message", async (msg) => {
       if (!riskyPosition) {
         if (
           md.trendUp15 &&
-          crossedEma(md.high15, md.low15, len15 - 2, md.ema15) &&
+          candleCrossesEitherEMA(
+            len15 - 2,
+            md.ema15_14,
+            md.ema15_21,
+            md.high15,
+            md.low15,
+          ) &&
           bullish(md.open15, md.close15, len15 - 2)
         ) {
           if (
@@ -624,7 +643,13 @@ ws.on("message", async (msg) => {
         }
         if (
           md.trendDown15 &&
-          crossedEma(md.high15, md.low15, len15 - 2, md.ema15) &&
+          candleCrossesEitherEMA(
+            len15 - 2,
+            md.ema15_14,
+            md.ema15_21,
+            md.high15,
+            md.low15,
+          ) &&
           bearish(md.open15, md.close15, len15 - 2)
         ) {
           if (
@@ -703,23 +728,7 @@ ws.on("message", async (msg) => {
     }
 
     if (connection) {
-      if (Math.abs(lossAmount) === profitAmount / 5 && profit >= profitAmount / 10) {
-        send({
-          contract_update: 1,
-          contract_id: id,
-          limit_order: {
-            stop_loss: profitAmount / 10,
-          },
-        });
-      }
-      if (profit >= Math.abs(lossAmount) && position.stoploss === 0) {
-        send({
-          contract_update: 1,
-          contract_id: id,
-          limit_order: {
-            stop_loss: Math.abs(commission),
-          },
-        });
+      if (profit >= profitAmount / 5 && position.stoploss === 0) {
         position.stoploss = Math.abs(commission);
         update(position.stoploss, id, symbol);
       }
