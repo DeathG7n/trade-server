@@ -3,7 +3,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const axios = require("axios");
-const { MongoClient } = require("mongodb");
+const { MongoClient } = require("mongodb"); 
 
 const API_TOKEN = "cc2h1a8o1j3CiMQ";
 let ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=36807");
@@ -24,7 +24,7 @@ let connection = false;
 let authorized = false;
 let loading = true;
 
-const symbols = ["stpRNG"];
+const symbols = ["stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5"];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -566,12 +566,14 @@ ws.on("message", async (msg) => {
 
       const ema14 = calculateEMA(md.close, 14);
       const ema14Then = ema14[prevIndex];
+      const ema14Now = ema14[currIndex];
 
       const ema21 = calculateEMA(md.close, 21);
       const ema21Then = ema21[prevIndex];
+      const ema21Now = ema21[currIndex];
 
-      md.trendUp = ema14Then > ema21Then;
-      md.trendDown = ema14Then < ema21Then;
+      md.trendUp = ema14Now > ema21Now;
+      md.trendDown = ema14Now < ema21Now;
 
       if (md.canAlert) {
         if (
@@ -617,64 +619,52 @@ ws.on("message", async (msg) => {
       }
       if (!riskyPosition) {
         if (
-          md.trendUp15 &&
-          candleCrossesEitherEMA(
-            len15 - 2,
-            md.ema15_14,
-            md.ema15_21,
-            md.high15,
-            md.low15,
-          ) &&
-          bullish(md.open15, md.close15, len15 - 2)
+          md.trendUp &&
+          crossedEma(md.high, md.low, prevIndex, ema21Then) &&
+          recentEmaCross(ema14, ema21, 15) &&
+          bullish(md.open, md.close, prevIndex)
         ) {
-          if (
-            bearish(md.open, md.close, fourthIndex) &&
-            bearish(md.open, md.close, thirdIndex) &&
-            bullish(md.open, md.close, prevIndex)
-          ) {
-            buyMultiplier(
-              "MULTUP",
-              data?.echo_req?.ticks_history,
-              amount,
-              md.multiplier_range[0],
-            );
-            loading = true;
-          }
+          buyMultiplier(
+            "MULTUP",
+            data?.echo_req?.ticks_history,
+            amount,
+            md.multiplier_range[0],
+          );
+          loading = true;
         }
         if (
-          md.trendDown15 &&
-          candleCrossesEitherEMA(
-            len15 - 2,
-            md.ema15_14,
-            md.ema15_21,
-            md.high15,
-            md.low15,
-          ) &&
-          bearish(md.open15, md.close15, len15 - 2)
+          md.trendDown &&
+          crossedEma(md.high, md.low, prevIndex, ema21Then) &&
+          recentEmaCross(ema14, ema21, 15) &&
+          bearish(md.open, md.close, prevIndex)
         ) {
-          if (
-            bullish(md.open, md.close, fourthIndex) &&
-            bullish(md.open, md.close, thirdIndex) &&
-            bearish(md.open, md.close, prevIndex)
-          ) {
-            buyMultiplier(
-              "MULTDOWN",
-              data?.echo_req?.ticks_history,
-              amount,
-              md.multiplier_range[0],
-            );
-            loading = true;
-          }
+          buyMultiplier(
+            "MULTDOWN",
+            data?.echo_req?.ticks_history,
+            amount,
+            md.multiplier_range[0],
+          );
+          loading = true;
         }
       } else {
         for (const contract of matchingPositions) {
           if (contract?.type === "MULTUP") {
-            if (md.trendDown15) {
+            if (
+              md.trendDown &&
+              crossedEma(md.high, md.low, prevIndex, ema21Then) &&
+              recentEmaCross(ema14, ema21, 15) &&
+              bearish(md.open, md.close, prevIndex)
+            ) {
               closePosition(symbol, contract.contract_id, `Opposite Signal`);
             }
           }
           if (contract?.type === "MULTDOWN") {
-            if (md.trendUp15) {
+            if (
+              md.trendUp &&
+              crossedEma(md.high, md.low, prevIndex, ema21Then) &&
+              recentEmaCross(ema14, ema21, 15) &&
+              bullish(md.open, md.close, prevIndex)
+            ) {
               closePosition(symbol, contract.contract_id, `Opposite Signal`);
             }
           }
