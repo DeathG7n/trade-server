@@ -716,6 +716,7 @@ ws.on("message", async (msg) => {
         if (
           md.trendUp &&
           crossedEma(md.high, md.low, currIndex, ema21Now) &&
+          recentEmaCross(ema14, ema21, 15) &&
           bullish(md.open, md.close, prevIndex)
         ) {
           sendMessage(`Bullish Signal on ${symbol} on 1 minute`);
@@ -724,6 +725,7 @@ ws.on("message", async (msg) => {
         if (
           md.trendDown &&
           crossedEma(md.high, md.low, currIndex, ema21Now) &&
+          recentEmaCross(ema14, ema21, 15) &&
           bearish(md.open, md.close, prevIndex)
         ) {
           sendMessage(`Bearish Signal on ${symbol} on 1 minute`);
