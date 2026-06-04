@@ -24,7 +24,14 @@ let connection = false;
 let authorized = false;
 let loading = true;
 
-const symbols = ["stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5", "1HZ75V"];
+const symbols = [
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
+  "stpRNG5",
+  "1HZ75V",
+];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -242,7 +249,7 @@ function buyMultiplier(direction, symbol, stake, multiplier) {
       currency: "USD",
       symbol: symbol,
       multiplier: multiplier,
-      limit_order: { stop_loss: stake / 5, take_profit: stake },
+      limit_order: { stop_loss: stake / 2.5, take_profit: stake * 1.2 },
     },
   });
 }
@@ -552,7 +559,9 @@ ws.on("message", async (msg) => {
         });
       }
     }
-    if (data.echo_req.granularity === 300 && symbol === "1HZ75V") {
+    if (data.echo_req.granularity === 300) {
+      const matchingPositions = positions.filter((p) => p?.name === symbol);
+      const riskyPosition = matchingPositions.find((p) => p.stoploss === 0);
       if (md.openTime5 === 0) {
         md.openTime5 = data.ohlc.open_time;
       }
@@ -585,10 +594,10 @@ ws.on("message", async (msg) => {
       md.trendUp5 = ema14Now > ema21Now;
       md.trendDown5 = ema14Now < ema21Now;
 
-      if (md.canAlert) {
+      if (md.canAlert && symbol === "1HZ75V") {
         if (
           md.trendUp5 &&
-          crossedEma(md.high5, md.low5, prevIndex, ema21Then) &&
+          candleCrossesEitherEMA(prevIndex, ema14, ema21, md.high5, md.low5) &&
           bullish(md.open5, md.close5, prevIndex)
         ) {
           sendMessage(`Bullish Signal on ${symbol}`);
@@ -596,14 +605,67 @@ ws.on("message", async (msg) => {
         }
         if (
           md.trendDown5 &&
-          crossedEma(md.high5, md.low5, prevIndex, ema21Then) &&
+          candleCrossesEitherEMA(prevIndex, ema14, ema21, md.high5, md.low5) &&
           bearish(md.open5, md.close5, prevIndex)
         ) {
           sendMessage(`Bearish Signal on ${symbol}`);
           md.canAlert = false;
         }
       }
-      
+      if (!riskyPosition && symbol !== "1HZ75V") {
+        if (
+          md.trendUp5 &&
+          crossedEma(md.high5, md.low5, prevIndex, ema21Then) &&
+          recentEmaCross(ema14, ema21, 15) &&
+          bullish(md.open5, md.close5, prevIndex)
+        ) {
+          buyMultiplier(
+            "MULTUP",
+            data?.echo_req?.ticks_history,
+            amount,
+            md.multiplier_range[0],
+          );
+          loading = true; 
+        }
+        if (
+          md.trendDown5 &&
+          crossedEma(md.high5, md.low5, prevIndex, ema21Then) &&
+          recentEmaCross(ema14, ema21, 15) &&
+          bearish(md.open5, md.close5, prevIndex)
+        ) {
+          buyMultiplier(
+            "MULTDOWN",
+            data?.echo_req?.ticks_history,
+            amount,
+            md.multiplier_range[0],
+          );
+          loading = true;
+        }
+      } else {
+        for (const contract of matchingPositions) {
+          if (contract?.type === "MULTUP") {
+            if (
+              md.trendDown5 &&
+              crossedEma(md.high5, md.low5, prevIndex, ema21Then) &&
+              recentEmaCross(ema14, ema21, 15) &&
+              bearish(md.open5, md.close5, prevIndex)
+            ) {
+              contract.contract_id && closePosition(symbol, contract.contract_id, `Opposite Signal`);
+            }
+          }
+          if (contract?.type === "MULTDOWN") {
+            if (
+              md.trendUp5 &&
+              crossedEma(md.high5, md.low5, prevIndex, ema21Then) &&
+              recentEmaCross(ema14, ema21, 15) &&
+              bullish(md.open5, md.close5, prevIndex)
+            ) {
+              contract.contract_id && closePosition(symbol, contract.contract_id, `Opposite Signal`);
+            }
+          }
+        }
+      }
+
       if (md.openTime5 !== data.ohlc.open_time) {
         md.openTime5 = data.ohlc.open_time;
         md.canAlert = true;
@@ -617,9 +679,7 @@ ws.on("message", async (msg) => {
       }
     }
 
-    if (data.echo_req.granularity === 60 && symbol !== "1HZ75V") {
-      const matchingPositions = positions.filter((p) => p?.name === symbol);
-      const riskyPosition = matchingPositions.find((p) => p.stoploss === 0);
+    if (data.echo_req.granularity === 60 && false) {
       if (md.openTime === 0) {
         md.openTime = data.ohlc.open_time;
       }
@@ -653,61 +713,6 @@ ws.on("message", async (msg) => {
       md.trendUp = ema14Now > ema21Now;
       md.trendDown = ema14Now < ema21Now;
 
-      
-      if (!riskyPosition) {
-        if (
-          md.trendUp &&
-          crossedEma(md.high, md.low, prevIndex, ema21Then) &&
-          recentEmaCross(ema14, ema21, 15) &&
-          bullish(md.open, md.close, prevIndex)
-        ) {
-          buyMultiplier(
-            "MULTUP",
-            data?.echo_req?.ticks_history,
-            amount,
-            md.multiplier_range[0],
-          );
-          loading = true;
-        }
-        if (
-          md.trendDown &&
-          crossedEma(md.high, md.low, prevIndex, ema21Then) &&
-          recentEmaCross(ema14, ema21, 15) &&
-          bearish(md.open, md.close, prevIndex)
-        ) {
-          buyMultiplier(
-            "MULTDOWN",
-            data?.echo_req?.ticks_history,
-            amount,
-            md.multiplier_range[0],
-          );
-          loading = true;
-        }
-      } else {
-        for (const contract of matchingPositions) {
-          if (contract?.type === "MULTUP") {
-            if (
-              md.trendDown &&
-              crossedEma(md.high, md.low, prevIndex, ema21Then) &&
-              recentEmaCross(ema14, ema21, 15) &&
-              bearish(md.open, md.close, prevIndex)
-            ) {
-              closePosition(symbol, contract.contract_id, `Opposite Signal`);
-            }
-          }
-          if (contract?.type === "MULTDOWN") {
-            if (
-              md.trendUp &&
-              crossedEma(md.high, md.low, prevIndex, ema21Then) &&
-              recentEmaCross(ema14, ema21, 15) &&
-              bullish(md.open, md.close, prevIndex)
-            ) {
-              closePosition(symbol, contract.contract_id, `Opposite Signal`);
-            }
-          }
-        }
-      }
-
       if (md.openTime !== data.ohlc.open_time) {
         md.openTime = data.ohlc.open_time;
         send({
@@ -722,7 +727,6 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "proposal_open_contract" && !loading) {
-    //console.log(data)
     const id = data?.echo_req?.contract_id;
     const position = positions.find((p) => p.contract_id === id);
     const symbol = data.proposal_open_contract?.underlying;
@@ -732,7 +736,7 @@ ws.on("message", async (msg) => {
     const entrySpot = data.proposal_open_contract?.entry_spot;
     const currentSpot = data.proposal_open_contract?.current_spot;
     const orderAmount =
-      data.proposal_open_contract?.limit_order?.stop_out?.order_amount;
+      data?.proposal_open_contract?.buy_price
     const lossAmount =
       data.proposal_open_contract?.limit_order?.stop_loss?.order_amount;
     const profitAmount =
