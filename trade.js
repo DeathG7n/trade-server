@@ -600,7 +600,7 @@ ws.on("message", async (msg) => {
           candleCrossesEitherEMA(prevIndex, ema14, ema21, md.high5, md.low5) &&
           bullish(md.open5, md.close5, prevIndex)
         ) {
-          sendMessage(`Bullish Signal on ${symbol}`);
+          sendMessage(`Bullish Signal on ${symbol} on 5 minutes`);
           md.canAlert = false;
         }
         if (
@@ -608,7 +608,7 @@ ws.on("message", async (msg) => {
           candleCrossesEitherEMA(prevIndex, ema14, ema21, md.high5, md.low5) &&
           bearish(md.open5, md.close5, prevIndex)
         ) {
-          sendMessage(`Bearish Signal on ${symbol}`);
+          sendMessage(`Bearish Signal on ${symbol} on 5 minutes`);
           md.canAlert = false;
         }
       }
@@ -668,7 +668,6 @@ ws.on("message", async (msg) => {
 
       if (md.openTime5 !== data.ohlc.open_time) {
         md.openTime5 = data.ohlc.open_time;
-        md.canAlert = true;
         send({
           ticks_history: data.echo_req.ticks_history,
           style: "candles",
@@ -679,7 +678,7 @@ ws.on("message", async (msg) => {
       }
     }
 
-    if (data.echo_req.granularity === 60 && false) {
+    if (data.echo_req.granularity === 60 && symbol === "1HZ75V") {
       if (md.openTime === 0) {
         md.openTime = data.ohlc.open_time;
       }
@@ -713,8 +712,28 @@ ws.on("message", async (msg) => {
       md.trendUp = ema14Now > ema21Now;
       md.trendDown = ema14Now < ema21Now;
 
+      if (md.canAlert) {
+        if (
+          md.trendUp &&
+          crossedEma(md.high, md.low, currIndex, ema21Now) &&
+          bullish(md.open, md.close, prevIndex)
+        ) {
+          sendMessage(`Bullish Signal on ${symbol} on 1 minute`);
+          md.canAlert = false;
+        }
+        if (
+          md.trendDown &&
+          crossedEma(md.high, md.low, currIndex, ema21Now) &&
+          bearish(md.open, md.close, prevIndex)
+        ) {
+          sendMessage(`Bearish Signal on ${symbol} on 1 minute`);
+          md.canAlert = false;
+        }
+      }
+
       if (md.openTime !== data.ohlc.open_time) {
         md.openTime = data.ohlc.open_time;
+        md.canAlert = true;
         send({
           ticks_history: data.echo_req.ticks_history,
           style: "candles",
@@ -758,15 +777,8 @@ ws.on("message", async (msg) => {
     }
 
     if (connection) {
-      if (profit >= profitAmount / 5 && position.stoploss === 0) {
+      if (profit >= orderAmount / 2.5 && position.stoploss === 0) {
         position.stoploss = Math.abs(commission);
-        update(position.stoploss, id, symbol);
-      }
-      if (
-        profit >= profitAmount / 2 &&
-        position.stoploss === Math.abs(commission)
-      ) {
-        position.stoploss = profitAmount / 4;
         update(position.stoploss, id, symbol);
       }
       if (position && position.stoploss !== 0 && profit <= position.stoploss) {
