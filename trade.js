@@ -602,7 +602,7 @@ ws.on("message", async (msg) => {
           bullish(md.open5, md.close5, prevIndex)
         ) {
           sendMessage(`Bullish Signal on ${symbol} on 5 minutes`);
-          md.canAlert = false;
+          md.canAlert5 = false;
         }
         if (
           md.trendDown5 &&
@@ -610,7 +610,7 @@ ws.on("message", async (msg) => {
           bearish(md.open5, md.close5, prevIndex)
         ) {
           sendMessage(`Bearish Signal on ${symbol} on 5 minutes`);
-          md.canAlert = false;
+          md.canAlert5 = false;
         }
       }
       if (!riskyPosition && symbol !== "1HZ75V") {
