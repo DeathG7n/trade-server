@@ -65,6 +65,7 @@ symbols.forEach((s) => {
     ema15_21: [],
     canOpenTrade: true,
     canAlert: true,
+    canAlert5: true,
     multiplier_range: [],
   };
 });
@@ -594,7 +595,7 @@ ws.on("message", async (msg) => {
       md.trendUp5 = ema14Now > ema21Now;
       md.trendDown5 = ema14Now < ema21Now;
 
-      if (md.canAlert && symbol === "1HZ75V") {
+      if (md.canAlert5 && symbol === "1HZ75V") {
         if (
           md.trendUp5 &&
           candleCrossesEitherEMA(prevIndex, ema14, ema21, md.high5, md.low5) &&
@@ -668,6 +669,7 @@ ws.on("message", async (msg) => {
 
       if (md.openTime5 !== data.ohlc.open_time) {
         md.openTime5 = data.ohlc.open_time;
+        md.canAlert5 = true;
         send({
           ticks_history: data.echo_req.ticks_history,
           style: "candles",
