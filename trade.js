@@ -113,13 +113,13 @@ function weakHaBearish(haOpen, haClose, haHigh, candle) {
 }
 
 function crossedEma(high, low, candle, ema) {
-  return high[candle] > ema && ema > low[candle];
+  return high[candle] > ema[candle] && ema[candle] > low[candle];
 }
 
 function candleCrossesEitherEMA(index, ema1, ema2, high, low) {
   return (
-    crossedEma(high, low, index, ema1[index]) ||
-    crossedEma(high, low, index, ema2[index])
+    crossedEma(high, low, index, ema1) ||
+    crossedEma(high, low, index, ema2)
   );
 }
 function detectCrossover(emaFast, emaSlow) {
@@ -616,7 +616,7 @@ ws.on("message", async (msg) => {
       if (!riskyPosition && symbol !== "1HZ75V") {
         if (
           md.trendUp5 &&
-          crossedEma(md.high5, md.low5, prevIndex, ema21Then) &&
+          crossedEma(md.high5, md.low5, prevIndex, ema21) &&
           recentEmaCross(ema14, ema21, 15) &&
           bullish(md.open5, md.close5, prevIndex)
         ) {
@@ -630,7 +630,7 @@ ws.on("message", async (msg) => {
         }
         if (
           md.trendDown5 &&
-          crossedEma(md.high5, md.low5, prevIndex, ema21Then) &&
+          crossedEma(md.high5, md.low5, prevIndex, ema21) &&
           recentEmaCross(ema14, ema21, 15) &&
           bearish(md.open5, md.close5, prevIndex)
         ) {
@@ -647,7 +647,7 @@ ws.on("message", async (msg) => {
           if (contract?.type === "MULTUP") {
             if (
               md.trendDown5 &&
-              crossedEma(md.high5, md.low5, prevIndex, ema21Then) &&
+              crossedEma(md.high5, md.low5, prevIndex, ema21) &&
               recentEmaCross(ema14, ema21, 15) &&
               bearish(md.open5, md.close5, prevIndex)
             ) {
@@ -657,7 +657,7 @@ ws.on("message", async (msg) => {
           if (contract?.type === "MULTDOWN") {
             if (
               md.trendUp5 &&
-              crossedEma(md.high5, md.low5, prevIndex, ema21Then) &&
+              crossedEma(md.high5, md.low5, prevIndex, ema21) &&
               recentEmaCross(ema14, ema21, 15) &&
               bullish(md.open5, md.close5, prevIndex)
             ) {
@@ -717,7 +717,7 @@ ws.on("message", async (msg) => {
       if (md.canAlert) {
         if (
           md.trendUp &&
-          crossedEma(md.high, md.low, currIndex, ema21Now) &&
+          crossedEma(md.high, md.low, currIndex, ema21) &&
           recentEmaCross(ema14, ema21, 15) &&
           bullish(md.open, md.close, prevIndex)
         ) {
@@ -726,7 +726,7 @@ ws.on("message", async (msg) => {
         }
         if (
           md.trendDown &&
-          crossedEma(md.high, md.low, currIndex, ema21Now) &&
+          crossedEma(md.high, md.low, currIndex, ema21) &&
           recentEmaCross(ema14, ema21, 15) &&
           bearish(md.open, md.close, prevIndex)
         ) {
