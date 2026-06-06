@@ -61,11 +61,17 @@ symbols.forEach((s) => {
     openTime15: 0,
     trendUp15: false,
     trendDown15: false,
-    ema15_14: [],
-    ema15_21: [],
+    close60: [],
+    open60: [],
+    high60: [],
+    low60: [],
+    openTime60: 0,
+    trendUp60: false,
+    trendDown60: false,
     canOpenTrade: true,
     canAlert: true,
     canAlert5: true,
+    canAlert60: true,
     multiplier_range: [],
   };
 });
@@ -118,8 +124,7 @@ function crossedEma(high, low, candle, ema) {
 
 function candleCrossesEitherEMA(index, ema1, ema2, high, low) {
   return (
-    crossedEma(high, low, index, ema1) ||
-    crossedEma(high, low, index, ema2)
+    crossedEma(high, low, index, ema1) || crossedEma(high, low, index, ema2)
   );
 }
 function detectCrossover(emaFast, emaSlow) {
@@ -343,6 +348,14 @@ ws.on("message", async (msg) => {
         end: "latest",
         subscribe: 1,
       });
+      send({
+        ticks_history: s,
+        style: "candles",
+        count: 500,
+        granularity: 3600,
+        end: "latest",
+        subscribe: 1,
+      });
     });
   }
 
@@ -488,6 +501,12 @@ ws.on("message", async (msg) => {
       sendMessage("Bot is still running");
     }
     try {
+      if (data.echo_req.granularity === 360) {
+        md.close60 = data.candles.map((c) => c.close);
+        md.open60 = data.candles.map((c) => c.open);
+        md.high60 = data.candles.map((c) => c.high);
+        md.low60 = data.candles.map((c) => c.low);
+      }
       if (data.echo_req.granularity === 900) {
         md.close15 = data.candles.map((c) => c.close);
         md.open15 = data.candles.map((c) => c.open);
@@ -516,6 +535,73 @@ ws.on("message", async (msg) => {
   if (data.msg_type === "ohlc" && !loading) {
     const symbol = data.echo_req.ticks_history;
     const md = marketData[symbol];
+
+    if (data.echo_req.granularity === 3600) {
+      if (md.openTime60 === 0) {
+        md.openTime60 = data.ohlc.open_time;
+      }
+      if (md.close60.length === 0) {
+        md.close60.push(Number(data.ohlc.close));
+        md.open60.push(Number(data.ohlc.open));
+        md.high60.push(Number(data.ohlc.high));
+        md.low60.push(Number(data.ohlc.low));
+      } else {
+        md.close60[md.close60.length - 1] = Number(data.ohlc.close);
+        md.open60[md.open60.length - 1] = Number(data.ohlc.open);
+        md.high60[md.high60.length - 1] = Number(data.ohlc.high);
+        md.low60[md.low60.length - 1] = Number(data.ohlc.low);
+      }
+
+      const len = md.close60.length;
+      const currIndex = len - 1;
+      const prevIndex = len - 2;
+      const thirdIndex = len - 3;
+      const fourthIndex = len - 4;
+
+      const ema14 = calculateEMA(md.close60, 14);
+      const ema14Then = ema14[prevIndex];
+      const ema14Now = ema14[currIndex];
+
+      const ema21 = calculateEMA(md.close60, 21);
+      const ema21Then = ema21[prevIndex];
+      const ema21Now = ema21[currIndex];
+
+      md.trendUp60 = ema14Now > ema21Now;
+      md.trendDown60 = ema14Now < ema21Now;
+
+      if (md.canAlert60) {
+        if (
+          md.trendUp60 &&
+          crossedEma(md.high60, md.low60, currIndex, ema21) &&
+          recentEmaCross(ema14, ema21, 15) &&
+          bullish(md.open60, md.close60, prevIndex)
+        ) {
+          sendMessage(`Bullish Signal on ${symbol} on 1 hour`);
+          md.canAlert60 = false;
+        }
+        if (
+          md.trendDown60 &&
+          crossedEma(md.high60, md.low60, currIndex, ema21) &&
+          recentEmaCross(ema14, ema21, 15) &&
+          bearish(md.open60, md.close60, prevIndex)
+        ) {
+          sendMessage(`Bearish Signal on ${symbol} on 1 hour`);
+          md.canAlert60 = false;
+        }
+      }
+
+      if (md.openTime60 !== data.ohlc.open_time) {
+        md.openTime60 = data.ohlc.open_time;
+        md.canAlert60 = true;
+        send({
+          ticks_history: data.echo_req.ticks_history,
+          style: "candles",
+          count: 500,
+          granularity: data.echo_req.granularity,
+          end: "latest",
+        });
+      }
+    }
 
     if (data.echo_req.granularity === 900) {
       if (md.openTime15 === 0) {
@@ -626,7 +712,7 @@ ws.on("message", async (msg) => {
             amount,
             md.multiplier_range[0],
           );
-          loading = true; 
+          loading = true;
         }
         if (
           md.trendDown5 &&
@@ -651,7 +737,8 @@ ws.on("message", async (msg) => {
               recentEmaCross(ema14, ema21, 15) &&
               bearish(md.open5, md.close5, prevIndex)
             ) {
-              contract.contract_id && closePosition(symbol, contract.contract_id, `Opposite Signal`);
+              contract.contract_id &&
+                closePosition(symbol, contract.contract_id, `Opposite Signal`);
             }
           }
           if (contract?.type === "MULTDOWN") {
@@ -661,7 +748,8 @@ ws.on("message", async (msg) => {
               recentEmaCross(ema14, ema21, 15) &&
               bullish(md.open5, md.close5, prevIndex)
             ) {
-              contract.contract_id && closePosition(symbol, contract.contract_id, `Opposite Signal`);
+              contract.contract_id &&
+                closePosition(symbol, contract.contract_id, `Opposite Signal`);
             }
           }
         }
@@ -758,8 +846,7 @@ ws.on("message", async (msg) => {
     const type = data.proposal_open_contract?.contract_type;
     const entrySpot = data.proposal_open_contract?.entry_spot;
     const currentSpot = data.proposal_open_contract?.current_spot;
-    const orderAmount =
-      data?.proposal_open_contract?.buy_price
+    const orderAmount = data?.proposal_open_contract?.buy_price;
     const lossAmount =
       data.proposal_open_contract?.limit_order?.stop_loss?.order_amount;
     const profitAmount =
@@ -884,6 +971,14 @@ ws.on("message", async (msg) => {
           style: "candles",
           count: 500,
           granularity: 900,
+          end: "latest",
+          subscribe: 1,
+        });
+        send({
+          ticks_history: s,
+          style: "candles",
+          count: 500,
+          granularity: 3600,
           end: "latest",
           subscribe: 1,
         });
