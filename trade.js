@@ -599,7 +599,6 @@ ws.on("message", async (msg) => {
           count: 500,
           granularity: data.echo_req.granularity,
           end: "latest",
-          subscribe: 1,
         });
       }
     }
@@ -644,7 +643,6 @@ ws.on("message", async (msg) => {
           count: 500,
           granularity: data.echo_req.granularity,
           end: "latest",
-          subscribe: 1,
         });
       }
     }
@@ -766,7 +764,6 @@ ws.on("message", async (msg) => {
           count: 500,
           granularity: data.echo_req.granularity,
           end: "latest",
-          subscribe: 1,
         });
       }
     }
@@ -835,7 +832,6 @@ ws.on("message", async (msg) => {
           count: 500,
           granularity: data.echo_req.granularity,
           end: "latest",
-          subscribe: 1,
         });
       }
     }
