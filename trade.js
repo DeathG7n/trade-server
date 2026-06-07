@@ -501,7 +501,7 @@ ws.on("message", async (msg) => {
       sendMessage("Bot is still running");
     }
     try {
-      if (data.echo_req.granularity === 360) {
+      if (data.echo_req.granularity === 3600) {
         md.close60 = data.candles.map((c) => c.close);
         md.open60 = data.candles.map((c) => c.open);
         md.high60 = data.candles.map((c) => c.high);
@@ -599,6 +599,7 @@ ws.on("message", async (msg) => {
           count: 500,
           granularity: data.echo_req.granularity,
           end: "latest",
+          subscribe: 1,
         });
       }
     }
@@ -643,6 +644,7 @@ ws.on("message", async (msg) => {
           count: 500,
           granularity: data.echo_req.granularity,
           end: "latest",
+          subscribe: 1,
         });
       }
     }
@@ -764,6 +766,7 @@ ws.on("message", async (msg) => {
           count: 500,
           granularity: data.echo_req.granularity,
           end: "latest",
+          subscribe: 1,
         });
       }
     }
@@ -832,6 +835,7 @@ ws.on("message", async (msg) => {
           count: 500,
           granularity: data.echo_req.granularity,
           end: "latest",
+          subscribe: 1,
         });
       }
     }
@@ -868,8 +872,15 @@ ws.on("message", async (msg) => {
     }
 
     if (connection) {
-      if (profit >= orderAmount / 2.5 && position.stoploss === 0) {
+      if (profit >= Math.abs(lossAmount) && position.stoploss === 0) {
         position.stoploss = Math.abs(commission);
+        update(position.stoploss, id, symbol);
+      }
+      if (
+        profit >= Math.abs(lossAmount * 2) &&
+        position.stoploss === Math.abs(commission)
+      ) {
+        position.stoploss = Math.abs(lossAmount);
         update(position.stoploss, id, symbol);
       }
       if (position && position.stoploss !== 0 && profit <= position.stoploss) {
