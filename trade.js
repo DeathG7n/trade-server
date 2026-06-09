@@ -1,18 +1,20 @@
-const WebSocket = require("ws");
-const express = require("express");
-const app = express();
-const cors = require("cors");
-const axios = require("axios");
-const { MongoClient } = require("mongodb");
+import WebSocket from "ws";
+import express from "express";
+import cors from "cors";
+import axios from "axios";
+import { MongoClient } from "mongodb";
+import process from "node:process";
 
-const API_TOKEN = "cc2h1a8o1j3CiMQ";
+process.loadEnvFile();
+const app = express();
+
+const API_TOKEN = process.env.API_TOKEN
 let ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=36807");
 
-const BOT_TOKEN = "8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ";
-const CHAT_ID = "8068534792";
+const BOT_TOKEN = process.env.BOT_TOKEN
+const CHAT_ID = process.env.CHAT_ID
 
-const uri =
-  "mongodb+srv://DeathG7n:if3anYichukwu@cluster0.gpfyqmb.mongodb.net/trading?retryWrites=true&w=majority";
+const uri = process.env.MONGODB_URI;
 const client = new MongoClient(uri);
 
 let positions = [];
@@ -23,6 +25,7 @@ let now = new Date();
 let connection = false;
 let authorized = false;
 let loading = true;
+const subscribedContracts = new Set();
 
 const symbols = [
   "stpRNG",
@@ -35,18 +38,6 @@ const symbols = [
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
-    close: [],
-    open: [],
-    high: [],
-    low: [],
-    haOpen: [],
-    haClose: [],
-    haHigh: [],
-    haLow: [],
-    openTime: 0,
-    tradeTime: 0,
-    trendUp: false,
-    trendDown: false,
     close5: [],
     open5: [],
     high5: [],
@@ -54,24 +45,7 @@ symbols.forEach((s) => {
     openTime5: 0,
     trendUp5: false,
     trendDown5: false,
-    close15: [],
-    open15: [],
-    high15: [],
-    low15: [],
-    openTime15: 0,
-    trendUp15: false,
-    trendDown15: false,
-    close60: [],
-    open60: [],
-    high60: [],
-    low60: [],
-    openTime60: 0,
-    trendUp60: false,
-    trendDown60: false,
-    canOpenTrade: true,
-    canAlert: true,
     canAlert5: true,
-    canAlert60: true,
     multiplier_range: [],
   };
 });
@@ -328,31 +302,7 @@ ws.on("message", async (msg) => {
         ticks_history: s,
         style: "candles",
         count: 500,
-        granularity: 60,
-        end: "latest",
-        subscribe: 1,
-      });
-      send({
-        ticks_history: s,
-        style: "candles",
-        count: 500,
         granularity: 300,
-        end: "latest",
-        subscribe: 1,
-      });
-      send({
-        ticks_history: s,
-        style: "candles",
-        count: 500,
-        granularity: 900,
-        end: "latest",
-        subscribe: 1,
-      });
-      send({
-        ticks_history: s,
-        style: "candles",
-        count: 500,
-        granularity: 3600,
         end: "latest",
         subscribe: 1,
       });
@@ -452,17 +402,18 @@ ws.on("message", async (msg) => {
           loading = true;
         }
       }
-      for (let i = 0; i < positions.length; i++) {
-        // Subscribe once
-        if (!positions[i].subscribed) {
-          send({
-            proposal_open_contract: 1,
-            contract_id: positions[i].contract_id,
-            subscribe: 1,
-          });
+      for (const position of positions) {
+        const id = position.contract_id;
 
-          positions[i].subscribed = true;
-        }
+        if (subscribedContracts.has(id)) continue;
+
+        send({
+          proposal_open_contract: 1,
+          contract_id: id,
+          subscribe: 1,
+        });
+
+        subscribedContracts.add(id);
       }
     } else {
       loading = false;
@@ -501,29 +452,11 @@ ws.on("message", async (msg) => {
       sendMessage("Bot is still running");
     }
     try {
-      if (data.echo_req.granularity === 3600) {
-        md.close60 = data.candles.map((c) => c.close);
-        md.open60 = data.candles.map((c) => c.open);
-        md.high60 = data.candles.map((c) => c.high);
-        md.low60 = data.candles.map((c) => c.low);
-      }
-      if (data.echo_req.granularity === 900) {
-        md.close15 = data.candles.map((c) => c.close);
-        md.open15 = data.candles.map((c) => c.open);
-        md.high15 = data.candles.map((c) => c.high);
-        md.low15 = data.candles.map((c) => c.low);
-      }
       if (data.echo_req.granularity === 300) {
         md.close5 = data.candles.map((c) => c.close);
         md.open5 = data.candles.map((c) => c.open);
         md.high5 = data.candles.map((c) => c.high);
         md.low5 = data.candles.map((c) => c.low);
-      }
-      if (data.echo_req.granularity === 60) {
-        md.close = data.candles.map((c) => c.close);
-        md.open = data.candles.map((c) => c.open);
-        md.high = data.candles.map((c) => c.high);
-        md.low = data.candles.map((c) => c.low);
       }
     } catch (err) {
       sendMessage(err);
@@ -536,116 +469,6 @@ ws.on("message", async (msg) => {
     const symbol = data.echo_req.ticks_history;
     const md = marketData[symbol];
 
-    if (data.echo_req.granularity === 3600) {
-      if (md.openTime60 === 0) {
-        md.openTime60 = data.ohlc.open_time;
-      }
-      if (md.close60.length === 0) {
-        md.close60.push(Number(data.ohlc.close));
-        md.open60.push(Number(data.ohlc.open));
-        md.high60.push(Number(data.ohlc.high));
-        md.low60.push(Number(data.ohlc.low));
-      } else {
-        md.close60[md.close60.length - 1] = Number(data.ohlc.close);
-        md.open60[md.open60.length - 1] = Number(data.ohlc.open);
-        md.high60[md.high60.length - 1] = Number(data.ohlc.high);
-        md.low60[md.low60.length - 1] = Number(data.ohlc.low);
-      }
-
-      const len = md.close60.length;
-      const currIndex = len - 1;
-      const prevIndex = len - 2;
-      const thirdIndex = len - 3;
-      const fourthIndex = len - 4;
-
-      const ema14 = calculateEMA(md.close60, 14);
-      const ema14Then = ema14[prevIndex];
-      const ema14Now = ema14[currIndex];
-
-      const ema21 = calculateEMA(md.close60, 21);
-      const ema21Then = ema21[prevIndex];
-      const ema21Now = ema21[currIndex];
-
-      md.trendUp60 = ema14Now > ema21Now;
-      md.trendDown60 = ema14Now < ema21Now;
-
-      if (md.canAlert60) {
-        if (
-          md.trendUp60 &&
-          crossedEma(md.high60, md.low60, currIndex, ema21) &&
-          recentEmaCross(ema14, ema21, 15) &&
-          bullish(md.open60, md.close60, prevIndex)
-        ) {
-          sendMessage(`Bullish Signal on ${symbol} on 1 hour`);
-          md.canAlert60 = false;
-        }
-        if (
-          md.trendDown60 &&
-          crossedEma(md.high60, md.low60, currIndex, ema21) &&
-          recentEmaCross(ema14, ema21, 15) &&
-          bearish(md.open60, md.close60, prevIndex)
-        ) {
-          sendMessage(`Bearish Signal on ${symbol} on 1 hour`);
-          md.canAlert60 = false;
-        }
-      }
-
-      if (md.openTime60 !== data.ohlc.open_time) {
-        md.openTime60 = data.ohlc.open_time;
-        md.canAlert60 = true;
-        send({
-          ticks_history: data.echo_req.ticks_history,
-          style: "candles",
-          count: 500,
-          granularity: data.echo_req.granularity,
-          end: "latest",
-        });
-      }
-    }
-
-    if (data.echo_req.granularity === 900) {
-      if (md.openTime15 === 0) {
-        md.openTime15 = data.ohlc.open_time;
-      }
-      if (md.close15.length === 0) {
-        md.close15.push(Number(data.ohlc.close));
-        md.open15.push(Number(data.ohlc.open));
-        md.high15.push(Number(data.ohlc.high));
-        md.low15.push(Number(data.ohlc.low));
-      } else {
-        md.close15[md.close15.length - 1] = Number(data.ohlc.close);
-        md.open15[md.open15.length - 1] = Number(data.ohlc.open);
-        md.high15[md.high15.length - 1] = Number(data.ohlc.high);
-        md.low15[md.low15.length - 1] = Number(data.ohlc.low);
-      }
-
-      const len = md.close15.length;
-      const currIndex = len - 1;
-      const prevIndex = len - 2;
-
-      const ema14 = calculateEMA(md.close15, 14);
-      const ema14Then = ema14[prevIndex];
-
-      const ema21 = calculateEMA(md.close15, 21);
-      const ema21Then = ema21[prevIndex];
-
-      md.ema15_14 = ema14;
-      md.ema15_21 = ema21;
-
-      md.trendUp15 = ema14Then > ema21Then;
-      md.trendDown15 = ema14Then < ema21Then;
-
-      if (md.openTime15 !== data.ohlc.open_time) {
-        md.openTime15 = data.ohlc.open_time;
-        send({
-          ticks_history: data.echo_req.ticks_history,
-          style: "candles",
-          count: 500,
-          granularity: data.echo_req.granularity,
-          end: "latest",
-        });
-      }
-    }
     if (data.echo_req.granularity === 300) {
       const matchingPositions = positions.filter((p) => p?.name === symbol);
       const riskyPosition = matchingPositions.find((p) => p.stoploss === 0);
@@ -758,74 +581,6 @@ ws.on("message", async (msg) => {
       if (md.openTime5 !== data.ohlc.open_time) {
         md.openTime5 = data.ohlc.open_time;
         md.canAlert5 = true;
-        send({
-          ticks_history: data.echo_req.ticks_history,
-          style: "candles",
-          count: 500,
-          granularity: data.echo_req.granularity,
-          end: "latest",
-        });
-      }
-    }
-
-    if (data.echo_req.granularity === 60 && symbol === "1HZ75V") {
-      if (md.openTime === 0) {
-        md.openTime = data.ohlc.open_time;
-      }
-      if (md.close.length === 0) {
-        md.close.push(Number(data.ohlc.close));
-        md.open.push(Number(data.ohlc.open));
-        md.high.push(Number(data.ohlc.high));
-        md.low.push(Number(data.ohlc.low));
-      } else {
-        md.close[md.close.length - 1] = Number(data.ohlc.close);
-        md.open[md.open.length - 1] = Number(data.ohlc.open);
-        md.high[md.high.length - 1] = Number(data.ohlc.high);
-        md.low[md.low.length - 1] = Number(data.ohlc.low);
-      }
-
-      const len = md.close.length;
-      const len15 = md.close15.length;
-      const currIndex = len - 1;
-      const prevIndex = len - 2;
-      const thirdIndex = len - 3;
-      const fourthIndex = len - 4;
-
-      const ema14 = calculateEMA(md.close, 14);
-      const ema14Then = ema14[prevIndex];
-      const ema14Now = ema14[currIndex];
-
-      const ema21 = calculateEMA(md.close, 21);
-      const ema21Then = ema21[prevIndex];
-      const ema21Now = ema21[currIndex];
-
-      md.trendUp = ema14Now > ema21Now;
-      md.trendDown = ema14Now < ema21Now;
-
-      if (md.canAlert) {
-        if (
-          md.trendUp &&
-          crossedEma(md.high, md.low, currIndex, ema21) &&
-          recentEmaCross(ema14, ema21, 15) &&
-          bullish(md.open, md.close, prevIndex)
-        ) {
-          sendMessage(`Bullish Signal on ${symbol} on 1 minute`);
-          md.canAlert = false;
-        }
-        if (
-          md.trendDown &&
-          crossedEma(md.high, md.low, currIndex, ema21) &&
-          recentEmaCross(ema14, ema21, 15) &&
-          bearish(md.open, md.close, prevIndex)
-        ) {
-          sendMessage(`Bearish Signal on ${symbol} on 1 minute`);
-          md.canAlert = false;
-        }
-      }
-
-      if (md.openTime !== data.ohlc.open_time) {
-        md.openTime = data.ohlc.open_time;
-        md.canAlert = true;
         send({
           ticks_history: data.echo_req.ticks_history,
           style: "candles",
@@ -961,31 +716,7 @@ ws.on("message", async (msg) => {
           ticks_history: s,
           style: "candles",
           count: 500,
-          granularity: 60,
-          end: "latest",
-          subscribe: 1,
-        });
-        send({
-          ticks_history: s,
-          style: "candles",
-          count: 500,
           granularity: 300,
-          end: "latest",
-          subscribe: 1,
-        });
-        send({
-          ticks_history: s,
-          style: "candles",
-          count: 500,
-          granularity: 900,
-          end: "latest",
-          subscribe: 1,
-        });
-        send({
-          ticks_history: s,
-          style: "candles",
-          count: 500,
-          granularity: 3600,
           end: "latest",
           subscribe: 1,
         });
