@@ -3,9 +3,9 @@ import express from "express";
 import cors from "cors";
 import axios from "axios";
 import { MongoClient } from "mongodb";
-import process from "node:process";
+import dotenv from "dotenv";
 
-process.loadEnvFile();
+dotenv.config();
 const app = express();
 
 const API_TOKEN = process.env.API_TOKEN
