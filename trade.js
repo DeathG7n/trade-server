@@ -8,12 +8,16 @@ import dotenv from "dotenv";
 dotenv.config();
 const app = express();
 
+// eslint-disable-next-line no-undef
 const API_TOKEN = process.env.API_TOKEN;
 let ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=36807");
 
+// eslint-disable-next-line no-undef
 const BOT_TOKEN = process.env.BOT_TOKEN;
+// eslint-disable-next-line no-undef
 const CHAT_ID = process.env.CHAT_ID;
 
+// eslint-disable-next-line no-undef
 const uri = process.env.MONGODB_URI;
 const client = new MongoClient(uri);
 
