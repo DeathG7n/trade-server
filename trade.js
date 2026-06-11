@@ -196,7 +196,7 @@ function buyMultiplier(direction, symbol, stake, multiplier) {
       currency: "USD",
       symbol: symbol,
       multiplier: multiplier,
-      limit_order: { stop_loss: stake / 2.5, take_profit: stake * 1.2 },
+      limit_order: { stop_loss: stake / 2.5, take_profit: stake * 5 },
     },
   });
 }
@@ -468,11 +468,11 @@ ws.on("message", async (msg) => {
       const ema14 = calculateEMA(md.close60, 14);
       const ema14Now = ema14[currIndex];
 
-      const ema21 = calculateEMA(md.close60, 21);
-      const ema21Now = ema21[currIndex];
+      const ema9 = calculateEMA(md.close60, 9);
+      const ema9Now = ema9[currIndex];
 
-      md.trendUp60 = ema14Now > ema21Now;
-      md.trendDown60 = ema14Now < ema21Now;
+      md.trendUp60 = ema9Now > ema14Now;
+      md.trendDown60 = ema9Now < ema14Now;
 
       if (md.openTime60 !== data.ohlc.open_time) {
         md.openTime60 = data.ohlc.open_time;
@@ -627,10 +627,24 @@ ws.on("message", async (msg) => {
         update(position.stoploss, id, symbol);
       }
       if (
-        profit >= Math.abs(lossAmount * 2) &&
+        profit >= Math.abs(lossAmount * 2) && //0.8
         position.stoploss === Math.abs(commission)
       ) {
-        position.stoploss = Math.abs(lossAmount);
+        position.stoploss = Math.abs(lossAmount); //0.4
+        update(position.stoploss, id, symbol);
+      }
+      if (
+        profit >= Math.abs(lossAmount * 5) && //2
+        position.stoploss === Math.abs(lossAmount) //0.4
+      ) {
+        position.stoploss = Math.abs(lossAmount * 2.5); //1
+        update(position.stoploss, id, symbol);
+      }
+      if (
+        profit >= Math.abs(lossAmount * 10) && //4
+        position.stoploss === Math.abs(lossAmount * 2.5) //1
+      ) {
+        position.stoploss = Math.abs(lossAmount * 5); //2
         update(position.stoploss, id, symbol);
       }
       if (position && position.stoploss !== 0 && profit <= position.stoploss) {
