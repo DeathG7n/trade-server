@@ -196,7 +196,7 @@ function buyMultiplier(direction, symbol, stake, multiplier) {
       currency: "USD",
       symbol: symbol,
       multiplier: multiplier,
-      limit_order: { stop_loss: stake / 2.5, take_profit: stake * 5 },
+      limit_order: { stop_loss: stake / 2.5, take_profit: stake * 2.5 },
     },
   });
 }
