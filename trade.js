@@ -491,7 +491,7 @@ ws.on("message", async (msg) => {
 
     if (data.echo_req.granularity === 300) {
       const matchingPositions = positions.filter((p) => p?.name === symbol);
-      // const riskyPosition = matchingPositions.find((p) => p.stoploss === 0);
+      const riskyPosition = matchingPositions.find((p) => p.stoploss === 0);
       if (md.openTime5 === 0) {
         md.openTime5 = data.ohlc.open_time;
       }
@@ -520,7 +520,7 @@ ws.on("message", async (msg) => {
       md.trendUp5 = ema14Now > ema21Now;
       md.trendDown5 = ema14Now < ema21Now;
 
-      if (positions.length <= positionsLimit) {
+      if (!riskyPosition && positions.length < positionsLimit) {
         if (
           md.trendUp60 &&
           md.trendUp5 &&
