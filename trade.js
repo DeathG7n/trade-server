@@ -21,8 +21,6 @@ const CHAT_ID = process.env.CHAT_ID;
 const uri = process.env.MONGODB_URI;
 const client = new MongoClient(uri);
 
-let positionsLimit = null
-
 let positions = [];
 let count = 0;
 let amount = null;
@@ -293,46 +291,32 @@ ws.on("message", async (msg) => {
     balance = Math.trunc(balance);
     if (isNumberBetween(balance, 1, 6)) {
       amount = 1;
-      positionsLimit = 1
     } else if (isNumberBetween(balance, 7, 13)) {
       amount = 2;
-      positionsLimit = 2
     } else if (isNumberBetween(balance, 14, 27)) {
       amount = 4;
-      positionsLimit = 2
     } else if (isNumberBetween(balance, 28, 59)) {
       amount = 8;
-      positionsLimit = 2
     } else if (isNumberBetween(balance, 60, 119)) {
       amount = 10;
-      positionsLimit = 4
     } else if (isNumberBetween(balance, 120, 239)) {
       amount = 20;
-      positionsLimit = 4
     } else if (isNumberBetween(balance, 240, 479)) {
       amount = 40;
-      positionsLimit = 5
     } else if (isNumberBetween(balance, 480, 599)) {
       amount = 80;
-      positionsLimit = 5
     } else if (isNumberBetween(balance, 600, 1199)) {
       amount = 100;
-      positionsLimit = 10
     } else if (isNumberBetween(balance, 1200, 2399)) {
       amount = 200;
-      positionsLimit = 10
     } else if (isNumberBetween(balance, 2400, 4799)) {
       amount = 400;
-      positionsLimit = 10
     } else if (isNumberBetween(balance, 4800, 5999)) {
       amount = 800;
-      positionsLimit = 10
     } else if (isNumberBetween(balance, 6000, 11999)) {
       amount = 1000;
-      positionsLimit = 10
     } else if (balance >= 12000) {
       amount = 2000;
-      positionsLimit = 20
     }
     send({ portfolio: 1 });
   }
@@ -504,7 +488,7 @@ ws.on("message", async (msg) => {
 
     if (data.echo_req.granularity === 300) {
       const matchingPositions = positions.filter((p) => p?.name === symbol);
-      const riskyPosition = matchingPositions.find((p) => p.stoploss === 0);
+      const riskyPosition = positions.find((p) => p.stoploss === 0);
       if (md.openTime5 === 0) {
         md.openTime5 = data.ohlc.open_time;
       }
@@ -533,7 +517,7 @@ ws.on("message", async (msg) => {
       md.trendUp5 = ema14Now > ema21Now;
       md.trendDown5 = ema14Now < ema21Now;
 
-      if (!riskyPosition && positions.length < positionsLimit) {
+      if (!riskyPosition) {
         if (
           md.trendUp60 &&
           md.trendUp5 &&
