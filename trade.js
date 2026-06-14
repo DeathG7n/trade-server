@@ -24,6 +24,7 @@ const client = new MongoClient(uri);
 let positions = [];
 let count = 0;
 let amount = null;
+let balance = null;
 let now = new Date();
 let connection = false;
 let authorized = false;
@@ -285,7 +286,7 @@ ws.on("message", async (msg) => {
   }
 
   if (data.msg_type === "balance") {
-    let balance = data.balance.balance;
+    balance = data.balance.balance;
     sendMessage(`💸 Balance is currently ${balance}`);
     console.log(`💸 Balance is currently ${balance}`);
     balance = Math.trunc(balance);
@@ -517,7 +518,7 @@ ws.on("message", async (msg) => {
       md.trendUp5 = ema14Now > ema21Now;
       md.trendDown5 = ema14Now < ema21Now;
 
-      if (!riskyPosition) {
+      if (!riskyPosition && Math.trunc(balance) !== 0) {
         if (
           md.trendUp60 &&
           md.trendUp5 &&
