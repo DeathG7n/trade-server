@@ -4,14 +4,15 @@ import cors from "cors";
 import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
+import { wsUrl } from "./server.js";
 
 dotenv.config();
 const app = express();
 
+let ws = new WebSocket(wsUrl);
+
 // eslint-disable-next-line no-undef
 const API_TOKEN = process.env.API_TOKEN;
-let ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=36807");
-
 // eslint-disable-next-line no-undef
 const BOT_TOKEN = process.env.BOT_TOKEN;
 // eslint-disable-next-line no-undef
@@ -37,19 +38,19 @@ const symbols = [
   "stpRNG3",
   "stpRNG4",
   "stpRNG5",
-  "R_10",
-  "1HZ10V",
-  "1HZ15V",
-  "R_25",
-  "1HZ25V",
-  "1HZ30V",
-  "R_50",
-  "1HZ50V",
-  "R_75",
-  "1HZ75V",
-  "1HZ90V",
-  "R_100",
-  "1HZ100V",
+  // "R_10",
+  // "1HZ10V",
+  // "1HZ15V",
+  // "R_25",
+  // "1HZ25V",
+  // "1HZ30V",
+  // "R_50",
+  // "1HZ50V",
+  // "R_75",
+  // "1HZ75V",
+  // "1HZ90V",
+  // "R_100",
+  // "1HZ100V",
 ];
 let marketData = {};
 symbols.forEach((s) => {
@@ -249,10 +250,11 @@ connect();
 
 ws.on("open", () => {
   console.log("🔌 Connected");
-  setInterval(() => {
+  const interval = setInterval(() => {
     if (authorized) {
       send({ authorize: API_TOKEN });
       authorized = false;
+      clearInterval(interval);
     }
   }, 1000);
 });
@@ -489,7 +491,7 @@ ws.on("message", async (msg) => {
 
     if (data.echo_req.granularity === 300) {
       const matchingPositions = positions.filter((p) => p?.name === symbol);
-      const riskyPosition = positions.find((p) => p.stoploss === 0);
+      const riskyPosition = matchingPositions.find((p) => p.stoploss === 0);
       if (md.openTime5 === 0) {
         md.openTime5 = data.ohlc.open_time;
       }
