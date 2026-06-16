@@ -5,9 +5,11 @@ dotenv.config();
 const API_TOKEN = process.env.API_TOKEN;
 // eslint-disable-next-line no-undef
 const APP_ID = process.env.APP_ID;
+// eslint-disable-next-line no-undef
+const ACCOUNT_ID = process.env.ACCOUNT_ID;
 
 const otpResponse = await fetch(
-  `https://api.derivws.com/trading/v1/options/accounts/ROT92021895/otp`,
+  `https://api.derivws.com/trading/v1/options/accounts/${ACCOUNT_ID}/otp`,
   {
     method: "POST",
     headers: {

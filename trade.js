@@ -186,20 +186,32 @@ const sendMessage = async (message) => {
   }
 };
 
-function buyMultiplier(direction, symbol, stake, multiplier) {
+async function getProposal(direction, symbol, stake, multiplier) {
+  const request = {
+    proposal: 1,
+    amount: stake,
+    contract_type: direction,
+    currency: "USD",
+    underlying_symbol: symbol,
+    multiplier: multiplier,
+    basis: "stake",
+    limit_order: { stop_loss: stake / 2.5, take_profit: stake * 1.2 },
+  };
+  ws.send(JSON.stringify(request));
+
+  ws.onmessage = (event) => {
+    const response = JSON.parse(event.data);
+    if (response.msg_type === "proposal") {
+      return response;
+    }
+  };
+}
+
+function buyMultiplier(direction, id, stake) {
   console.log(`📈 Buying ${direction} multiplier...`);
   send({
-    buy: 1,
+    buy: id,
     price: stake,
-    parameters: {
-      amount: stake,
-      basis: "stake",
-      contract_type: direction,
-      currency: "USD",
-      symbol: symbol,
-      multiplier: multiplier,
-      limit_order: { stop_loss: stake / 2.5, take_profit: stake * 1.2 },
-    },
   });
 }
 
@@ -350,7 +362,7 @@ ws.on("message", async (msg) => {
       let ticker = 0;
       for (const contract of data.portfolio.contracts) {
         const asset = {
-          name: contract.symbol,
+          name: contract.underlying_symbol,
           contract_id: contract.contract_id,
           stoploss: 0,
           date_start: contract.date_start,
@@ -528,7 +540,7 @@ ws.on("message", async (msg) => {
           recentEmaCross(ema14, ema21, 15) &&
           bullish(md.open5, md.close5, prevIndex)
         ) {
-          buyMultiplier(
+          await getProposal(
             "MULTUP",
             data?.echo_req?.ticks_history,
             amount,
@@ -543,7 +555,7 @@ ws.on("message", async (msg) => {
           recentEmaCross(ema14, ema21, 15) &&
           bearish(md.open5, md.close5, prevIndex)
         ) {
-          buyMultiplier(
+          await getProposal(
             "MULTDOWN",
             data?.echo_req?.ticks_history,
             amount,
@@ -593,11 +605,18 @@ ws.on("message", async (msg) => {
       }
     }
   }
+  if (data.msg_type === "proposal") {
+    buyMultiplier(
+      data?.echo_req?.contract_type,
+      data?.proposal?.id,
+      data?.proposal?.ask_price,
+    );
+  }
 
   if (data.msg_type === "proposal_open_contract" && !loading) {
-    const id = data?.echo_req?.contract_id;
+    const id = data?.echo_req?.contract_id; 
     const position = positions.find((p) => p.contract_id === id);
-    const symbol = data.proposal_open_contract?.underlying;
+    const symbol = data.proposal_open_contract?.underlying_symbol;
     const commission = data.proposal_open_contract?.commission;
     const multiplier = data.proposal_open_contract?.multiplier;
     const type = data.proposal_open_contract?.contract_type;
@@ -667,7 +686,7 @@ ws.on("message", async (msg) => {
       profitAmount: profitAmount,
       gain: gain,
       risk: risk,
-      stopLoss: position.stoploss,
+      stopLoss: position?.stoploss,
       symbol: symbol,
       type: type,
     };
@@ -678,21 +697,14 @@ ws.on("message", async (msg) => {
       sendMessage(JSON.stringify(runningTrade, null, 2));
     }
     console.log(runningTrade);
-    if (!symbols.includes(symbol)) {
-      closePosition(symbol, position.contract_id, `Stop Loss Hit`);
-    }
+    // if (!symbols.includes(symbol)) {
+    //   closePosition(symbol, position.contract_id, `Stop Loss Hit`);
+    // }
   }
 
   if (data.msg_type === "buy") {
-    const symbol = data.echo_req.parameters.symbol;
-
-    sendMessage(
-      `${data.echo_req.parameters.contract_type} position entered on ${symbol}`,
-    );
-
-    console.log(
-      `🟢 Entered ${data.echo_req.parameters.contract_type} position on ${symbol}, Contract ID: ${data.buy.contract_id}`,
-    );
+    sendMessage(`${data?.buy?.shortcode}`);
+    console.log(`🟢 ${data?.buy?.shortcode}`);
   }
 
   if (data.msg_type === "sell") {
@@ -716,6 +728,7 @@ ws.on("message", async (msg) => {
 
     console.log(`Deleted closed contract ${contract_id}`);
   }
+
   if (data.msg_type === "contract_update") {
     const position = positions.find(
       (p) => p.contract_id === data.echo_req.contract_id,
