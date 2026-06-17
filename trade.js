@@ -342,7 +342,7 @@ ws.on("message", async (msg) => {
     sendMessage(`💸 Balance is currently ${balance}`);
     console.log(`💸 Balance is currently ${balance}`);
     balance = Math.trunc(balance);
-    if (isNumberBetween(balance, 1, 6)) {
+    if (isNumberBetween(balance, 0, 6)) {
       amount = 1;
     } else if (isNumberBetween(balance, 7, 13)) {
       amount = 2;
