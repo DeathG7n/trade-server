@@ -728,7 +728,7 @@ ws.on("message", async (msg) => {
       md.trendUp = ema14Now > ema21Now;
       md.trendDown = ema14Now < ema21Now;
 
-      if (touchPositions < 0) {
+      if (touchPositions.length === 0) {
         if (
           md.trendUp15 &&
           md.trendUp &&
@@ -736,7 +736,7 @@ ws.on("message", async (msg) => {
           recentEmaCross(ema14, ema21, 15) &&
           bullish(md.open, md.close, prevIndex)
         ) {
-          await getTouchProposal("+300", data?.echo_req?.ticks_history, amount);
+          await getTouchProposal("+330", data?.echo_req?.ticks_history, amount);
           loading = true;
         }
         if (
@@ -746,7 +746,7 @@ ws.on("message", async (msg) => {
           recentEmaCross(ema14, ema21, 15) &&
           bearish(md.open, md.close, prevIndex)
         ) {
-          await getTouchProposal("-300", data?.echo_req?.ticks_history, amount);
+          await getTouchProposal("-330", data?.echo_req?.ticks_history, amount);
           loading = true;
         }
       }
@@ -796,12 +796,15 @@ ws.on("message", async (msg) => {
     const gain =
       type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
     const profit = data.proposal_open_contract?.profit;
+    const duration =
+      data?.proposal_open_contract?.current_spot_time -
+      data?.proposal_open_contract?.date_start;
     if (position) {
       position.subscribed = true;
       position.profit = profit;
     }
 
-    if (connection) {
+    if (connection && type !== "ONETOUCH") {
       if (profit >= Math.abs(lossAmount) && position.stoploss === 0) {
         position.stoploss = Math.abs(commission);
         update(position.stoploss, id, symbol);
@@ -834,6 +837,10 @@ ws.on("message", async (msg) => {
       }
     }
 
+    if (connection && type === "ONETOUCH" && duration >= 1050) {
+      closePosition(symbol, position?.contract_id, `Time exceeded`);
+    }
+
     const runningTrade = {
       multiplier: multiplier,
       pip: pip,
@@ -848,18 +855,11 @@ ws.on("message", async (msg) => {
       symbol: symbol,
       type: type,
     };
-    const duration =
-      data?.proposal_open_contract?.current_spot_time -
-      data?.proposal_open_contract?.date_start;
+
     if (duration === 2) {
       sendMessage(JSON.stringify(runningTrade, null, 2));
     }
-    if (
-      type === "ONETOUCH" &&
-      duration > 18
-    ) {
-      closePosition(symbol, position.contract_id, `Stop Loss Hit`);
-    }
+
     console.log(runningTrade);
     // if (!symbols.includes(symbol)) {
     //   closePosition(symbol, position.contract_id, `Stop Loss Hit`);
