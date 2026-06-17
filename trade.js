@@ -310,14 +310,14 @@ ws.on("message", async (msg) => {
         end: "latest",
         subscribe: 1,
       });
-      send({
-        ticks_history: s,
-        style: "candles",
-        count: 500,
-        granularity: 300,
-        end: "latest",
-        subscribe: 1,
-      });
+      // send({
+      //   ticks_history: s,
+      //   style: "candles",
+      //   count: 500,
+      //   granularity: 300,
+      //   end: "latest",
+      //   subscribe: 1,
+      // });
       send({
         ticks_history: s,
         style: "candles",
@@ -326,14 +326,14 @@ ws.on("message", async (msg) => {
         end: "latest",
         subscribe: 1,
       });
-      send({
-        ticks_history: s,
-        style: "candles",
-        count: 500,
-        granularity: 3600,
-        end: "latest",
-        subscribe: 1,
-      });
+      // send({
+      //   ticks_history: s,
+      //   style: "candles",
+      //   count: 500,
+      //   granularity: 3600,
+      //   end: "latest",
+      //   subscribe: 1,
+      // });
     });
   }
 
