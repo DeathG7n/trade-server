@@ -182,6 +182,8 @@ const sendMessage = async (message) => {
 };
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
+  const stopLoss = stake / 5
+  const takeProfit = stopLoss * 3
   const request = {
     proposal: 1,
     amount: stake,
@@ -190,7 +192,7 @@ async function getMultiProposal(direction, symbol, stake, multiplier) {
     underlying_symbol: symbol,
     multiplier: multiplier,
     basis: "stake",
-    limit_order: { stop_loss: stake / 10, take_profit: stake / 2.5 },
+    limit_order: { stop_loss: stopLoss, take_profit: takeProfit },
   };
   ws.send(JSON.stringify(request));
 }
@@ -534,7 +536,7 @@ try {
           });
         }
       }
-      if (data.echo_req.granularity === 900 && symbol === "R_75") {
+      if (data.echo_req.granularity === 900) {
         if (md.openTime15 === 0) {
           md.openTime15 = data.ohlc.open_time;
         }
@@ -723,8 +725,9 @@ try {
         md.trendUp = ema9Now > ema14Now;
         md.trendDown = ema9Now < ema14Now;
 
-        if (!riskyPosition && md.canTrade) {
+        if (!riskyPosition) {
           if (
+            md.trendUp15 &&
             md.trendUp &&
             crossedEma(md.high, md.low, prevIndex, ema14) &&
             recentEmaCross(ema9, ema14, 15) &&
@@ -740,6 +743,7 @@ try {
             md.canTrade = false;
           }
           if (
+            md.trendDown15 &&
             md.trendDown &&
             crossedEma(md.high, md.low, prevIndex, ema14) &&
             recentEmaCross(ema9, ema14, 15) &&
@@ -759,6 +763,7 @@ try {
         for (const contract of multiplierPositions) {
           if (contract?.type === "MULTUP") {
             if (
+              md.trendDown15 &&
               md.trendDown &&
               crossedEma(md.high, md.low, prevIndex, ema14) &&
               recentEmaCross(ema9, ema14, 15) &&
@@ -770,6 +775,7 @@ try {
           }
           if (contract?.type === "MULTDOWN") {
             if (
+              md.trendUp15 &&
               md.trendUp &&
               crossedEma(md.high, md.low, prevIndex, ema14) &&
               recentEmaCross(ema9, ema14, 15) &&
