@@ -43,28 +43,6 @@ symbols.forEach((s) => {
     openTime: 0,
     trendUp: false,
     trendDown: false,
-    close5: [],
-    open5: [],
-    high5: [],
-    low5: [],
-    openTime5: 0,
-    trendUp5: false,
-    trendDown5: false,
-    close15: [],
-    open15: [],
-    high15: [],
-    low15: [],
-    openTime15: 0,
-    trendUp15: false,
-    trendDown15: false,
-    close60: [],
-    open60: [],
-    high60: [],
-    low60: [],
-    openTime60: 0,
-    trendUp60: false,
-    trendDown60: false,
-    canTrade: true,
     multiplier_range: [],
   };
 });
@@ -90,34 +68,6 @@ function bullish(open, close, candle) {
 function crossedEma(high, low, candle, ema) {
   return high[candle] > ema[candle] && ema[candle] > low[candle];
 }
-
-// function candleCrossesEitherEMA(index, ema1, ema2, high, low) {
-//   return (
-//     crossedEma(high, low, index, ema1) || crossedEma(high, low, index, ema2)
-//   );
-// }
-
-// function detectCrossover(emaFast, emaSlow) {
-//   const len = emaFast.length;
-
-//   if (len < 3) return null;
-
-//   const prevFast = emaFast[len - 3];
-//   const prevSlow = emaSlow[len - 3];
-
-//   const currFast = emaFast[len - 2];
-//   const currSlow = emaSlow[len - 2];
-
-//   if (prevFast <= prevSlow && currFast > currSlow) {
-//     return "bullish";
-//   }
-
-//   if (prevFast >= prevSlow && currFast < currSlow) {
-//     return "bearish";
-//   }
-
-//   return null;
-// }
 
 function recentEmaCross(emaFast, emaSlow, lookback = 15) {
   const len = emaFast.length;
@@ -182,8 +132,8 @@ const sendMessage = async (message) => {
 };
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 5
-  const takeProfit = stopLoss * 2
+  const stopLoss = stake / 5;
+  const takeProfit = stopLoss ;
   const request = {
     proposal: 1,
     amount: stake,
@@ -193,21 +143,6 @@ async function getMultiProposal(direction, symbol, stake, multiplier) {
     multiplier: multiplier,
     basis: "stake",
     limit_order: { stop_loss: stopLoss, take_profit: takeProfit },
-  };
-  ws.send(JSON.stringify(request));
-}
-
-async function getTouchProposal(barrier, symbol, stake) {
-  const request = {
-    proposal: 1,
-    amount: stake * 0.35,
-    barrier: barrier,
-    basis: "stake",
-    contract_type: "ONETOUCH",
-    currency: "USD",
-    duration: 20,
-    duration_unit: "m",
-    underlying_symbol: symbol,
   };
   ws.send(JSON.stringify(request));
 }
@@ -294,30 +229,6 @@ try {
           end: "latest",
           subscribe: 1,
         });
-        // send({
-        //   ticks_history: s,
-        //   style: "candles",
-        //   count: 500,
-        //   granularity: 300,
-        //   end: "latest",
-        //   subscribe: 1,
-        // });
-        send({
-          ticks_history: s,
-          style: "candles",
-          count: 500,
-          granularity: 900,
-          end: "latest",
-          subscribe: 1,
-        });
-        // send({
-        //   ticks_history: s,
-        //   style: "candles",
-        //   count: 500,
-        //   granularity: 3600,
-        //   end: "latest",
-        //   subscribe: 1,
-        // });
       });
     }
 
@@ -461,24 +372,6 @@ try {
         sendMessage("Bot is still running");
       }
       try {
-        if (data.echo_req.granularity === 3600) {
-          md.close60 = data.candles.map((c) => c.close);
-          md.open60 = data.candles.map((c) => c.open);
-          md.high60 = data.candles.map((c) => c.high);
-          md.low60 = data.candles.map((c) => c.low);
-        }
-        if (data.echo_req.granularity === 900) {
-          md.close15 = data.candles.map((c) => c.close);
-          md.open15 = data.candles.map((c) => c.open);
-          md.high15 = data.candles.map((c) => c.high);
-          md.low15 = data.candles.map((c) => c.low);
-        }
-        if (data.echo_req.granularity === 300) {
-          md.close5 = data.candles.map((c) => c.close);
-          md.open5 = data.candles.map((c) => c.open);
-          md.high5 = data.candles.map((c) => c.high);
-          md.low5 = data.candles.map((c) => c.low);
-        }
         if (data.echo_req.granularity === 60) {
           md.close = data.candles.map((c) => c.close);
           md.open = data.candles.map((c) => c.open);
@@ -497,209 +390,15 @@ try {
       const md = marketData[symbol];
       const matchingPositions = positions.filter((p) => p?.name === symbol);
 
-      if (data.echo_req.granularity === 3600 && symbol !== "R_75") {
-        if (md.openTime60 === 0) {
-          md.openTime60 = data.ohlc.open_time;
-        }
-        if (md.close60.length === 0) {
-          md.close60.push(Number(data.ohlc.close));
-          md.open60.push(Number(data.ohlc.open));
-          md.high60.push(Number(data.ohlc.high));
-          md.low60.push(Number(data.ohlc.low));
-        } else {
-          md.close60[md.close60.length - 1] = Number(data.ohlc.close);
-          md.open60[md.open60.length - 1] = Number(data.ohlc.open);
-          md.high60[md.high60.length - 1] = Number(data.ohlc.high);
-          md.low60[md.low60.length - 1] = Number(data.ohlc.low);
-        }
-
-        const len = md.close60.length;
-        const currIndex = len - 1;
-
-        const ema14 = calculateEMA(md.close60, 14);
-        const ema14Now = ema14[currIndex];
-
-        const ema9 = calculateEMA(md.close60, 9);
-        const ema9Now = ema9[currIndex];
-
-        md.trendUp60 = ema9Now > ema14Now;
-        md.trendDown60 = ema9Now < ema14Now;
-
-        if (md.openTime60 !== data.ohlc.open_time) {
-          md.openTime60 = data.ohlc.open_time;
-          send({
-            ticks_history: data.echo_req.ticks_history,
-            style: "candles",
-            count: 500,
-            granularity: data.echo_req.granularity,
-            end: "latest",
-          });
-        }
-      }
-      if (data.echo_req.granularity === 900) {
-        if (md.openTime15 === 0) {
-          md.openTime15 = data.ohlc.open_time;
-        }
-        if (md.close15.length === 0) {
-          md.close15.push(Number(data.ohlc.close));
-          md.open15.push(Number(data.ohlc.open));
-          md.high15.push(Number(data.ohlc.high));
-          md.low15.push(Number(data.ohlc.low));
-        } else {
-          md.close15[md.close15.length - 1] = Number(data.ohlc.close);
-          md.open15[md.open15.length - 1] = Number(data.ohlc.open);
-          md.high15[md.high15.length - 1] = Number(data.ohlc.high);
-          md.low15[md.low15.length - 1] = Number(data.ohlc.low);
-        }
-
-        const len = md.close15.length;
-        const currIndex = len - 1;
-
-        const ema14 = calculateEMA(md.close15, 14);
-        const ema14Now = ema14[currIndex];
-
-        const ema21 = calculateEMA(md.close15, 21);
-        const ema21Now = ema21[currIndex];
-
-        md.trendUp15 = ema14Now > ema21Now;
-        md.trendDown15 = ema14Now < ema21Now;
-
-        if (md.openTime15 !== data.ohlc.open_time) {
-          md.openTime15 = data.ohlc.open_time;
-          send({
-            ticks_history: data.echo_req.ticks_history,
-            style: "candles",
-            count: 500,
-            granularity: data.echo_req.granularity,
-            end: "latest",
-          });
-        }
-      }
-
-      if (data.echo_req.granularity === 300 && symbol !== "R_75") {
-        const multiplierPositions = matchingPositions.filter(
-          (p) => p.type !== "ONETOUCH",
-        );
-        const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
-        if (md.openTime5 === 0) {
-          md.openTime5 = data.ohlc.open_time;
-        }
-        if (md.close5.length === 0) {
-          md.close5.push(Number(data.ohlc.close));
-          md.open5.push(Number(data.ohlc.open));
-          md.high5.push(Number(data.ohlc.high));
-          md.low5.push(Number(data.ohlc.low));
-        } else {
-          md.close5[md.close5.length - 1] = Number(data.ohlc.close);
-          md.open5[md.open5.length - 1] = Number(data.ohlc.open);
-          md.high5[md.high5.length - 1] = Number(data.ohlc.high);
-          md.low5[md.low5.length - 1] = Number(data.ohlc.low);
-        }
-
-        const len = md.close5.length;
-        const currIndex = len - 1;
-        const prevIndex = len - 2;
-
-        const ema14 = calculateEMA(md.close5, 14);
-        const ema14Now = ema14[currIndex];
-
-        const ema21 = calculateEMA(md.close5, 21);
-        const ema21Now = ema21[currIndex];
-
-        md.trendUp5 = ema14Now > ema21Now;
-        md.trendDown5 = ema14Now < ema21Now;
-
-        if (!riskyPosition && Math.trunc(balance) !== 0) {
-          if (
-            md.trendUp60 &&
-            md.trendUp5 &&
-            crossedEma(md.high5, md.low5, prevIndex, ema21) &&
-            recentEmaCross(ema14, ema21, 15) &&
-            bullish(md.open5, md.close5, prevIndex)
-          ) {
-            await getMultiProposal(
-              "MULTUP",
-              data?.echo_req?.ticks_history,
-              amount,
-              md.multiplier_range[0],
-            );
-            loading = true;
-          }
-          if (
-            md.trendDown60 &&
-            md.trendDown5 &&
-            crossedEma(md.high5, md.low5, prevIndex, ema21) &&
-            recentEmaCross(ema14, ema21, 15) &&
-            bearish(md.open5, md.close5, prevIndex)
-          ) {
-            await getMultiProposal(
-              "MULTDOWN",
-              data?.echo_req?.ticks_history,
-              amount,
-              md.multiplier_range[0],
-            );
-            loading = true;
-          }
-        } else {
-          for (const contract of multiplierPositions) {
-            if (contract?.type === "MULTUP") {
-              if (
-                md.trendDown60 &&
-                md.trendDown5 &&
-                crossedEma(md.high5, md.low5, prevIndex, ema21) &&
-                recentEmaCross(ema14, ema21, 15) &&
-                bearish(md.open5, md.close5, prevIndex)
-              ) {
-                contract.contract_id &&
-                  closePosition(
-                    symbol,
-                    contract.contract_id,
-                    `Opposite Signal`,
-                  );
-              }
-            }
-            if (contract?.type === "MULTDOWN") {
-              if (
-                md.trendUp60 &&
-                md.trendUp5 &&
-                crossedEma(md.high5, md.low5, prevIndex, ema21) &&
-                recentEmaCross(ema14, ema21, 15) &&
-                bullish(md.open5, md.close5, prevIndex)
-              ) {
-                contract.contract_id &&
-                  closePosition(
-                    symbol,
-                    contract.contract_id,
-                    `Opposite Signal`,
-                  );
-              }
-            }
-          }
-        }
-
-        if (md.openTime5 !== data.ohlc.open_time) {
-          md.openTime5 = data.ohlc.open_time;
-          md.canAlert5 = true;
-          send({
-            ticks_history: data.echo_req.ticks_history,
-            style: "candles",
-            count: 500,
-            granularity: data.echo_req.granularity,
-            end: "latest",
-          });
-        }
-      }
       if (data.echo_req.granularity === 60) {
-        const multiplierPositions = matchingPositions.filter(
-          (p) => p.type !== "ONETOUCH",
-        );
-        const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
-        const touchPositions = matchingPositions.filter(
-          (p) => p.type === "ONETOUCH",
-        );
         if (md.openTime === 0) {
           md.openTime = data.ohlc.open_time;
         }
+        const multiplierPositions = matchingPositions.filter(
+          (p) => p.type !== "ONETOUCH",
+        );
+        const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
+
         if (md.close.length === 0) {
           md.close.push(Number(data.ohlc.close));
           md.open.push(Number(data.ohlc.open));
@@ -727,7 +426,6 @@ try {
 
         if (!riskyPosition) {
           if (
-            md.trendUp15 &&
             md.trendUp &&
             crossedEma(md.high, md.low, prevIndex, ema14) &&
             recentEmaCross(ema9, ema14, 15) &&
@@ -740,10 +438,8 @@ try {
               md.multiplier_range[0],
             );
             loading = true;
-            md.canTrade = false;
           }
           if (
-            md.trendDown15 &&
             md.trendDown &&
             crossedEma(md.high, md.low, prevIndex, ema14) &&
             recentEmaCross(ema9, ema14, 15) &&
@@ -756,14 +452,12 @@ try {
               md.multiplier_range[0],
             );
             loading = true;
-            md.canTrade = false;
           }
         }
 
         for (const contract of multiplierPositions) {
           if (contract?.type === "MULTUP") {
             if (
-              md.trendDown15 &&
               md.trendDown &&
               crossedEma(md.high, md.low, prevIndex, ema14) &&
               recentEmaCross(ema9, ema14, 15) &&
@@ -775,7 +469,6 @@ try {
           }
           if (contract?.type === "MULTDOWN") {
             if (
-              md.trendUp15 &&
               md.trendUp &&
               crossedEma(md.high, md.low, prevIndex, ema14) &&
               recentEmaCross(ema9, ema14, 15) &&
@@ -787,40 +480,8 @@ try {
           }
         }
 
-        if (touchPositions.length === 0) {
-          if (
-            md.trendUp15 &&
-            md.trendUp &&
-            crossedEma(md.high, md.low, prevIndex, ema14) &&
-            recentEmaCross(ema9, ema14, 15) &&
-            bullish(md.open, md.close, prevIndex)
-          ) {
-            await getTouchProposal(
-              "+330",
-              data?.echo_req?.ticks_history,
-              amount,
-            );
-            loading = true;
-          }
-          if (
-            md.trendDown15 &&
-            md.trendDown &&
-            crossedEma(md.high, md.low, prevIndex, ema14) &&
-            recentEmaCross(ema9, ema14, 15) &&
-            bearish(md.open, md.close, prevIndex)
-          ) {
-            await getTouchProposal(
-              "-330",
-              data?.echo_req?.ticks_history,
-              amount,
-            );
-            loading = true;
-          }
-        }
-
         if (md.openTime !== data.ohlc.open_time) {
           md.openTime = data.ohlc.open_time;
-          md.canTrade = true;
           send({
             ticks_history: data.echo_req.ticks_history,
             style: "candles",
@@ -910,10 +571,6 @@ try {
         }
       }
 
-      if (connection && type === "ONETOUCH" && duration >= 1050) {
-        closePosition(symbol, position?.contract_id, `Time exceeded`);
-      }
-
       const runningTrade = {
         multiplier: multiplier,
         pip: pip,
@@ -978,14 +635,14 @@ try {
         await run(30000);
         symbols.forEach((s) => {
           send({ contracts_for: s });
-          // send({
-          //   ticks_history: s,
-          //   style: "candles",
-          //   count: 500,
-          //   granularity: 300,
-          //   end: "latest",
-          //   subscribe: 1,
-          // });
+          send({
+            ticks_history: s,
+            style: "candles",
+            count: 500,
+            granularity: 60,
+            end: "latest",
+            subscribe: 1,
+          });
         });
         sendMessage(`Candles Resubscribed`);
       }
