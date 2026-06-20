@@ -132,8 +132,8 @@ const sendMessage = async (message) => {
 };
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 5;
-  const takeProfit = stopLoss ;
+  const stopLoss = stake / 2.5;
+  const takeProfit = stopLoss * 3;
   const request = {
     proposal: 1,
     amount: stake,
@@ -225,7 +225,7 @@ try {
           ticks_history: s,
           style: "candles",
           count: 500,
-          granularity: 60,
+          granularity: 300,
           end: "latest",
           subscribe: 1,
         });
@@ -308,7 +308,6 @@ try {
 
           if (!exists) {
             const result = await collection.insertOne(asset);
-
             console.log(`Document created with _id: ${result.insertedId}`);
           }
           assets = await collection.find({}).toArray();
@@ -372,7 +371,7 @@ try {
         sendMessage("Bot is still running");
       }
       try {
-        if (data.echo_req.granularity === 60) {
+        if (data.echo_req.granularity === 300) {
           md.close = data.candles.map((c) => c.close);
           md.open = data.candles.map((c) => c.open);
           md.high = data.candles.map((c) => c.high);
@@ -390,7 +389,7 @@ try {
       const md = marketData[symbol];
       const matchingPositions = positions.filter((p) => p?.name === symbol);
 
-      if (data.echo_req.granularity === 60) {
+      if (data.echo_req.granularity === 300) {
         if (md.openTime === 0) {
           md.openTime = data.ohlc.open_time;
         }
@@ -424,7 +423,7 @@ try {
         md.trendUp = ema9Now > ema14Now;
         md.trendDown = ema9Now < ema14Now;
 
-        if (!riskyPosition) {
+        if (!riskyPosition && Math.trunc(balance) !== 0) {
           if (
             md.trendUp &&
             crossedEma(md.high, md.low, prevIndex, ema14) &&
@@ -639,7 +638,7 @@ try {
             ticks_history: s,
             style: "candles",
             count: 500,
-            granularity: 60,
+            granularity: 300,
             end: "latest",
             subscribe: 1,
           });
