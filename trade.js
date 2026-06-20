@@ -524,7 +524,7 @@ try {
       const risk = type === "MULTUP" ? entrySpot - stop : stop - entrySpot;
       const gain =
         type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
-      const profit = data.proposal_open_contract?.profit;
+      const profit = Number(data.proposal_open_contract?.profit);
       const duration =
         data?.proposal_open_contract?.current_spot_time -
         data?.proposal_open_contract?.date_start;
