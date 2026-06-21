@@ -534,7 +534,7 @@ try {
       }
 
       if (connection && type !== "ONETOUCH") {
-        if (profit >= Math.abs(lossAmount) && position.stoploss === 0) {
+        if (pip >= risk && position.stoploss === 0) {
           position.stoploss = Math.abs(commission);
           update(position.stoploss, id, symbol);
         }
