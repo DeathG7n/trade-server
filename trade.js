@@ -59,14 +59,14 @@ app.listen(3000, () => {
 
 //Functions
 function bearish(open, close, candle) {
-  return open[candle] > close[candle];
+  return open?.[candle] > close?.[candle];
 }
 function bullish(open, close, candle) {
-  return close[candle] > open[candle];
+  return close?.[candle] > open?.[candle];
 }
 
 function crossedEma(high, low, candle, ema) {
-  return high[candle] > ema[candle] && ema[candle] > low[candle];
+  return high?.[candle] > ema?.[candle] && ema?.[candle] > low?.[candle];
 }
 
 function recentEmaCross(emaFast, emaSlow, lookback = 15) {
