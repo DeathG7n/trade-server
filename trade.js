@@ -32,7 +32,7 @@ let authorized = false;
 let loading = true;
 const subscribedContracts = new Set();
 
-const symbols = ["stpRNG"];
+const symbols = ["stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5"];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
