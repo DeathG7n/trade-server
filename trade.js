@@ -30,7 +30,6 @@ let now = new Date();
 let connection = false;
 let authorized = false;
 let loading = true;
-let placingTrade = false;
 let lastBalance = null;
 const subscribedContracts = new Set();
 
@@ -229,7 +228,7 @@ try {
           ticks_history: s,
           style: "candles",
           count: 500,
-          granularity: 300,
+          granularity: 60,
           end: "latest",
           subscribe: 1,
         });
@@ -378,7 +377,7 @@ try {
         sendMessage("Bot is still running");
       }
       try {
-        if (data.echo_req.granularity === 300) {
+        if (data.echo_req.granularity === 60) {
           md.close = data.candles.map((c) => c.close);
           md.open = data.candles.map((c) => c.open);
           md.high = data.candles.map((c) => c.high);
@@ -397,7 +396,7 @@ try {
       const matchingPositions = positions.filter((p) => p?.name === symbol);
       if (!md.multiplier_range?.length) return;
 
-      if (data.echo_req.granularity === 300) {
+      if (data.echo_req.granularity === 60) {
         if (md.openTime === 0) {
           md.openTime = data.ohlc.open_time;
         }
@@ -439,8 +438,6 @@ try {
             recentEmaCross(ema9, ema14, 15) === "bullish" &&
             bullish(md.open, md.close, prevIndex)
           ) {
-            if (placingTrade) return;
-            placingTrade = true;
             await getMultiProposal(
               "MULTUP",
               symbol,
@@ -455,8 +452,6 @@ try {
             recentEmaCross(ema9, ema14, 15) === "bearish" &&
             bearish(md.open, md.close, prevIndex)
           ) {
-            if (placingTrade) return;
-            placingTrade = true;
             await getMultiProposal(
               "MULTDOWN",
               symbol,
@@ -512,7 +507,6 @@ try {
           data.proposal.ask_price,
         );
       } catch (err) {
-        placingTrade = false;
         sendMessage(String(err));
       }
     }
@@ -613,7 +607,6 @@ try {
     }
 
     if (data.msg_type === "buy") {
-      placingTrade = false;
       sendMessage(`${data?.buy?.shortcode}`);
       console.log(`🟢 ${data?.buy?.shortcode}`);
     }
@@ -664,7 +657,7 @@ try {
             ticks_history: s,
             style: "candles",
             count: 500,
-            granularity: 300,
+            granularity: 60,
             end: "latest",
             subscribe: 1,
           });
