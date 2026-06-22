@@ -30,6 +30,8 @@ let now = new Date();
 let connection = false;
 let authorized = false;
 let loading = true;
+let placingTrade = false;
+let lastBalance = null;
 const subscribedContracts = new Set();
 
 const symbols = ["stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5"];
@@ -88,7 +90,9 @@ function recentEmaCross(emaFast, emaSlow, lookback = 15) {
 }
 
 function send(msg) {
-  ws.send(JSON.stringify(msg));
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(msg));
+  }
 }
 
 function sleep(ms) {
@@ -144,7 +148,7 @@ async function getMultiProposal(direction, symbol, stake, multiplier) {
     basis: "stake",
     limit_order: { stop_loss: stopLoss, take_profit: takeProfit },
   };
-  ws.send(JSON.stringify(request));
+  send(request);
 }
 
 function buyContract(direction, id, stake) {
@@ -234,8 +238,11 @@ try {
 
     if (data.msg_type === "balance") {
       balance = data.balance.balance;
-      sendMessage(`💸 Balance is currently ${balance}`);
-      console.log(`💸 Balance is currently ${balance}`);
+      if (balance !== lastBalance) {
+        sendMessage(`💸 Balance is currently ${balance}`);
+        console.log(`💸 Balance is currently ${balance}`);
+        lastBalance = balance;
+      }
       balance = Math.trunc(balance);
       if (isNumberBetween(balance, 0, 6)) {
         amount = 1;
@@ -378,7 +385,7 @@ try {
           md.low = data.candles.map((c) => c.low);
         }
       } catch (err) {
-        sendMessage(err);
+        sendMessage(String(err));
       }
       count += 1;
       console.log(count);
@@ -388,6 +395,7 @@ try {
       const symbol = data.echo_req.ticks_history;
       const md = marketData[symbol];
       const matchingPositions = positions.filter((p) => p?.name === symbol);
+      if (!md.multiplier_range?.length) return;
 
       if (data.echo_req.granularity === 300) {
         if (md.openTime === 0) {
@@ -413,6 +421,7 @@ try {
         const len = md.close.length;
         const currIndex = len - 1;
         const prevIndex = len - 2;
+        if (len < 20) return;
 
         const ema9 = calculateEMA(md.close, 9);
         const ema9Now = ema9[currIndex];
@@ -427,9 +436,11 @@ try {
           if (
             md.trendUp &&
             crossedEma(md.high, md.low, prevIndex, ema14) &&
-            recentEmaCross(ema9, ema14, 15) &&
+            recentEmaCross(ema9, ema14, 15) === "bullish" &&
             bullish(md.open, md.close, prevIndex)
           ) {
+            if (placingTrade) return;
+            placingTrade = true;
             await getMultiProposal(
               "MULTUP",
               symbol,
@@ -441,9 +452,11 @@ try {
           if (
             md.trendDown &&
             crossedEma(md.high, md.low, prevIndex, ema14) &&
-            recentEmaCross(ema9, ema14, 15) &&
+            recentEmaCross(ema9, ema14, 15) === "bearish" &&
             bearish(md.open, md.close, prevIndex)
           ) {
+            if (placingTrade) return;
+            placingTrade = true;
             await getMultiProposal(
               "MULTDOWN",
               symbol,
@@ -459,7 +472,7 @@ try {
             if (
               md.trendDown &&
               crossedEma(md.high, md.low, prevIndex, ema14) &&
-              recentEmaCross(ema9, ema14, 15) &&
+              recentEmaCross(ema9, ema14, 15) === "bearish" &&
               bearish(md.open, md.close, prevIndex)
             ) {
               contract.contract_id &&
@@ -470,8 +483,8 @@ try {
             if (
               md.trendUp &&
               crossedEma(md.high, md.low, prevIndex, ema14) &&
-              recentEmaCross(ema9, ema14, 15) &&
-              bullish(md.open5, md.close5, prevIndex)
+              recentEmaCross(ema9, ema14, 15) === "bullish" &&
+              bullish(md.open, md.close, prevIndex)
             ) {
               contract.contract_id &&
                 closePosition(symbol, contract.contract_id, `Opposite Signal`);
@@ -492,11 +505,16 @@ try {
       }
     }
     if (data.msg_type === "proposal") {
-      buyContract(
-        data?.echo_req?.contract_type,
-        data?.proposal?.id,
-        data?.proposal?.ask_price,
-      );
+      try {
+        buyContract(
+          data.echo_req.contract_type,
+          data.proposal.id,
+          data.proposal.ask_price,
+        );
+      } catch (err) {
+        placingTrade = false;
+        sendMessage(String(err));
+      }
     }
 
     if (data.msg_type === "proposal_open_contract" && !loading) {
@@ -534,6 +552,8 @@ try {
       }
 
       if (connection && type !== "ONETOUCH") {
+        if (!position) return;
+        if (lossAmount == null) return;
         if (pip >= risk && position.stoploss === 0) {
           position.stoploss = Math.abs(commission);
           update(position.stoploss, id, symbol);
@@ -593,6 +613,7 @@ try {
     }
 
     if (data.msg_type === "buy") {
+      placingTrade = false;
       sendMessage(`${data?.buy?.shortcode}`);
       console.log(`🟢 ${data?.buy?.shortcode}`);
     }
@@ -606,6 +627,7 @@ try {
 
       if (!position) return;
 
+      subscribedContracts.delete(contract_id);
       sendMessage(
         `💸 Position closed at ${data.sell?.sold_for} USD on ${position.name}, because ${position.reason}`,
       );
@@ -623,10 +645,14 @@ try {
       const position = positions.find(
         (p) => p.contract_id === data.echo_req.contract_id,
       );
-      sendMessage(`💸 Position updated on ${position.name}`);
+
+      if (position) {
+        sendMessage(`💸 Position updated on ${position.name}`);
+      }
     }
 
     if (data.error) {
+      placingTrade = false;
       const error = data?.error?.message;
       console.error("❗ Error: ", error);
       sendMessage(`❗ Error: ${error}`);
@@ -652,8 +678,8 @@ try {
       }
     }
   });
-} catch (error) {
-  sendMessage(error);
+} catch (err) {
+  sendMessage(String(err));
 }
 
 ws.on("close", () => {
