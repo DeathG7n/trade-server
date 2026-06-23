@@ -104,6 +104,24 @@ function calculateEMA(prices, period) {
   return emaArray;
 }
 
+function recentEmaCross(emaFast, emaSlow, lookback = 15) {
+  const len = emaFast.length;
+
+  for (let i = len - 2; i >= len - lookback - 1 && i > 0; i--) {
+    // Bullish cross
+    if (emaFast[i - 1] <= emaSlow[i - 1] && emaFast[i] > emaSlow[i]) {
+      return "bullish";
+    }
+
+    // Bearish cross
+    if (emaFast[i - 1] >= emaSlow[i - 1] && emaFast[i] < emaSlow[i]) {
+      return "bearish";
+    }
+  }
+
+  return null;
+}
+
 const sendMessage = async (message) => {
   try {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
@@ -122,7 +140,7 @@ const sendMessage = async (message) => {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 2.5;
-  const takeProfit = stopLoss * 3;
+  const takeProfit = stopLoss * 2;
   const request = {
     proposal: 1,
     amount: stake,
@@ -390,36 +408,17 @@ try {
         const ema14 = calculateEMA(md.close, 14);
         const ema14Now = ema14[currIndex];
 
-        const ema21 = calculateEMA(md.close, 21);
-        const ema21Now = ema21[currIndex];
-
-        const ema50 = calculateEMA(md.close, 50);
-        const ema50Now = ema50[currIndex];
-
-        const ema100 = calculateEMA(md.close, 100);
-        const ema100Now = ema100[currIndex];
-
-        const ema200 = calculateEMA(md.close, 200);
-        const ema200Now = ema200[currIndex];
-
         md.trendUp =
-          ema9Now > ema14Now &&
-          ema14Now > ema21Now &&
-          ema21Now > ema50Now &&
-          ema50Now > ema100Now &&
-          ema100Now > ema200Now;
+          ema9Now > ema14Now 
 
         md.trendDown =
-          ema9Now < ema14Now &&
-          ema14Now < ema21Now &&
-          ema21Now < ema50Now &&
-          ema50Now < ema100Now &&
-          ema100Now < ema200Now;
+          ema9Now < ema14Now 
 
         if (md.canAlert && symbol === "1HZ75V") {
           if (
             md.trendUp &&
             crossedEma(md.high, md.low, currIndex, ema14) &&
+            recentEmaCross(ema9, ema14, 15) === "bullish" &&
             bullish(md.open, md.close, currIndex)
           ) {
             sendMessage(`Bullish signal on ${symbol}`);
@@ -428,6 +427,7 @@ try {
           if (
             md.trendDown &&
             crossedEma(md.high, md.low, currIndex, ema14) &&
+            recentEmaCross(ema9, ema14, 15) === "bearish" &&
             bearish(md.open, md.close, currIndex)
           ) {
             sendMessage(`Bearish signal on ${symbol}`);
@@ -442,6 +442,7 @@ try {
           if (
             md.trendUp &&
             crossedEma(md.high, md.low, prevIndex, ema14) &&
+            recentEmaCross(ema9, ema14, 15) === "bullish" &&
             bullish(md.open, md.close, prevIndex)
           ) {
             await getMultiProposal(
@@ -455,6 +456,7 @@ try {
           if (
             md.trendDown &&
             crossedEma(md.high, md.low, prevIndex, ema14) &&
+            recentEmaCross(ema9, ema14, 15) === "bearish" &&
             bearish(md.open, md.close, prevIndex)
           ) {
             await getMultiProposal(
