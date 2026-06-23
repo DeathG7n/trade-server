@@ -224,7 +224,7 @@ try {
       if (balance < 12) {
         amount = 1;
       } else {
-        amount = Math.min(2000, 2 ** Math.floor(Math.log2(balance / 12) + 1));
+        amount = Math.min(1000, 2 ** Math.floor(Math.log2(balance / 12) + 1));
       }
       send({ portfolio: 1 });
     }
@@ -475,9 +475,9 @@ try {
     if (data.msg_type === "proposal") {
       try {
         buyContract(
-          data.echo_req.contract_type,
-          data.proposal.id,
-          data.proposal.ask_price,
+          data?.echo_req?.contract_type,
+          data?.proposal?.id,
+          data?.proposal?.ask_price,
         );
       } catch (err) {
         sendMessage(String(err));
