@@ -33,7 +33,14 @@ let loading = true;
 let lastBalance = null;
 const subscribedContracts = new Set();
 
-const symbols = ["stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5"];
+const symbols = [
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
+  "stpRNG5",
+  "1HZ75V",
+];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -45,6 +52,7 @@ symbols.forEach((s) => {
     trendUp: false,
     trendDown: false,
     multiplier_range: [],
+    canAlert: true,
   };
 });
 
@@ -408,7 +416,29 @@ try {
           ema50Now < ema100Now &&
           ema100Now < ema200Now;
 
-        if (!riskyPosition && Math.trunc(balance) !== 0) {
+        if (md.canAlert && symbol === "1HZ75V") {
+          if (
+            md.trendUp &&
+            crossedEma(md.high, md.low, currIndex, ema14) &&
+            bullish(md.open, md.close, currIndex)
+          ) {
+            sendMessage(`Bullish signal on ${symbol}`);
+            md.canAlert = false;
+          }
+          if (
+            md.trendDown &&
+            crossedEma(md.high, md.low, currIndex, ema14) &&
+            bearish(md.open, md.close, currIndex)
+          ) {
+            sendMessage(`Bearish signal on ${symbol}`);
+            md.canAlert = false;
+          }
+        }
+        if (
+          !riskyPosition &&
+          Math.trunc(balance) !== 0 &&
+          symbol !== "1HZ75V"
+        ) {
           if (
             md.trendUp &&
             crossedEma(md.high, md.low, prevIndex, ema14) &&
@@ -462,6 +492,7 @@ try {
 
         if (md.openTime !== data.ohlc.open_time) {
           md.openTime = data.ohlc.open_time;
+          md.canAlert = true
           send({
             ticks_history: data.echo_req.ticks_history,
             style: "candles",
