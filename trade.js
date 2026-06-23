@@ -70,24 +70,6 @@ function crossedEma(high, low, candle, ema) {
   return high?.[candle] > ema?.[candle] && ema?.[candle] > low?.[candle];
 }
 
-function recentEmaCross(emaFast, emaSlow, lookback = 15) {
-  const len = emaFast.length;
-
-  for (let i = len - 2; i >= len - lookback - 1 && i > 0; i--) {
-    // Bullish cross
-    if (emaFast[i - 1] <= emaSlow[i - 1] && emaFast[i] > emaSlow[i]) {
-      return "bullish";
-    }
-
-    // Bearish cross
-    if (emaFast[i - 1] >= emaSlow[i - 1] && emaFast[i] < emaSlow[i]) {
-      return "bearish";
-    }
-  }
-
-  return null;
-}
-
 function send(msg) {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(msg));
@@ -102,10 +84,6 @@ async function run(ms) {
   // console.log(`⏳ Waiting ${ms / 1000} seconds...`);
   await sleep(ms);
   // console.log("✅ Done!");
-}
-
-function isNumberBetween(number, lowerBound, upperBound) {
-  return number >= lowerBound && number <= upperBound;
 }
 
 function calculateEMA(prices, period) {
@@ -243,34 +221,10 @@ try {
         lastBalance = balance;
       }
       balance = Math.trunc(balance);
-      if (isNumberBetween(balance, 0, 6)) {
+      if (balance < 12) {
         amount = 1;
-      } else if (isNumberBetween(balance, 7, 13)) {
-        amount = 2;
-      } else if (isNumberBetween(balance, 14, 27)) {
-        amount = 4;
-      } else if (isNumberBetween(balance, 28, 59)) {
-        amount = 8;
-      } else if (isNumberBetween(balance, 60, 119)) {
-        amount = 10;
-      } else if (isNumberBetween(balance, 120, 239)) {
-        amount = 20;
-      } else if (isNumberBetween(balance, 240, 479)) {
-        amount = 40;
-      } else if (isNumberBetween(balance, 480, 599)) {
-        amount = 80;
-      } else if (isNumberBetween(balance, 600, 1199)) {
-        amount = 100;
-      } else if (isNumberBetween(balance, 1200, 2399)) {
-        amount = 200;
-      } else if (isNumberBetween(balance, 2400, 4799)) {
-        amount = 400;
-      } else if (isNumberBetween(balance, 4800, 5999)) {
-        amount = 800;
-      } else if (isNumberBetween(balance, 6000, 11999)) {
-        amount = 1000;
-      } else if (balance >= 12000) {
-        amount = 2000;
+      } else {
+        amount = Math.min(2000, 2 ** Math.floor(Math.log2(balance / 12) + 1));
       }
       send({ portfolio: 1 });
     }
@@ -420,7 +374,7 @@ try {
         const len = md.close.length;
         const currIndex = len - 1;
         const prevIndex = len - 2;
-        if (len < 20) return;
+        if (len < 200) return;
 
         const ema9 = calculateEMA(md.close, 9);
         const ema9Now = ema9[currIndex];
@@ -428,14 +382,36 @@ try {
         const ema14 = calculateEMA(md.close, 14);
         const ema14Now = ema14[currIndex];
 
-        md.trendUp = ema9Now > ema14Now;
-        md.trendDown = ema9Now < ema14Now;
+        const ema21 = calculateEMA(md.close, 21);
+        const ema21Now = ema21[currIndex];
+
+        const ema50 = calculateEMA(md.close, 50);
+        const ema50Now = ema50[currIndex];
+
+        const ema100 = calculateEMA(md.close, 100);
+        const ema100Now = ema100[currIndex];
+
+        const ema200 = calculateEMA(md.close, 200);
+        const ema200Now = ema200[currIndex];
+
+        md.trendUp =
+          ema9Now > ema14Now &&
+          ema14Now > ema21Now &&
+          ema21Now > ema50Now &&
+          ema50Now > ema100Now &&
+          ema100Now > ema200Now;
+
+        md.trendDown =
+          ema9Now < ema14Now &&
+          ema14Now < ema21Now &&
+          ema21Now < ema50Now &&
+          ema50Now < ema100Now &&
+          ema100Now < ema200Now;
 
         if (!riskyPosition && Math.trunc(balance) !== 0) {
           if (
             md.trendUp &&
             crossedEma(md.high, md.low, prevIndex, ema14) &&
-            recentEmaCross(ema9, ema14, 15) === "bullish" &&
             bullish(md.open, md.close, prevIndex)
           ) {
             await getMultiProposal(
@@ -449,7 +425,6 @@ try {
           if (
             md.trendDown &&
             crossedEma(md.high, md.low, prevIndex, ema14) &&
-            recentEmaCross(ema9, ema14, 15) === "bearish" &&
             bearish(md.open, md.close, prevIndex)
           ) {
             await getMultiProposal(
@@ -467,7 +442,6 @@ try {
             if (
               md.trendDown &&
               crossedEma(md.high, md.low, prevIndex, ema14) &&
-              recentEmaCross(ema9, ema14, 15) === "bearish" &&
               bearish(md.open, md.close, prevIndex)
             ) {
               contract.contract_id &&
@@ -478,7 +452,6 @@ try {
             if (
               md.trendUp &&
               crossedEma(md.high, md.low, prevIndex, ema14) &&
-              recentEmaCross(ema9, ema14, 15) === "bullish" &&
               bullish(md.open, md.close, prevIndex)
             ) {
               contract.contract_id &&
@@ -645,7 +618,6 @@ try {
     }
 
     if (data.error) {
-      placingTrade = false;
       const error = data?.error?.message;
       console.error("❗ Error: ", error);
       sendMessage(`❗ Error: ${error}`);

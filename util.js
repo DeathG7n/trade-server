@@ -40,3 +40,25 @@
 //   };
 //   ws.send(JSON.stringify(request));
 // }
+
+// function isNumberBetween(number, lowerBound, upperBound) {
+//   return number >= lowerBound && number <= upperBound;
+// }
+
+// function recentEmaCross(emaFast, emaSlow, lookback = 15) {
+//   const len = emaFast.length;
+
+//   for (let i = len - 2; i >= len - lookback - 1 && i > 0; i--) {
+//     // Bullish cross
+//     if (emaFast[i - 1] <= emaSlow[i - 1] && emaFast[i] > emaSlow[i]) {
+//       return "bullish";
+//     }
+
+//     // Bearish cross
+//     if (emaFast[i - 1] >= emaSlow[i - 1] && emaFast[i] < emaSlow[i]) {
+//       return "bearish";
+//     }
+//   }
+
+//   return null;
+// }
