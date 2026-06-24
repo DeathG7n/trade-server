@@ -17,6 +17,8 @@ const API_TOKEN = process.env.API_TOKEN;
 const BOT_TOKEN = process.env.BOT_TOKEN;
 // eslint-disable-next-line no-undef
 const CHAT_ID = process.env.CHAT_ID;
+// eslint-disable-next-line no-undef
+const DEPLOY_HOOK = process.env.DEPLOY_HOOK;
 
 // eslint-disable-next-line no-undef
 const uri = process.env.MONGODB_URI;
@@ -409,11 +411,9 @@ try {
         const ema21 = calculateEMA(md.close, 21);
         const ema21Now = ema21[currIndex];
 
-        md.trendUp =
-          ema14Now > ema21Now 
+        md.trendUp = ema14Now > ema21Now;
 
-        md.trendDown =
-          ema14Now < ema21Now 
+        md.trendDown = ema14Now < ema21Now;
 
         if (md.canAlert && symbol === "1HZ75V") {
           if (
@@ -495,7 +495,7 @@ try {
 
         if (md.openTime !== data.ohlc.open_time) {
           md.openTime = data.ohlc.open_time;
-          md.canAlert = true
+          md.canAlert = true;
           send({
             ticks_history: data.echo_req.ticks_history,
             style: "candles",
@@ -664,9 +664,7 @@ try {
         sendMessage(`Candles Resubscribed`);
       }
       if (error === "Please log in.") {
-        fetch(
-          "https://api.render.com/deploy/srv-d08lfobuibrs73b4vg9g?key=rpjXNGs05-o",
-        ).then(() => sendMessage(`Login Reinitiated`));
+        fetch(DEPLOY_HOOK).then(() => sendMessage(`Login Reinitiated`));
       }
     }
   });
@@ -676,7 +674,5 @@ try {
 
 ws.on("close", () => {
   sendMessage("WebSocket disconnected. Reconnecting...");
-  fetch(
-    "https://api.render.com/deploy/srv-d08lfobuibrs73b4vg9g?key=rpjXNGs05-o",
-  ).then(() => sendMessage(`Login Reinitiated`));
+  fetch(DEPLOY_HOOK).then(() => sendMessage(`Login Reinitiated`));
 });
