@@ -34,6 +34,7 @@ let authorized = false;
 let loading = true;
 let lastBalance = null;
 let timeframe = 300;
+let trades = 1;
 const subscribedContracts = new Set();
 
 const symbols = [
@@ -105,6 +106,89 @@ function calculateEMA(prices, period) {
     emaArray[i] = prices[i] * k + emaArray[i - 1] * (1 - k);
   }
   return emaArray;
+}
+
+function calculateADX(high, low, close, period = 14) {
+  const tr = [];
+  const plusDM = [];
+  const minusDM = [];
+
+  // Step 1: TR, +DM, -DM
+  tr[0] = 0;
+  plusDM[0] = 0;
+  minusDM[0] = 0;
+
+  for (let i = 1; i < high.length; i++) {
+    const upMove = high[i] - high[i - 1];
+    const downMove = low[i - 1] - low[i];
+
+    plusDM[i] = upMove > downMove && upMove > 0 ? upMove : 0;
+    minusDM[i] = downMove > upMove && downMove > 0 ? downMove : 0;
+
+    tr[i] = Math.max(
+      high[i] - low[i],
+      Math.abs(high[i] - close[i - 1]),
+      Math.abs(low[i] - close[i - 1]),
+    );
+  }
+
+  const smoothTR = [];
+  const smoothPlusDM = [];
+  const smoothMinusDM = [];
+
+  // First smoothed values
+  smoothTR[period] = 0;
+  smoothPlusDM[period] = 0;
+  smoothMinusDM[period] = 0;
+
+  for (let i = 1; i <= period; i++) {
+    smoothTR[period] += tr[i];
+    smoothPlusDM[period] += plusDM[i];
+    smoothMinusDM[period] += minusDM[i];
+  }
+
+  // Wilder smoothing
+  for (let i = period + 1; i < high.length; i++) {
+    smoothTR[i] = smoothTR[i - 1] - smoothTR[i - 1] / period + tr[i];
+
+    smoothPlusDM[i] =
+      smoothPlusDM[i - 1] - smoothPlusDM[i - 1] / period + plusDM[i];
+
+    smoothMinusDM[i] =
+      smoothMinusDM[i - 1] - smoothMinusDM[i - 1] / period + minusDM[i];
+  }
+
+  const plusDI = [];
+  const minusDI = [];
+  const dx = [];
+
+  for (let i = period; i < high.length; i++) {
+    plusDI[i] = (100 * smoothPlusDM[i]) / smoothTR[i];
+    minusDI[i] = (100 * smoothMinusDM[i]) / smoothTR[i];
+
+    dx[i] = (100 * Math.abs(plusDI[i] - minusDI[i])) / (plusDI[i] + minusDI[i]);
+  }
+
+  const adx = [];
+
+  // First ADX = average of first 'period' DX values
+  let sumDX = 0;
+  for (let i = period; i < period * 2; i++) {
+    sumDX += dx[i];
+  }
+
+  adx[period * 2 - 1] = sumDX / period;
+
+  // Wilder smoothing of ADX
+  for (let i = period * 2; i < high.length; i++) {
+    adx[i] = (adx[i - 1] * (period - 1) + dx[i]) / period;
+  }
+
+  return {
+    adx,
+    plusDI,
+    minusDI,
+  };
 }
 
 function recentEmaCross(emaFast, emaSlow, lookback = 15) {
@@ -254,6 +338,12 @@ try {
         amount = 1;
       } else {
         amount = Math.min(1000, 2 ** Math.floor(Math.log2(balance / 12) + 1));
+      }
+      if (amount < 1000) {
+        trades = 1;
+      } else {
+        const forefeit = 2 ** Math.floor(Math.log2(balance / 12) + 1);
+        trades = forefeit / 1000;
       }
       send({ portfolio: 1 });
     }
@@ -415,7 +505,25 @@ try {
 
         md.trendDown = ema14Now < ema21Now;
 
+        const { adx, plusDI, minusDI } = calculateADX(
+          md.high,
+          md.low,
+          md.close,
+          14,
+        );
+
+        const adxNow = adx[currIndex];
+        const plus = plusDI[currIndex];
+        const minus = minusDI[currIndex];
+
         if (md.canAlert && symbol === "1HZ75V") {
+          if (plus > minus) {
+            sendMessage(`Bullish signal on ${symbol}`);
+            md.canAlert = false;
+          } else {
+            sendMessage(`Bearish signal on ${symbol}`);
+            md.canAlert = false;
+          }
           if (
             md.trendUp &&
             crossedEma(md.high, md.low, currIndex, ema21) &&
@@ -444,7 +552,8 @@ try {
             md.trendUp &&
             crossedEma(md.high, md.low, prevIndex, ema21) &&
             recentEmaCross(ema14, ema21, 15) === "bullish" &&
-            bullish(md.open, md.close, prevIndex)
+            bullish(md.open, md.close, prevIndex) &&
+            adxNow > 25
           ) {
             await getMultiProposal(
               "MULTUP",
@@ -458,7 +567,8 @@ try {
             md.trendDown &&
             crossedEma(md.high, md.low, prevIndex, ema21) &&
             recentEmaCross(ema14, ema21, 15) === "bearish" &&
-            bearish(md.open, md.close, prevIndex)
+            bearish(md.open, md.close, prevIndex) &&
+            adxNow > 25
           ) {
             await getMultiProposal(
               "MULTDOWN",
@@ -507,14 +617,16 @@ try {
       }
     }
     if (data.msg_type === "proposal") {
-      try {
-        buyContract(
-          data?.echo_req?.contract_type,
-          data?.proposal?.id,
-          data?.proposal?.ask_price,
-        );
-      } catch (err) {
-        sendMessage(String(err));
+      for (let i = 0; i < trades; i++) {
+        try {
+          buyContract(
+            data?.echo_req?.contract_type,
+            data?.proposal?.id,
+            data?.proposal?.ask_price,
+          );
+        } catch (err) {
+          sendMessage(String(err));
+        }
       }
     }
 
