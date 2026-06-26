@@ -209,6 +209,28 @@ function recentEmaCross(emaFast, emaSlow, lookback = 15) {
   return null;
 }
 
+function detectCrossover(emaFast, emaSlow) {
+  const len = emaFast.length;
+
+  if (len < 3) return null;
+
+  const prevFast = emaFast[len - 3];
+  const prevSlow = emaSlow[len - 3];
+
+  const currFast = emaFast[len - 2];
+  const currSlow = emaSlow[len - 2];
+
+  if (prevFast <= prevSlow && currFast > currSlow) {
+    return "bullish";
+  }
+
+  if (prevFast >= prevSlow && currFast < currSlow) {
+    return "bearish";
+  }
+
+  return null;
+}
+
 const sendMessage = async (message) => {
   try {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
@@ -515,22 +537,24 @@ try {
         const adxNow = adx[currIndex];
         const plus = plusDI[currIndex];
         const minus = minusDI[currIndex];
+        const signal = detectCrossover(plus, minus);
 
         if (md.canAlert && symbol === "1HZ75V") {
-          if (plus > minus) {
+          if (signal === "bullish") {
             sendMessage(`Bullish signal on ${symbol}`);
             md.canAlert = false;
-          } else {
+          } else if (signal === "bearish") {
             sendMessage(`Bearish signal on ${symbol}`);
             md.canAlert = false;
           }
+
           if (
             md.trendUp &&
             crossedEma(md.high, md.low, currIndex, ema21) &&
             recentEmaCross(ema14, ema21, 15) === "bullish" &&
             bullish(md.open, md.close, currIndex)
           ) {
-            sendMessage(`Bullish signal on ${symbol}`);
+            sendMessage(`Bullish signal of 21 EMA on ${symbol}`);
             md.canAlert = false;
           }
           if (
@@ -539,7 +563,7 @@ try {
             recentEmaCross(ema14, ema21, 15) === "bearish" &&
             bearish(md.open, md.close, currIndex)
           ) {
-            sendMessage(`Bearish signal on ${symbol}`);
+            sendMessage(`Bearish signal of 21 EMA on ${symbol}`);
             md.canAlert = false;
           }
         }
@@ -580,25 +604,37 @@ try {
           }
         }
 
-        for (const contract of multiplierPositions) {
-          if (contract?.type === "MULTUP") {
-            if (
-              md.trendDown &&
-              crossedEma(md.high, md.low, prevIndex, ema21) &&
-              bearish(md.open, md.close, prevIndex)
-            ) {
-              contract.contract_id &&
-                closePosition(symbol, contract.contract_id, `Opposite Signal`);
+        if (multiplierPositions) {
+          for (const contract of multiplierPositions) {
+            if (contract?.type === "MULTUP") {
+              if (
+                md.trendDown &&
+                crossedEma(md.high, md.low, prevIndex, ema21) &&
+                bearish(md.open, md.close, prevIndex)
+              ) {
+                contract.contract_id &&
+                  closePosition(
+                    symbol,
+                    contract.contract_id,
+                    `Opposite Signal`,
+                  );
+                loading = true;
+              }
             }
-          }
-          if (contract?.type === "MULTDOWN") {
-            if (
-              md.trendUp &&
-              crossedEma(md.high, md.low, prevIndex, ema21) &&
-              bullish(md.open, md.close, prevIndex)
-            ) {
-              contract.contract_id &&
-                closePosition(symbol, contract.contract_id, `Opposite Signal`);
+            if (contract?.type === "MULTDOWN") {
+              if (
+                md.trendUp &&
+                crossedEma(md.high, md.low, prevIndex, ema21) &&
+                bullish(md.open, md.close, prevIndex)
+              ) {
+                contract.contract_id &&
+                  closePosition(
+                    symbol,
+                    contract.contract_id,
+                    `Opposite Signal`,
+                  );
+                loading = true;
+              }
             }
           }
         }
