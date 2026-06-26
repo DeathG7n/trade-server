@@ -45,15 +45,12 @@ const symbols = [
   "stpRNG5",
   "1HZ10V",
   "R_10",
-  "1HZ15V",
   "1HZ25V",
   "R_25",
-  "1HZ30V",
   "1HZ50V",
   "R_50",
   "1HZ75V",
   "R_75",
-  "1HZ90V",
   "1HZ100V",
   "R_100",
 ];
@@ -582,8 +579,7 @@ try {
         }
         if (
           !riskyPosition &&
-          Math.trunc(balance) !== 0 &&
-          symbol !== "1HZ75V"
+          Math.trunc(balance) !== 0 
         ) {
           if (
             md.trendUp &&
