@@ -43,7 +43,19 @@ const symbols = [
   "stpRNG3",
   "stpRNG4",
   "stpRNG5",
+  "1HZ10V",
+  "R_10",
+  "1HZ15V",
+  "1HZ25V",
+  "R_25",
+  "1HZ30V",
+  "1HZ50V",
+  "R_50",
   "1HZ75V",
+  "R_75",
+  "1HZ90V",
+  "1HZ100V",
+  "R_100",
 ];
 let marketData = {};
 symbols.forEach((s) => {
@@ -538,6 +550,7 @@ try {
         const plus = plusDI[currIndex];
         const minus = minusDI[currIndex];
         const signal = detectCrossover(plus, minus);
+        const threshold = 20;
 
         if (md.canAlert && symbol === "1HZ75V") {
           if (signal === "bullish") {
@@ -550,18 +563,18 @@ try {
 
           if (
             md.trendUp &&
-            crossedEma(md.high, md.low, currIndex, ema21) &&
+            crossedEma(md.high, md.low, prevIndex, ema21) &&
             recentEmaCross(ema14, ema21, 15) === "bullish" &&
-            bullish(md.open, md.close, currIndex)
+            bullish(md.open, md.close, prevIndex)
           ) {
             sendMessage(`Bullish signal of 21 EMA on ${symbol}`);
             md.canAlert = false;
           }
           if (
             md.trendDown &&
-            crossedEma(md.high, md.low, currIndex, ema21) &&
+            crossedEma(md.high, md.low, prevIndex, ema21) &&
             recentEmaCross(ema14, ema21, 15) === "bearish" &&
-            bearish(md.open, md.close, currIndex)
+            bearish(md.open, md.close, prevIndex)
           ) {
             sendMessage(`Bearish signal of 21 EMA on ${symbol}`);
             md.canAlert = false;
@@ -575,9 +588,8 @@ try {
           if (
             md.trendUp &&
             crossedEma(md.high, md.low, prevIndex, ema21) &&
-            recentEmaCross(ema14, ema21, 15) === "bullish" &&
             bullish(md.open, md.close, prevIndex) &&
-            adxNow > 25
+            adxNow > threshold
           ) {
             await getMultiProposal(
               "MULTUP",
@@ -590,9 +602,8 @@ try {
           if (
             md.trendDown &&
             crossedEma(md.high, md.low, prevIndex, ema21) &&
-            recentEmaCross(ema14, ema21, 15) === "bearish" &&
             bearish(md.open, md.close, prevIndex) &&
-            adxNow > 25
+            adxNow > threshold
           ) {
             await getMultiProposal(
               "MULTDOWN",
