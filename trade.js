@@ -54,6 +54,8 @@ const symbols = [
   "1HZ100V",
   "R_100",
 ];
+
+const alertSymbols = ["R_10", "R_50", "1HZ75V"]
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -550,7 +552,7 @@ try {
         const signal = detectCrossover(plus, minus);
         const threshold = 20;
 
-        if (md.canAlert && symbol === "1HZ75V") {
+        if (md.canAlert && alertSymbols.includes(symbol)) {
           if (signal === "bullish") {
             sendMessage(`Bullish signal on ${symbol}`);
             md.canAlert = false;
@@ -565,7 +567,7 @@ try {
             recentEmaCross(ema14, ema21, 15) === "bullish" &&
             bullish(md.open, md.close, prevIndex)
           ) {
-            sendMessage(`Bullish signal of 21 EMA on ${symbol}`);
+            sendMessage(`Bullish signal off 21 EMA on ${symbol}`);
             md.canAlert = false;
           }
           if (
@@ -574,7 +576,7 @@ try {
             recentEmaCross(ema14, ema21, 15) === "bearish" &&
             bearish(md.open, md.close, prevIndex)
           ) {
-            sendMessage(`Bearish signal of 21 EMA on ${symbol}`);
+            sendMessage(`Bearish signal off 21 EMA on ${symbol}`);
             md.canAlert = false;
           }
         }
