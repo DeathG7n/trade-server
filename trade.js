@@ -370,11 +370,12 @@ try {
       } else {
         amount = Math.min(1000, 2 ** Math.floor(Math.log2(balance / 12) + 1));
       }
-      if (amount < 1000) {
+
+      const forefeit = 2 ** Math.floor(Math.log2(balance / 12) + 1);
+      if (forefeit < 1000) {
         trades = 1;
       } else {
-        const forefeit = 2 ** Math.floor(Math.log2(balance / 12) + 1);
-        trades = forefeit / 1000;
+        trades = Math.trunc(forefeit / 1000);
       }
       send({ portfolio: 1 });
     }
@@ -577,10 +578,7 @@ try {
             md.canAlert = false;
           }
         }
-        if (
-          !riskyPosition &&
-          Math.trunc(balance) !== 0 
-        ) {
+        if (!riskyPosition && Math.trunc(balance) !== 0) {
           if (
             md.trendUp &&
             crossedEma(md.high, md.low, prevIndex, ema21) &&
