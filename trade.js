@@ -53,9 +53,14 @@ const symbols = [
   "R_75",
   "1HZ100V",
   "R_100",
+  "JD10",
+  "JD25",
+  "JD50",
+  "JD75",
+  "JD100",
 ];
 
-const alertSymbols = ["R_10", "R_50", "1HZ75V"]
+const alertSymbols = ["R_10", "R_50", "1HZ75V", "JD10", "JD75", "JD100"];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -309,15 +314,15 @@ async function connect() {
 
 async function update(stop, id, symbol) {
   try {
+    if(!symbol) return
     const database = client.db("trading");
     const collection = database.collection("trade");
-
     await collection.findOneAndUpdate(
       { contract_id: id },
       { $set: { stoploss: stop } },
     );
 
-    sendMessage(`💸 Stop Loss trailed to ${stop} on ${symbol}`);
+    //sendMessage(`💸 Stop Loss trailed to ${stop} on ${symbol}`);
 
     send({ portfolio: 1 });
   } catch (e) {
@@ -362,7 +367,7 @@ try {
     if (data.msg_type === "balance") {
       balance = data.balance.balance;
       if (balance !== lastBalance) {
-        sendMessage(`💸 Balance is currently ${balance}`);
+        //sendMessage(`💸 Balance is currently ${balance}`);
         console.log(`💸 Balance is currently ${balance}`);
         lastBalance = balance;
       }
