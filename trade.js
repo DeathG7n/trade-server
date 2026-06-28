@@ -755,14 +755,14 @@ try {
       };
 
       if (duration === 2) {
-        sendMessage(JSON.stringify(runningTrade, null, 2));
+        //sendMessage(JSON.stringify(runningTrade, null, 2));
       }
 
       console.log(runningTrade);
     }
 
     if (data.msg_type === "buy") {
-      sendMessage(`${data?.buy?.shortcode}`);
+      //sendMessage(`${data?.buy?.shortcode}`);
       console.log(`🟢 ${data?.buy?.shortcode}`);
     }
 
@@ -776,9 +776,9 @@ try {
       if (!position) return;
 
       subscribedContracts.delete(contract_id);
-      sendMessage(
-        `💸 Position closed at ${data.sell?.sold_for} USD on ${position.name}, because ${position.reason}`,
-      );
+      // sendMessage(
+      //   `💸 Position closed at ${data.sell?.sold_for} USD on ${position.name}, because ${position.reason}`,
+      // );
 
       console.log(
         `💸 Position closed at ${data.sell?.sold_for} USD on ${position.name}, because ${position.reason}`,
