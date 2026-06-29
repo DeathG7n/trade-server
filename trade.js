@@ -33,7 +33,7 @@ let connection = false;
 let authorized = false;
 let loading = true;
 let lastBalance = null;
-let timeframe = 300;
+let timeframes = [300, 3600];
 let trades = 1;
 const subscribedContracts = new Set();
 
@@ -71,8 +71,17 @@ symbols.forEach((s) => {
     openTime: 0,
     trendUp: false,
     trendDown: false,
+    close60: [],
+    open60: [],
+    high60: [],
+    low60: [],
+    openTime60: 0,
+    trendUp60: false,
+    trendDown60: false,
     multiplier_range: [],
     canAlert: true,
+    canBuy: false,
+    canSell: false,
   };
 });
 
@@ -314,7 +323,7 @@ async function connect() {
 
 async function update(stop, id, symbol) {
   try {
-    if(!symbol) return
+    if (!symbol) return;
     const database = client.db("trading");
     const collection = database.collection("trade");
     await collection.findOneAndUpdate(
@@ -353,13 +362,15 @@ try {
       send({ balance: 1, subscribe: 1 });
       symbols.forEach((s) => {
         send({ contracts_for: s });
-        send({
-          ticks_history: s,
-          style: "candles",
-          count: 500,
-          granularity: timeframe,
-          end: "latest",
-          subscribe: 1,
+        timeframes.forEach((t) => {
+          send({
+            ticks_history: s,
+            style: "candles",
+            count: 500,
+            granularity: t,
+            end: "latest",
+            subscribe: 1,
+          });
         });
       });
     }
@@ -489,7 +500,13 @@ try {
         sendMessage("Bot is still running");
       }
       try {
-        if (data.echo_req.granularity === timeframe) {
+        if (data.echo_req.granularity === 3600) {
+          md.close60 = data.candles.map((c) => c.close);
+          md.open60 = data.candles.map((c) => c.open);
+          md.high60 = data.candles.map((c) => c.high);
+          md.low60 = data.candles.map((c) => c.low);
+        }
+        if (data.echo_req.granularity === 300) {
           md.close = data.candles.map((c) => c.close);
           md.open = data.candles.map((c) => c.open);
           md.high = data.candles.map((c) => c.high);
@@ -508,7 +525,67 @@ try {
       const matchingPositions = positions.filter((p) => p?.name === symbol);
       if (!md.multiplier_range?.length) return;
 
-      if (data.echo_req.granularity === timeframe) {
+      if (data.echo_req.granularity === 3600) {
+        if (md.openTime60 === 0) {
+          md.openTime60 = data.ohlc.open_time;
+        }
+
+        if (md.close60.length === 0) {
+          md.close60.push(Number(data.ohlc.close));
+          md.open60.push(Number(data.ohlc.open));
+          md.high60.push(Number(data.ohlc.high));
+          md.low60.push(Number(data.ohlc.low));
+        } else {
+          md.close60[md.close60.length - 1] = Number(data.ohlc.close);
+          md.open60[md.open60.length - 1] = Number(data.ohlc.open);
+          md.high60[md.high60.length - 1] = Number(data.ohlc.high);
+          md.low60[md.low60.length - 1] = Number(data.ohlc.low);
+        }
+
+        const len = md.close60.length;
+        const currIndex = len - 1;
+        if (len < 200) return;
+
+        const ema14 = calculateEMA(md.close60, 14);
+        const ema14Now = ema14[currIndex];
+
+        const ema21 = calculateEMA(md.close60, 21);
+        const ema21Now = ema21[currIndex];
+
+        const { adx, plusDI, minusDI } = calculateADX(
+          md.high60,
+          md.low60,
+          md.close60,
+          14,
+        );
+
+        const adxNow = adx[currIndex];
+        const plus = plusDI[currIndex];
+        const minus = minusDI[currIndex];
+        const signal = detectCrossover(plus, minus);
+        const threshold = 20;
+
+        console.log(signal);
+
+        md.trendUp60 = ema14Now > ema21Now;
+        md.trendDown60 = ema14Now < ema21Now;
+
+        md.canBuy = md.trendUp60 && adxNow > threshold;
+        md.canSell = md.trendDown60 && adxNow > threshold;
+
+        if (md.openTime60 !== data.ohlc.open_time) {
+          md.openTime60 = data.ohlc.open_time;
+          send({
+            ticks_history: data.echo_req.ticks_history,
+            style: "candles",
+            count: 500,
+            granularity: data.echo_req.granularity,
+            end: "latest",
+          });
+        }
+      }
+
+      if (data.echo_req.granularity === 300) {
         if (md.openTime === 0) {
           md.openTime = data.ohlc.open_time;
         }
@@ -552,9 +629,7 @@ try {
         );
 
         const adxNow = adx[currIndex];
-        const plus = plusDI[currIndex];
-        const minus = minusDI[currIndex];
-        const signal = detectCrossover(plus, minus);
+        const signal = detectCrossover(plusDI, minusDI)
         const threshold = 20;
 
         if (md.canAlert && alertSymbols.includes(symbol)) {
@@ -567,6 +642,7 @@ try {
           }
 
           if (
+            md.canBuy &&
             md.trendUp &&
             crossedEma(md.high, md.low, prevIndex, ema21) &&
             recentEmaCross(ema14, ema21, 15) === "bullish" &&
@@ -576,6 +652,7 @@ try {
             md.canAlert = false;
           }
           if (
+            md.canSell &&
             md.trendDown &&
             crossedEma(md.high, md.low, prevIndex, ema21) &&
             recentEmaCross(ema14, ema21, 15) === "bearish" &&
@@ -750,6 +827,7 @@ try {
         profit: profit,
         loss: loss,
         orderAmount: orderAmount,
+        stopOutAmount: stopOut,
         lossAmount: lossAmount,
         profitAmount: profitAmount,
         gain: gain,
@@ -812,13 +890,15 @@ try {
         await run(30000);
         symbols.forEach((s) => {
           send({ contracts_for: s });
-          send({
-            ticks_history: s,
-            style: "candles",
-            count: 500,
-            granularity: timeframe,
-            end: "latest",
-            subscribe: 1,
+          timeframes.forEach((t) => {
+            send({
+              ticks_history: s,
+              style: "candles",
+              count: 500,
+              granularity: t,
+              end: "latest",
+              subscribe: 1,
+            });
           });
         });
         sendMessage(`Candles Resubscribed`);
