@@ -33,7 +33,7 @@ let connection = false;
 let authorized = false;
 let loading = true;
 let lastBalance = null;
-let timeframes = [300, 3600];
+let timeframes = [300, 1800];
 let trades = 1;
 const subscribedContracts = new Set();
 
@@ -60,7 +60,7 @@ const symbols = [
   "JD100",
 ];
 
-const alertSymbols = ["R_10", "R_50", "1HZ75V", "JD10", "JD75", "JD100"];
+const alertSymbols = ["JD75"];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -133,129 +133,6 @@ function calculateEMA(prices, period) {
   return emaArray;
 }
 
-function calculateADX(high, low, close, period = 14) {
-  const tr = [];
-  const plusDM = [];
-  const minusDM = [];
-
-  // Step 1: TR, +DM, -DM
-  tr[0] = 0;
-  plusDM[0] = 0;
-  minusDM[0] = 0;
-
-  for (let i = 1; i < high.length; i++) {
-    const upMove = high[i] - high[i - 1];
-    const downMove = low[i - 1] - low[i];
-
-    plusDM[i] = upMove > downMove && upMove > 0 ? upMove : 0;
-    minusDM[i] = downMove > upMove && downMove > 0 ? downMove : 0;
-
-    tr[i] = Math.max(
-      high[i] - low[i],
-      Math.abs(high[i] - close[i - 1]),
-      Math.abs(low[i] - close[i - 1]),
-    );
-  }
-
-  const smoothTR = [];
-  const smoothPlusDM = [];
-  const smoothMinusDM = [];
-
-  // First smoothed values
-  smoothTR[period] = 0;
-  smoothPlusDM[period] = 0;
-  smoothMinusDM[period] = 0;
-
-  for (let i = 1; i <= period; i++) {
-    smoothTR[period] += tr[i];
-    smoothPlusDM[period] += plusDM[i];
-    smoothMinusDM[period] += minusDM[i];
-  }
-
-  // Wilder smoothing
-  for (let i = period + 1; i < high.length; i++) {
-    smoothTR[i] = smoothTR[i - 1] - smoothTR[i - 1] / period + tr[i];
-
-    smoothPlusDM[i] =
-      smoothPlusDM[i - 1] - smoothPlusDM[i - 1] / period + plusDM[i];
-
-    smoothMinusDM[i] =
-      smoothMinusDM[i - 1] - smoothMinusDM[i - 1] / period + minusDM[i];
-  }
-
-  const plusDI = [];
-  const minusDI = [];
-  const dx = [];
-
-  for (let i = period; i < high.length; i++) {
-    plusDI[i] = (100 * smoothPlusDM[i]) / smoothTR[i];
-    minusDI[i] = (100 * smoothMinusDM[i]) / smoothTR[i];
-
-    dx[i] = (100 * Math.abs(plusDI[i] - minusDI[i])) / (plusDI[i] + minusDI[i]);
-  }
-
-  const adx = [];
-
-  // First ADX = average of first 'period' DX values
-  let sumDX = 0;
-  for (let i = period; i < period * 2; i++) {
-    sumDX += dx[i];
-  }
-
-  adx[period * 2 - 1] = sumDX / period;
-
-  // Wilder smoothing of ADX
-  for (let i = period * 2; i < high.length; i++) {
-    adx[i] = (adx[i - 1] * (period - 1) + dx[i]) / period;
-  }
-
-  return {
-    adx,
-    plusDI,
-    minusDI,
-  };
-}
-
-function recentEmaCross(emaFast, emaSlow, lookback = 15) {
-  const len = emaFast.length;
-
-  for (let i = len - 2; i >= len - lookback - 1 && i > 0; i--) {
-    // Bullish cross
-    if (emaFast[i - 1] <= emaSlow[i - 1] && emaFast[i] > emaSlow[i]) {
-      return "bullish";
-    }
-
-    // Bearish cross
-    if (emaFast[i - 1] >= emaSlow[i - 1] && emaFast[i] < emaSlow[i]) {
-      return "bearish";
-    }
-  }
-
-  return null;
-}
-
-function detectCrossover(emaFast, emaSlow) {
-  const len = emaFast.length;
-
-  if (len < 3) return null;
-
-  const prevFast = emaFast[len - 3];
-  const prevSlow = emaSlow[len - 3];
-
-  const currFast = emaFast[len - 2];
-  const currSlow = emaSlow[len - 2];
-
-  if (prevFast <= prevSlow && currFast > currSlow) {
-    return "bullish";
-  }
-
-  if (prevFast >= prevSlow && currFast < currSlow) {
-    return "bearish";
-  }
-
-  return null;
-}
-
 const sendMessage = async (message) => {
   try {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
@@ -273,8 +150,8 @@ const sendMessage = async (message) => {
 };
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 2.5;
-  const takeProfit = stopLoss * 3;
+  const stopLoss = 0;
+  const takeProfit = stake;
   const request = {
     proposal: 1,
     amount: stake,
@@ -500,7 +377,7 @@ try {
         sendMessage("Bot is still running");
       }
       try {
-        if (data.echo_req.granularity === 3600) {
+        if (data.echo_req.granularity === 1800) {
           md.close60 = data.candles.map((c) => c.close);
           md.open60 = data.candles.map((c) => c.open);
           md.high60 = data.candles.map((c) => c.high);
@@ -525,10 +402,15 @@ try {
       const matchingPositions = positions.filter((p) => p?.name === symbol);
       if (!md.multiplier_range?.length) return;
 
-      if (data.echo_req.granularity === 3600) {
+      if (data.echo_req.granularity === 1800) {
         if (md.openTime60 === 0) {
           md.openTime60 = data.ohlc.open_time;
         }
+
+        const multiplierPositions = matchingPositions.filter(
+          (p) => p.type !== "ONETOUCH",
+        );
+        const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
 
         if (md.close60.length === 0) {
           md.close60.push(Number(data.ohlc.close));
@@ -543,6 +425,7 @@ try {
         }
 
         const len = md.close60.length;
+        const prevIndex = len - 2;
         const currIndex = len - 1;
         if (len < 200) return;
 
@@ -552,26 +435,72 @@ try {
         const ema21 = calculateEMA(md.close60, 21);
         const ema21Now = ema21[currIndex];
 
-        const { adx, plusDI, minusDI } = calculateADX(
-          md.high60,
-          md.low60,
-          md.close60,
-          14,
-        );
-
-        const adxNow = adx[currIndex];
-        const plus = plusDI[currIndex];
-        const minus = minusDI[currIndex];
-        const signal = detectCrossover(plus, minus);
-        const threshold = 20;
-
-        console.log(signal);
-
         md.trendUp60 = ema14Now > ema21Now;
         md.trendDown60 = ema14Now < ema21Now;
 
-        md.canBuy = md.trendUp60 && adxNow > threshold;
-        md.canSell = md.trendDown60 && adxNow > threshold;
+        if (!riskyPosition && Math.trunc(balance) !== 0) {
+          if (
+            md.trendUp60 &&
+            crossedEma(md.high60, md.low60, prevIndex, ema21) &&
+            bullish(md.open60, md.close60, prevIndex)
+          ) {
+            await getMultiProposal(
+              "MULTUP",
+              symbol,
+              amount,
+              md.multiplier_range[0],
+            );
+            loading = true;
+          }
+          if (
+            md.trendDown60 &&
+            crossedEma(md.high60, md.low60, prevIndex, ema21) &&
+            bearish(md.open60, md.close60, prevIndex)
+          ) {
+            await getMultiProposal(
+              "MULTDOWN",
+              symbol,
+              amount,
+              md.multiplier_range[0],
+            );
+            loading = true;
+          }
+        }
+
+        if (multiplierPositions) {
+          for (const contract of multiplierPositions) {
+            if (contract?.type === "MULTUP") {
+              if (
+                md.trendDown60 &&
+                crossedEma(md.high60, md.low60, prevIndex, ema21) &&
+                bearish(md.open60, md.close60, prevIndex)
+              ) {
+                contract.contract_id &&
+                  closePosition(
+                    symbol,
+                    contract.contract_id,
+                    `Opposite Signal`,
+                  );
+                loading = true;
+              }
+            }
+            if (contract?.type === "MULTDOWN") {
+              if (
+                md.trendUp60 &&
+                crossedEma(md.high60, md.low60, prevIndex, ema21) &&
+                bullish(md.open60, md.close60, prevIndex)
+              ) {
+                contract.contract_id &&
+                  closePosition(
+                    symbol,
+                    contract.contract_id,
+                    `Opposite Signal`,
+                  );
+                loading = true;
+              }
+            }
+          }
+        }
 
         if (md.openTime60 !== data.ohlc.open_time) {
           md.openTime60 = data.ohlc.open_time;
@@ -589,10 +518,6 @@ try {
         if (md.openTime === 0) {
           md.openTime = data.ohlc.open_time;
         }
-        const multiplierPositions = matchingPositions.filter(
-          (p) => p.type !== "ONETOUCH",
-        );
-        const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
 
         if (md.close.length === 0) {
           md.close.push(Number(data.ohlc.close));
@@ -621,110 +546,22 @@ try {
 
         md.trendDown = ema14Now < ema21Now;
 
-        const { adx, plusDI, minusDI } = calculateADX(
-          md.high,
-          md.low,
-          md.close,
-          14,
-        );
-
-        const adxNow = adx[currIndex];
-        const signal = detectCrossover(plusDI, minusDI)
-        const threshold = 20;
-
         if (md.canAlert && alertSymbols.includes(symbol)) {
-          if (signal === "bullish") {
-            sendMessage(`Bullish signal on ${symbol}`);
-            md.canAlert = false;
-          } else if (signal === "bearish") {
-            sendMessage(`Bearish signal on ${symbol}`);
-            md.canAlert = false;
-          }
-
           if (
-            md.canBuy &&
             md.trendUp &&
             crossedEma(md.high, md.low, prevIndex, ema21) &&
-            recentEmaCross(ema14, ema21, 15) === "bullish" &&
             bullish(md.open, md.close, prevIndex)
           ) {
             sendMessage(`Bullish signal off 21 EMA on ${symbol}`);
             md.canAlert = false;
           }
           if (
-            md.canSell &&
             md.trendDown &&
             crossedEma(md.high, md.low, prevIndex, ema21) &&
-            recentEmaCross(ema14, ema21, 15) === "bearish" &&
             bearish(md.open, md.close, prevIndex)
           ) {
             sendMessage(`Bearish signal off 21 EMA on ${symbol}`);
             md.canAlert = false;
-          }
-        }
-        if (!riskyPosition && Math.trunc(balance) !== 0) {
-          if (
-            md.trendUp &&
-            crossedEma(md.high, md.low, prevIndex, ema21) &&
-            bullish(md.open, md.close, prevIndex) &&
-            adxNow > threshold
-          ) {
-            await getMultiProposal(
-              "MULTUP",
-              symbol,
-              amount,
-              md.multiplier_range[0],
-            );
-            loading = true;
-          }
-          if (
-            md.trendDown &&
-            crossedEma(md.high, md.low, prevIndex, ema21) &&
-            bearish(md.open, md.close, prevIndex) &&
-            adxNow > threshold
-          ) {
-            await getMultiProposal(
-              "MULTDOWN",
-              symbol,
-              amount,
-              md.multiplier_range[0],
-            );
-            loading = true;
-          }
-        }
-
-        if (multiplierPositions) {
-          for (const contract of multiplierPositions) {
-            if (contract?.type === "MULTUP") {
-              if (
-                md.trendDown &&
-                crossedEma(md.high, md.low, prevIndex, ema21) &&
-                bearish(md.open, md.close, prevIndex)
-              ) {
-                contract.contract_id &&
-                  closePosition(
-                    symbol,
-                    contract.contract_id,
-                    `Opposite Signal`,
-                  );
-                loading = true;
-              }
-            }
-            if (contract?.type === "MULTDOWN") {
-              if (
-                md.trendUp &&
-                crossedEma(md.high, md.low, prevIndex, ema21) &&
-                bullish(md.open, md.close, prevIndex)
-              ) {
-                contract.contract_id &&
-                  closePosition(
-                    symbol,
-                    contract.contract_id,
-                    `Opposite Signal`,
-                  );
-                loading = true;
-              }
-            }
           }
         }
 
