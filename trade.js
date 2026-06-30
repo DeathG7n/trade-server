@@ -150,7 +150,7 @@ const sendMessage = async (message) => {
 };
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake;
+  const stopLoss = stake * 0.9;
   const takeProfit = stake;
   const request = {
     proposal: 1,
