@@ -444,18 +444,19 @@ try {
         }
 
         const len = md.close60.length;
+        const currIndex = len - 1
         const prevIndex = len - 2;
         if (len < 200) return;
 
         const ema14 = calculateEMA(md.close60, 14);
-        const ema14Then = ema14[prevIndex];
+        const ema14Now = ema14[currIndex];
 
         const ema21 = calculateEMA(md.close60, 21);
-        const ema21Then = ema21[prevIndex];
+        const ema21Now = ema21[currIndex];
 
-        md.trendUp60 = ema14Then > ema21Then;
+        md.trendUp60 = ema14Now > ema21Now;
 
-        md.trendDown60 = ema14Then < ema21Then;
+        md.trendDown60 = ema14Now < ema21Now;
 
         if (!riskyPosition && Math.trunc(balance) !== 0) {
           if (
@@ -553,18 +554,19 @@ try {
         }
 
         const len = md.close.length;
+        const currIndex = len - 1
         const prevIndex = len - 2;
         if (len < 200) return;
 
         const ema14 = calculateEMA(md.close, 14);
-        const ema14Then = ema14[prevIndex];
+        const ema14Now = ema14[currIndex];
 
         const ema21 = calculateEMA(md.close, 21);
-        const ema21Then = ema21[prevIndex];
+        const ema21Now = ema21[currIndex];
 
-        md.trendUp = ema14Then > ema21Then;
+        md.trendUp = ema14Now > ema21Now;
 
-        md.trendDown = ema14Then < ema21Then;
+        md.trendDown = ema14Now < ema21Now;
 
         if (md.canAlert && alertSymbols.includes(symbol)) {
           if (
@@ -572,7 +574,7 @@ try {
             candleCrossesEitherEMA(prevIndex, ema14, ema21, md.high, md.low) &&
             bullish(md.open, md.close, prevIndex)
           ) {
-            sendMessage(`Bullish signal off 21 EMA on ${symbol}`);
+            sendMessage(`Bullish signal off EMA on ${symbol}`);
             md.canAlert = false;
           }
           if (
@@ -580,7 +582,7 @@ try {
             candleCrossesEitherEMA(prevIndex, ema14, ema21, md.high, md.low) &&
             bearish(md.open, md.close, prevIndex)
           ) {
-            sendMessage(`Bearish signal off 21 EMA on ${symbol}`);
+            sendMessage(`Bearish signal off EMA on ${symbol}`);
             md.canAlert = false;
           }
         }
