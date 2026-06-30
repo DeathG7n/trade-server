@@ -1,8 +1,4 @@
-// function candleCrossesEitherEMA(index, ema1, ema2, high, low) {
-//   return (
-//     crossedEma(high, low, index, ema1) || crossedEma(high, low, index, ema2)
-//   );
-// }
+
 
 // function detectCrossover(emaFast, emaSlow) {
 //   const len = emaFast.length;
