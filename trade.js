@@ -150,7 +150,7 @@ const sendMessage = async (message) => {
 };
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = 0;
+  const stopLoss = stake;
   const takeProfit = stake;
   const request = {
     proposal: 1,
@@ -579,6 +579,7 @@ try {
       }
     }
     if (data.msg_type === "proposal") {
+      console.log(data)
       for (let i = 0; i < trades; i++) {
         try {
           buyContract(
@@ -606,7 +607,7 @@ try {
         data.proposal_open_contract?.limit_order?.stop_loss?.order_amount;
       const profitAmount =
         data.proposal_open_contract?.limit_order?.take_profit?.order_amount;
-      const stopOut = data.proposal_open_contract?.limit_order?.stop_out?.value;
+      const stopOut = data.proposal_open_contract?.limit_order?.stop_out?.order_amount;
       const stop = data.proposal_open_contract?.limit_order?.stop_loss?.value;
       const takeProfit =
         data.proposal_open_contract?.limit_order?.take_profit?.value;
