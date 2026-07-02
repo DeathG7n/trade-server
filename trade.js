@@ -5,6 +5,14 @@ import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 import { wsUrl } from "./server.js";
+import {
+  bearish,
+  bullish,
+  calculateADX,
+  candleCrossesEitherEMA,
+  crossedEma,
+  recentEmaCross,
+} from "./util.js";
 
 dotenv.config();
 const app = express();
@@ -33,7 +41,7 @@ let connection = false;
 let authorized = false;
 let loading = true;
 let lastBalance = null;
-let timeframes = [300, 1800];
+let timeframes = [300, 3600];
 let trades = 1;
 const subscribedContracts = new Set();
 
@@ -60,7 +68,8 @@ const symbols = [
   "JD100",
 ];
 
-const alertSymbols = ["JD75"];
+const alertSymbols = ["JD75", "JD100"];
+const tradeSymbols = ["stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5"];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -76,8 +85,7 @@ symbols.forEach((s) => {
     high60: [],
     low60: [],
     openTime60: 0,
-    trendUp60: false,
-    trendDown60: false,
+    strongTrend: false,
     multiplier_range: [],
     canAlert: true,
     canBuy: false,
@@ -96,22 +104,6 @@ app.listen(3000, () => {
 });
 
 //Functions
-function bearish(open, close, candle) {
-  return open?.[candle] > close?.[candle];
-}
-function bullish(open, close, candle) {
-  return close?.[candle] > open?.[candle];
-}
-
-function crossedEma(high, low, candle, ema) {
-  return high?.[candle] > ema?.[candle] && ema?.[candle] > low?.[candle];
-}
-
-function candleCrossesEitherEMA(index, ema1, ema2, high, low) {
-  return (
-    crossedEma(high, low, index, ema1) || crossedEma(high, low, index, ema2)
-  );
-}
 
 function send(msg) {
   if (ws.readyState === WebSocket.OPEN) {
@@ -383,7 +375,7 @@ try {
         sendMessage("Bot is still running");
       }
       try {
-        if (data.echo_req.granularity === 1800) {
+        if (data.echo_req.granularity === 3600) {
           md.close60 = data.candles.map((c) => c.close);
           md.open60 = data.candles.map((c) => c.open);
           md.high60 = data.candles.map((c) => c.high);
@@ -406,9 +398,13 @@ try {
       const symbol = data.echo_req.ticks_history;
       const md = marketData[symbol];
       const matchingPositions = positions.filter((p) => p?.name === symbol);
+      const multiplierPositions = matchingPositions.filter(
+        (p) => p.type !== "ONETOUCH",
+      );
+      const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
       if (!md.multiplier_range?.length) return;
 
-      if (data.echo_req.granularity === 1800) {
+      if (data.echo_req.granularity === 3600) {
         if (md.openTime60 === 0) {
           md.openTime60 = data.ohlc.open_time;
         }
@@ -426,11 +422,6 @@ try {
           return;
         }
 
-        const multiplierPositions = matchingPositions.filter(
-          (p) => p.type !== "ONETOUCH",
-        );
-        const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
-
         if (md.close60.length === 0) {
           md.close60.push(Number(data.ohlc.close));
           md.open60.push(Number(data.ohlc.open));
@@ -444,83 +435,11 @@ try {
         }
 
         const len = md.close60.length;
-        const currIndex = len - 1
-        const prevIndex = len - 2;
+        const currIndex = len - 1;
         if (len < 200) return;
 
-        const ema14 = calculateEMA(md.close60, 14);
-        const ema14Now = ema14[currIndex];
-
-        const ema21 = calculateEMA(md.close60, 21);
-        const ema21Now = ema21[currIndex];
-
-        md.trendUp60 = ema14Now > ema21Now;
-
-        md.trendDown60 = ema14Now < ema21Now;
-
-        if (!riskyPosition && Math.trunc(balance) !== 0) {
-          if (
-            md.trendUp60 &&
-            crossedEma(md.high60, md.low60, prevIndex, ema21) &&
-            bullish(md.open60, md.close60, prevIndex)
-          ) {
-            await getMultiProposal(
-              "MULTUP",
-              symbol,
-              amount,
-              md.multiplier_range[0],
-            );
-            loading = true;
-          }
-          if (
-            md.trendDown60 &&
-            crossedEma(md.high60, md.low60, prevIndex, ema21) &&
-            bearish(md.open60, md.close60, prevIndex)
-          ) {
-            await getMultiProposal(
-              "MULTDOWN",
-              symbol,
-              amount,
-              md.multiplier_range[0],
-            );
-            loading = true;
-          }
-        }
-
-        if (multiplierPositions) {
-          for (const contract of multiplierPositions) {
-            if (contract?.type === "MULTUP") {
-              if (
-                md.trendDown60 &&
-                crossedEma(md.high60, md.low60, prevIndex, ema21) &&
-                bearish(md.open60, md.close60, prevIndex)
-              ) {
-                contract.contract_id &&
-                  closePosition(
-                    symbol,
-                    contract.contract_id,
-                    `Opposite Signal`,
-                  );
-                loading = true;
-              }
-            }
-            if (contract?.type === "MULTDOWN") {
-              if (
-                md.trendUp60 &&
-                crossedEma(md.high60, md.low60, prevIndex, ema21) &&
-                bullish(md.open60, md.close60, prevIndex)
-              ) {
-                contract.contract_id &&
-                  closePosition(
-                    symbol,
-                    contract.contract_id,
-                    `Opposite Signal`,
-                  );
-                loading = true;
-              }
-            }
-          }
-        }
+        const trendStrength = calculateADX(md.high60, md.low60, md.close60, 14);
+        md.strongTrend = trendStrength.adx[currIndex] > 20;
       }
 
       if (data.echo_req.granularity === 300) {
@@ -554,7 +473,7 @@ try {
         }
 
         const len = md.close.length;
-        const currIndex = len - 1
+        const currIndex = len - 1;
         const prevIndex = len - 2;
         if (len < 200) return;
 
@@ -565,25 +484,109 @@ try {
         const ema21Now = ema21[currIndex];
 
         md.trendUp = ema14Now > ema21Now;
-
         md.trendDown = ema14Now < ema21Now;
 
         if (md.canAlert && alertSymbols.includes(symbol)) {
-          if (
-            md.trendUp &&
-            candleCrossesEitherEMA(prevIndex, ema14, ema21, md.high, md.low) &&
-            bullish(md.open, md.close, prevIndex)
-          ) {
-            sendMessage(`Bullish signal off EMA on ${symbol}`);
-            md.canAlert = false;
+          if (md.strongTrend) {
+            if (
+              md.trendUp &&
+              candleCrossesEitherEMA(
+                prevIndex,
+                ema14,
+                ema21,
+                md.high,
+                md.low,
+              ) &&
+              bullish(md.open, md.close, prevIndex)
+            ) {
+              sendMessage(`Bullish signal off EMA on ${symbol}`);
+              md.canAlert = false;
+            }
+            if (
+              md.trendDown &&
+              candleCrossesEitherEMA(
+                prevIndex,
+                ema14,
+                ema21,
+                md.high,
+                md.low,
+              ) &&
+              bearish(md.open, md.close, prevIndex)
+            ) {
+              sendMessage(`Bearish signal off EMA on ${symbol}`);
+              md.canAlert = false;
+            }
           }
-          if (
-            md.trendDown &&
-            candleCrossesEitherEMA(prevIndex, ema14, ema21, md.high, md.low) &&
-            bearish(md.open, md.close, prevIndex)
-          ) {
-            sendMessage(`Bearish signal off EMA on ${symbol}`);
-            md.canAlert = false;
+        }
+        if (
+          !riskyPosition &&
+          Math.trunc(balance) !== 0 &&
+          tradeSymbols.includes(symbol)
+        ) {
+          if (md.strongTrend) {
+            if (
+              md.trendUp &&
+              crossedEma(md.high, md.low, prevIndex, ema21) &&
+              bullish(md.open, md.close, prevIndex) &&
+              recentEmaCross(ema14, ema21, 15) === "bullish"
+            ) {
+              await getMultiProposal(
+                "MULTUP",
+                symbol,
+                amount,
+                md.multiplier_range[0],
+              );
+              loading = true;
+            }
+            if (
+              md.trendDown &&
+              crossedEma(md.high, md.low, prevIndex, ema21) &&
+              bearish(md.open, md.close, prevIndex) &&
+              recentEmaCross(ema14, ema21, 15) === "bearish"
+            ) {
+              await getMultiProposal(
+                "MULTDOWN",
+                symbol,
+                amount,
+                md.multiplier_range[0],
+              );
+              loading = true;
+            }
+          }
+        }
+
+        if (multiplierPositions.length !== 0) {
+          for (const contract of multiplierPositions) {
+            if (contract?.type === "MULTUP") {
+              if (
+                md.trendDown &&
+                crossedEma(md.high, md.low, prevIndex, ema21) &&
+                bearish(md.open, md.close, prevIndex)
+              ) {
+                contract.contract_id &&
+                  closePosition(
+                    symbol,
+                    contract.contract_id,
+                    `Opposite Signal`,
+                  );
+                loading = true;
+              }
+            }
+            if (contract?.type === "MULTDOWN") {
+              if (
+                md.trendUp &&
+                crossedEma(md.high, md.low, prevIndex, ema21) &&
+                bullish(md.open, md.close, prevIndex)
+              ) {
+                contract.contract_id &&
+                  closePosition(
+                    symbol,
+                    contract.contract_id,
+                    `Opposite Signal`,
+                  );
+                loading = true;
+              }
+            }
           }
         }
       }
