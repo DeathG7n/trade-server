@@ -66,7 +66,7 @@ const symbols = [
   "JD100",
 ];
 
-const alertSymbols = ["JD75", "JD100"];
+const alertSymbols = ["JD75", "JD100", "1HZ75V"];
 const tradeSymbols = ["stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5"];
 let marketData = {};
 symbols.forEach((s) => {
@@ -78,16 +78,13 @@ symbols.forEach((s) => {
     openTime: 0,
     trendUp: false,
     trendDown: false,
-    close60: [],
-    open60: [],
-    high60: [],
-    low60: [],
-    openTime60: 0,
-    strongTrend: false,
+    close5: [],
+    open5: [],
+    high5: [],
+    low5: [],
+    openTime5: 0,
     multiplier_range: [],
     canAlert: true,
-    canBuy: false,
-    canSell: false,
   };
 });
 
@@ -374,10 +371,10 @@ try {
       }
       try {
         if (data.echo_req.granularity === 300) {
-          md.close60 = data.candles.map((c) => c.close);
-          md.open60 = data.candles.map((c) => c.open);
-          md.high60 = data.candles.map((c) => c.high);
-          md.low60 = data.candles.map((c) => c.low);
+          md.close5 = data.candles.map((c) => c.close);
+          md.open5 = data.candles.map((c) => c.open);
+          md.high5 = data.candles.map((c) => c.high);
+          md.low5 = data.candles.map((c) => c.low);
         }
         if (data.echo_req.granularity === 60) {
           md.close = data.candles.map((c) => c.close);
@@ -403,12 +400,12 @@ try {
       if (!md.multiplier_range?.length) return;
 
       if (data.echo_req.granularity === 300) {
-        if (md.openTime60 === 0) {
-          md.openTime60 = data.ohlc.open_time;
+        if (md.openTime5 === 0) {
+          md.openTime5 = data.ohlc.open_time;
         }
 
-        if (md.openTime60 !== data.ohlc.open_time) {
-          md.openTime60 = data.ohlc.open_time;
+        if (md.openTime5 !== data.ohlc.open_time) {
+          md.openTime5 = data.ohlc.open_time;
           send({
             ticks_history: data.echo_req.ticks_history,
             style: "candles",
@@ -420,25 +417,25 @@ try {
           return;
         }
 
-        if (md.close60.length === 0) {
-          md.close60.push(Number(data.ohlc.close));
-          md.open60.push(Number(data.ohlc.open));
-          md.high60.push(Number(data.ohlc.high));
-          md.low60.push(Number(data.ohlc.low));
+        if (md.close5.length === 0) {
+          md.close5.push(Number(data.ohlc.close));
+          md.open5.push(Number(data.ohlc.open));
+          md.high5.push(Number(data.ohlc.high));
+          md.low5.push(Number(data.ohlc.low));
         } else {
-          md.close60[md.close60.length - 1] = Number(data.ohlc.close);
-          md.open60[md.open60.length - 1] = Number(data.ohlc.open);
-          md.high60[md.high60.length - 1] = Number(data.ohlc.high);
-          md.low60[md.low60.length - 1] = Number(data.ohlc.low);
+          md.close5[md.close5.length - 1] = Number(data.ohlc.close);
+          md.open5[md.open5.length - 1] = Number(data.ohlc.open);
+          md.high5[md.high5.length - 1] = Number(data.ohlc.high);
+          md.low5[md.low5.length - 1] = Number(data.ohlc.low);
         }
 
-        const len = md.close60.length;
+        const len = md.close5.length;
         const prevIndex = len - 2;
         if (len < 200) return;
 
-        const ema50 = calculateEMA(md.close60, 50);
+        const ema50 = calculateEMA(md.close5, 50);
 
-        const ema100 = calculateEMA(md.close60, 100);
+        const ema100 = calculateEMA(md.close5, 100);
 
         if (md.canAlert && alertSymbols.includes(symbol)) {
           if (
@@ -446,10 +443,10 @@ try {
               prevIndex,
               ema50,
               ema100,
-              md.high60,
-              md.low60,
+              md.high5,
+              md.low5,
             ) &&
-            bullish(md.open60, md.close60, prevIndex)
+            bullish(md.open5, md.close5, prevIndex)
           ) {
             sendMessage(`Bullish signal off EMA on ${symbol} 5 minutes`);
             md.canAlert = false;
@@ -459,10 +456,10 @@ try {
               prevIndex,
               ema50,
               ema100,
-              md.high60,
-              md.low60,
+              md.high5,
+              md.low5,
             ) &&
-            bearish(md.open60, md.close60, prevIndex)
+            bearish(md.open5, md.close5, prevIndex)
           ) {
             sendMessage(`Bearish signal off EMA on ${symbol} 5 minutes`);
             md.canAlert = false;
