@@ -451,7 +451,7 @@ try {
             bullish(md.open5, md.close5, prevIndex)
           ) {
             sendMessage(`Bullish signal off EMA on ${symbol} 5 minutes`);
-            md.canAlert = false;
+            md.canAlert5 = false;
           }
           if (
             candleCrossesEitherEMA(
@@ -464,7 +464,7 @@ try {
             bearish(md.open5, md.close5, prevIndex)
           ) {
             sendMessage(`Bearish signal off EMA on ${symbol} 5 minutes`);
-            md.canAlert = false;
+            md.canAlert5 = false;
           }
         }
       }
