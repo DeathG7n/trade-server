@@ -85,6 +85,7 @@ symbols.forEach((s) => {
     openTime5: 0,
     multiplier_range: [],
     canAlert: true,
+    canAlert5: true,
   };
 });
 
@@ -406,6 +407,7 @@ try {
 
         if (md.openTime5 !== data.ohlc.open_time) {
           md.openTime5 = data.ohlc.open_time;
+          md.canAlert5 = true;
           send({
             ticks_history: data.echo_req.ticks_history,
             style: "candles",
@@ -437,7 +439,7 @@ try {
 
         const ema100 = calculateEMA(md.close5, 100);
 
-        if (md.canAlert && alertSymbols.includes(symbol)) {
+        if (md.canAlert5 && alertSymbols.includes(symbol)) {
           if (
             candleCrossesEitherEMA(
               prevIndex,
@@ -530,7 +532,7 @@ try {
           if (
             crossedEma(md.high, md.low, thirdIndex, ema50) &&
             bullish(md.open, md.close, thirdIndex) &&
-            md.close[prevIndex] > ema50
+            md.close[prevIndex] > ema50[prevIndex]
           ) {
             await getMultiProposal(
               "MULTUP",
@@ -543,7 +545,7 @@ try {
           if (
             crossedEma(md.high, md.low, thirdIndex, ema50) &&
             bearish(md.open, md.close, thirdIndex) &&
-            md.close[prevIndex] < ema50
+            md.close[prevIndex] < ema50[prevIndex]
           ) {
             await getMultiProposal(
               "MULTDOWN",
@@ -561,7 +563,7 @@ try {
               if (
                 crossedEma(md.high, md.low, thirdIndex, ema50) &&
                 bearish(md.open, md.close, thirdIndex) &&
-                md.close[prevIndex] < ema50
+                md.close[prevIndex] < ema50[prevIndex]
               ) {
                 contract.contract_id &&
                   closePosition(
@@ -576,7 +578,7 @@ try {
               if (
                 crossedEma(md.high, md.low, thirdIndex, ema50) &&
                 bullish(md.open, md.close, thirdIndex) &&
-                md.close[prevIndex] > ema50
+                md.close[prevIndex] > ema50[prevIndex]
               ) {
                 contract.contract_id &&
                   closePosition(
