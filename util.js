@@ -199,3 +199,51 @@ export function candleCrossesEitherEMA(index, ema1, ema2, high, low) {
     crossedEma(high, low, index, ema1) || crossedEma(high, low, index, ema2)
   );
 }
+
+// Body size
+export function candleBody(open, close, index) {
+  return Math.abs(close[index] - open[index]);
+}
+
+export function calculateATR(high, low, close, period = 14) {
+  if (
+    high.length !== low.length ||
+    low.length !== close.length ||
+    high.length < period + 1
+  ) {
+    return [];
+  }
+
+  const tr = [];
+
+  // True Range
+  tr.push(high[0] - low[0]);
+
+  for (let i = 1; i < high.length; i++) {
+    tr.push(
+      Math.max(
+        high[i] - low[i],
+        Math.abs(high[i] - close[i - 1]),
+        Math.abs(low[i] - close[i - 1])
+      )
+    );
+  }
+
+  const atr = [];
+
+  // First ATR = SMA of first period TRs
+  let firstATR = 0;
+  for (let i = 0; i < period; i++) {
+    firstATR += tr[i];
+  }
+  firstATR /= period;
+
+  atr[period - 1] = firstATR;
+
+  // Wilder smoothing
+  for (let i = period; i < tr.length; i++) {
+    atr[i] = ((atr[i - 1] * (period - 1)) + tr[i]) / period;
+  }
+
+  return atr;
+}
