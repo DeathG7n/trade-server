@@ -247,3 +247,44 @@ export function calculateATR(high, low, close, period = 14) {
 
   return atr;
 }
+
+export function calculateHeikinAshi(open, high, low, close) {
+  const haOpen = [];
+  const haHigh = [];
+  const haLow = [];
+  const haClose = [];
+
+  if (
+    open.length !== high.length ||
+    high.length !== low.length ||
+    low.length !== close.length
+  ) {
+    throw new Error("OHLC arrays must have the same length.");
+  }
+
+  for (let i = 0; i < close.length; i++) {
+    // HA Close
+    haClose[i] = (open[i] + high[i] + low[i] + close[i]) / 4;
+
+    if (i === 0) {
+      // First candle
+      haOpen[i] = (open[i] + close[i]) / 2;
+    } else {
+      // Remaining candles
+      haOpen[i] = (haOpen[i - 1] + haClose[i - 1]) / 2;
+    }
+
+    // HA High
+    haHigh[i] = Math.max(high[i], haOpen[i], haClose[i]);
+
+    // HA Low
+    haLow[i] = Math.min(low[i], haOpen[i], haClose[i]);
+  }
+
+  return {
+    open: haOpen,
+    high: haHigh,
+    low: haLow,
+    close: haClose,
+  };
+}
