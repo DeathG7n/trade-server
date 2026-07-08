@@ -514,6 +514,7 @@ try {
 
         const len = md.close.length;
         const prevIndex = len - 2;
+        const thirdIndex = len - 3;
         if (len < 200) return;
 
         const ema50 = calculateEMA(md.close, 50);
@@ -550,10 +551,66 @@ try {
               );
             }
           }
+          if (crossedEma(haHigh, haLow, thirdIndex, ema50)) {
+            if (
+              bullish(haOpen, haClose, prevIndex) &&
+              haClose[prevIndex] > ema50Then
+            ) {
+              loading = true;
+              await getMultiProposal(
+                "MULTUP",
+                symbol,
+                amount,
+                md.multiplier_range[0],
+              );
+            }
+            if (
+              bearish(haOpen, haClose, prevIndex) &&
+              haClose[prevIndex] < ema50Then
+            ) {
+              loading = true;
+              await getMultiProposal(
+                "MULTDOWN",
+                symbol,
+                amount,
+                md.multiplier_range[0],
+              );
+            }
+          }
         }
         if (multiplierPositions.length !== 0) {
           for (const contract of multiplierPositions) {
             if (crossedEma(haHigh, haLow, prevIndex, ema50)) {
+              if (contract?.type === "MULTUP") {
+                if (
+                  bearish(haOpen, haClose, prevIndex) &&
+                  haClose[prevIndex] < ema50Then
+                ) {
+                  loading = true;
+                  contract.contract_id &&
+                    closePosition(
+                      symbol,
+                      contract.contract_id,
+                      `Opposite Signal`,
+                    );
+                }
+              }
+              if (contract?.type === "MULTDOWN") {
+                if (
+                  bullish(haOpen, haClose, prevIndex) &&
+                  haClose[prevIndex] > ema50Then
+                ) {
+                  loading = true;
+                  contract.contract_id &&
+                    closePosition(
+                      symbol,
+                      contract.contract_id,
+                      `Opposite Signal`,
+                    );
+                }
+              }
+            }
+            if (crossedEma(haHigh, haLow, thirdIndex, ema50)) {
               if (contract?.type === "MULTUP") {
                 if (
                   bearish(haOpen, haClose, prevIndex) &&
