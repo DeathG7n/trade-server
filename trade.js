@@ -517,6 +517,7 @@ try {
         if (len < 200) return;
 
         const ema50 = calculateEMA(md.close, 50);
+        const ema50Then = ema50[prevIndex]
 
         if (
           !riskyPosition &&
@@ -526,7 +527,7 @@ try {
           if (crossedEma(haHigh, haLow, prevIndex, ema50)) {
             if (
               bullish(haOpen, haClose, prevIndex) &&
-              haClose[prevIndex] > ema50
+              haClose[prevIndex] > ema50Then
             ) {
               loading = true;
               await getMultiProposal(
@@ -538,7 +539,7 @@ try {
             }
             if (
               bearish(haOpen, haClose, prevIndex) &&
-              haClose[prevIndex] < ema50
+              haClose[prevIndex] < ema50Then
             ) {
               loading = true;
               await getMultiProposal(
@@ -556,7 +557,7 @@ try {
               if (contract?.type === "MULTUP") {
                 if (
                   bearish(haOpen, haClose, prevIndex) &&
-                  haClose[prevIndex] < ema50
+                  haClose[prevIndex] < ema50Then
                 ) {
                   loading = true;
                   contract.contract_id &&
@@ -570,7 +571,7 @@ try {
               if (contract?.type === "MULTDOWN") {
                 if (
                   bullish(haOpen, haClose, prevIndex) &&
-                  haClose[prevIndex] > ema50
+                  haClose[prevIndex] > ema50Then
                 ) {
                   loading = true;
                   contract.contract_id &&
