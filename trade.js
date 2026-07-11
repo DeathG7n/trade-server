@@ -68,7 +68,22 @@ const symbols = [
 ];
 
 const alertSymbols = ["JD100"];
-const tradeSymbols = ["stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5"];
+const tradeSymbols = [
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
+  "1HZ10V",
+  "R_10",
+  "1HZ25V",
+  "R_25",
+  "1HZ50V",
+  "R_50",
+  "1HZ75V",
+  "R_75",
+  "1HZ100V",
+  "R_100",
+];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -495,13 +510,7 @@ try {
         if (md.canAlert && alertSymbols.includes(symbol)) {
           if (
             md.trendUp15 &&
-            candleCrossesEitherEMA(
-              currIndex,
-              ema50,
-              ema50,
-              md.high,
-              md.low,
-            ) &&
+            candleCrossesEitherEMA(currIndex, ema50, ema50, md.high, md.low) &&
             bullish(md.open, md.close, currIndex)
           ) {
             sendMessage(`Bullish signal off EMA on ${symbol} 1 minute`);
@@ -509,13 +518,7 @@ try {
           }
           if (
             md.trendDown15 &&
-            candleCrossesEitherEMA(
-              currIndex,
-              ema50,
-              ema50,
-              md.high,
-              md.low,
-            ) &&
+            candleCrossesEitherEMA(currIndex, ema50, ema50, md.high, md.low) &&
             bearish(md.open, md.close, currIndex)
           ) {
             sendMessage(`Bearish signal off EMA on ${symbol} 1 minute`);
