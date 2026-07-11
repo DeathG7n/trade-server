@@ -48,18 +48,18 @@ const symbols = [
   "stpRNG",
   "stpRNG2",
   "stpRNG3",
-  "stpRNG4",
+  // "stpRNG4",
   // "stpRNG5",
-  "1HZ10V",
-  "R_10",
-  "1HZ25V",
-  "R_25",
-  "1HZ50V",
-  "R_50",
-  "1HZ75V",
-  "R_75",
-  "1HZ100V",
-  "R_100",
+  // "1HZ10V",
+  // "R_10",
+  // "1HZ25V",
+  // "R_25",
+  // "1HZ50V",
+  // "R_50",
+  // "1HZ75V",
+  // "R_75",
+  // "1HZ100V",
+  // "R_100",
   // "JD10",
   // "JD25",
   // "JD50",
@@ -68,22 +68,7 @@ const symbols = [
 ];
 
 const alertSymbols = ["JD100"];
-const tradeSymbols = [
-  "stpRNG",
-  "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
-  "1HZ10V",
-  "R_10",
-  "1HZ25V",
-  "R_25",
-  "1HZ50V",
-  "R_50",
-  "1HZ75V",
-  "R_75",
-  "1HZ100V",
-  "R_100",
-];
+const tradeSymbols = ["stpRNG", "stpRNG2", "stpRNG3"];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
