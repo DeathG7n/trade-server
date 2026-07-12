@@ -437,13 +437,24 @@ try {
 
         const len = md.close15.length;
         const prevIndex = len - 2;
+        const currIndex = len - 1;
         if (len < 200) return;
 
         const ema14 = calculateEMA(md.close15, 14);
         const ema21 = calculateEMA(md.close15, 21);
 
-        md.trendUp15 = ema14[prevIndex] > ema21[prevIndex];
-        md.trendDown15 = ema14[prevIndex] < ema21[prevIndex];
+        const canBuy =
+          candleCrossesEitherEMA(
+            currIndex,
+            ema14,
+            ema21,
+            md.high15,
+            md.low15,
+          ) ||
+          candleCrossesEitherEMA(prevIndex, ema14, ema21, md.high15, md.low15);
+
+        md.trendUp15 = ema14[prevIndex] > ema21[prevIndex] && canBuy;
+        md.trendDown15 = ema14[prevIndex] < ema21[prevIndex] && canBuy;
       }
 
       if (data.echo_req.granularity === 60) {
