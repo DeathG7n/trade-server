@@ -578,30 +578,6 @@ try {
         }
         if (multiplierPositions.length !== 0) {
           for (const contract of multiplierPositions) {
-            if (contract.stoploss === 0) {
-              if (contract?.type === "MULTUP") {
-                if (haClose[prevIndex] < ema50Then) {
-                  loading = true;
-                  contract.contract_id &&
-                    closePosition(
-                      symbol,
-                      contract.contract_id,
-                      `Opposite Signal`,
-                    );
-                }
-              }
-              if (contract?.type === "MULTDOWN") {
-                if (haClose[prevIndex] > ema50Then) {
-                  loading = true;
-                  contract.contract_id &&
-                    closePosition(
-                      symbol,
-                      contract.contract_id,
-                      `Opposite Signal`,
-                    );
-                }
-              }
-            }
             if (contract?.type === "MULTUP") {
               if (md.trendDown15) {
                 loading = true;
