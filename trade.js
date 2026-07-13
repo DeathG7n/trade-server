@@ -48,27 +48,43 @@ const symbols = [
   "stpRNG",
   "stpRNG2",
   "stpRNG3",
-  // "stpRNG4",
-  // "stpRNG5",
-  // "1HZ10V",
-  // "R_10",
-  // "1HZ25V",
-  // "R_25",
-  // "1HZ50V",
-  // "R_50",
-  // "1HZ75V",
-  // "R_75",
-  // "1HZ100V",
-  // "R_100",
+  "stpRNG4",
+  "stpRNG5",
+  "1HZ10V",
+  "R_10",
+  "1HZ25V",
+  "R_25",
+  "1HZ50V",
+  "R_50",
+  "1HZ75V",
+  "R_75",
+  "1HZ100V",
+  "R_100",
   // "JD10",
   // "JD25",
   // "JD50",
   // "JD75",
-  "JD100",
+  // "JD100",
 ];
 
-const alertSymbols = ["JD100"];
-const tradeSymbols = ["stpRNG", "stpRNG2", "stpRNG3"];
+const alertSymbols = [];
+const tradeSymbols = [
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
+  "stpRNG5",
+  "1HZ10V",
+  "R_10",
+  "1HZ25V",
+  "R_25",
+  "1HZ50V",
+  "R_50",
+  "1HZ75V",
+  "R_75",
+  "1HZ100V",
+  "R_100",
+];
 let marketData = {};
 symbols.forEach((s) => {
   marketData[s] = {
@@ -442,16 +458,17 @@ try {
 
         const ema14 = calculateEMA(md.close15, 14);
         const ema21 = calculateEMA(md.close15, 21);
+        const ema50 = calculateEMA(md.close15, 50);
 
         const canBuy =
           candleCrossesEitherEMA(
             currIndex,
-            ema14,
+            ema50,
             ema21,
             md.high15,
             md.low15,
           ) ||
-          candleCrossesEitherEMA(prevIndex, ema14, ema21, md.high15, md.low15);
+          candleCrossesEitherEMA(prevIndex, ema50, ema21, md.high15, md.low15);
 
         md.trendUp15 = ema14[prevIndex] > ema21[prevIndex] && canBuy;
         md.trendDown15 = ema14[prevIndex] < ema21[prevIndex] && canBuy;
@@ -561,6 +578,30 @@ try {
         }
         if (multiplierPositions.length !== 0) {
           for (const contract of multiplierPositions) {
+            if (contract.stoploss === 0) {
+              if (contract?.type === "MULTUP") {
+                if (haClose[prevIndex] < ema50Then) {
+                  loading = true;
+                  contract.contract_id &&
+                    closePosition(
+                      symbol,
+                      contract.contract_id,
+                      `Opposite Signal`,
+                    );
+                }
+              }
+              if (contract?.type === "MULTDOWN") {
+                if (haClose[prevIndex] > ema50Then) {
+                  loading = true;
+                  contract.contract_id &&
+                    closePosition(
+                      symbol,
+                      contract.contract_id,
+                      `Opposite Signal`,
+                    );
+                }
+              }
+            }
             if (contract?.type === "MULTUP") {
               if (md.trendDown15) {
                 loading = true;
