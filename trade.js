@@ -47,19 +47,19 @@ const subscribedContracts = new Set();
 const symbols = [
   "stpRNG",
   "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
-  "stpRNG5",
-  "1HZ10V",
-  "R_10",
-  "1HZ25V",
-  "R_25",
-  "1HZ50V",
-  "R_50",
-  "1HZ75V",
-  "R_75",
-  "1HZ100V",
-  "R_100",
+  // "stpRNG3",
+  // "stpRNG4",
+  // "stpRNG5",
+  // "1HZ10V",
+  // "R_10",
+  // "1HZ25V",
+  // "R_25",
+  // "1HZ50V",
+  // "R_50",
+  // "1HZ75V",
+  // "R_75",
+  // "1HZ100V",
+  // "R_100",
   // "JD10",
   // "JD25",
   // "JD50",
@@ -453,25 +453,13 @@ try {
 
         const len = md.close15.length;
         const prevIndex = len - 2;
-        const currIndex = len - 1;
         if (len < 200) return;
 
         const ema14 = calculateEMA(md.close15, 14);
         const ema21 = calculateEMA(md.close15, 21);
-        const ema50 = calculateEMA(md.close15, 50);
 
-        const canBuy =
-          candleCrossesEitherEMA(
-            currIndex,
-            ema50,
-            ema21,
-            md.high15,
-            md.low15,
-          ) ||
-          candleCrossesEitherEMA(prevIndex, ema50, ema21, md.high15, md.low15);
-
-        md.trendUp15 = ema14[prevIndex] > ema21[prevIndex] && canBuy;
-        md.trendDown15 = ema14[prevIndex] < ema21[prevIndex] && canBuy;
+        md.trendUp15 = ema14[prevIndex] > ema21[prevIndex]
+        md.trendDown15 = ema14[prevIndex] < ema21[prevIndex]
       }
 
       if (data.echo_req.granularity === 60) {
