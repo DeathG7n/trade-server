@@ -505,13 +505,13 @@ try {
         const thirdIndex = len - 3;
         if (len < 200) return;
 
-        const ema50 = calculateEMA(md.close, 50);
-        const ema50Then = ema50[prevIndex];
+        const ema200 = calculateEMA(md.close, 200);
+        const ema200Then = ema200[prevIndex];
 
         if (md.canAlert && alertSymbols.includes(symbol)) {
           if (
             md.trendUp15 &&
-            candleCrossesEitherEMA(currIndex, ema50, ema50, md.high, md.low) &&
+            candleCrossesEitherEMA(currIndex, ema200, ema200, md.high, md.low) &&
             bullish(md.open, md.close, currIndex)
           ) {
             sendMessage(`Bullish signal off EMA on ${symbol} 1 minute`);
@@ -519,7 +519,7 @@ try {
           }
           if (
             md.trendDown15 &&
-            candleCrossesEitherEMA(currIndex, ema50, ema50, md.high, md.low) &&
+            candleCrossesEitherEMA(currIndex, ema200, ema200, md.high, md.low) &&
             bearish(md.open, md.close, currIndex)
           ) {
             sendMessage(`Bearish signal off EMA on ${symbol} 1 minute`);
@@ -533,13 +533,13 @@ try {
           tradeSymbols.includes(symbol)
         ) {
           if (
-            crossedEma(haHigh, haLow, prevIndex, ema50) ||
-            crossedEma(haHigh, haLow, thirdIndex, ema50)
+            crossedEma(haHigh, haLow, prevIndex, ema200) ||
+            crossedEma(haHigh, haLow, thirdIndex, ema200)
           ) {
             if (
               md.trendUp15 &&
               bullish(haOpen, haClose, prevIndex) &&
-              haClose[prevIndex] > ema50Then
+              haClose[prevIndex] > ema200Then
             ) {
               loading = true;
               await getMultiProposal(
@@ -552,7 +552,7 @@ try {
             if (
               md.trendDown15 &&
               bearish(haOpen, haClose, prevIndex) &&
-              haClose[prevIndex] < ema50Then
+              haClose[prevIndex] < ema200Then
             ) {
               loading = true;
               await getMultiProposal(
