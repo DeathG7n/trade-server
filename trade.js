@@ -163,7 +163,7 @@ const sendMessage = async (message) => {
 };
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 2;
+  const stopLoss = stake / 4;
   const takeProfit = stopLoss * 3;
   const request = {
     proposal: 1,
@@ -504,22 +504,27 @@ try {
         const prevIndex = len - 2;
         const thirdIndex = len - 3;
         if (len < 200) return;
+ 
+        const ema14 = calculateEMA(md.close, 14);
+        const ema14Then = ema14[prevIndex];
+        const ema21 = calculateEMA(md.close, 21);
+        const ema21Then = ema21[prevIndex];
 
-        const ema200 = calculateEMA(md.close, 200);
-        const ema200Then = ema200[prevIndex];
+        md.trendUp = ema14Then > ema21Then
+        md.trendDown = ema14Then < ema21Then
 
         if (md.canAlert && alertSymbols.includes(symbol)) {
           if (
-            md.trendUp15 &&
-            candleCrossesEitherEMA(currIndex, ema200, ema200, md.high, md.low) &&
+            md.trendUp &&
+            candleCrossesEitherEMA(currIndex, ema21, ema21, md.high, md.low) &&
             bullish(md.open, md.close, currIndex)
           ) {
             sendMessage(`Bullish signal off EMA on ${symbol} 1 minute`);
             md.canAlert = false;
           }
           if (
-            md.trendDown15 &&
-            candleCrossesEitherEMA(currIndex, ema200, ema200, md.high, md.low) &&
+            md.trendDown &&
+            candleCrossesEitherEMA(currIndex, ema21, ema21, md.high, md.low) &&
             bearish(md.open, md.close, currIndex)
           ) {
             sendMessage(`Bearish signal off EMA on ${symbol} 1 minute`);
@@ -533,13 +538,13 @@ try {
           tradeSymbols.includes(symbol)
         ) {
           if (
-            crossedEma(haHigh, haLow, prevIndex, ema200) ||
-            crossedEma(haHigh, haLow, thirdIndex, ema200)
+            crossedEma(haHigh, haLow, prevIndex, ema21) ||
+            crossedEma(haHigh, haLow, thirdIndex, ema21)
           ) {
             if (
-              md.trendUp15 &&
+              md.trendUp &&
               bullish(haOpen, haClose, prevIndex) &&
-              haClose[prevIndex] > ema200Then
+              haClose[prevIndex] > ema21Then
             ) {
               loading = true;
               await getMultiProposal(
@@ -550,9 +555,9 @@ try {
               );
             }
             if (
-              md.trendDown15 &&
+              md.trendDown &&
               bearish(haOpen, haClose, prevIndex) &&
-              haClose[prevIndex] < ema200Then
+              haClose[prevIndex] < ema21Then
             ) {
               loading = true;
               await getMultiProposal(
@@ -567,7 +572,7 @@ try {
         if (multiplierPositions.length !== 0) {
           for (const contract of multiplierPositions) {
             if (contract?.type === "MULTUP") {
-              if (md.trendDown15) {
+              if (md.trendDown) {
                 loading = true;
                 contract.contract_id &&
                   closePosition(
@@ -578,7 +583,7 @@ try {
               }
             }
             if (contract?.type === "MULTDOWN") {
-              if (md.trendUp15) {
+              if (md.trendUp) {
                 loading = true;
                 contract.contract_id &&
                   closePosition(
