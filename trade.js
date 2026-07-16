@@ -11,6 +11,7 @@ import {
   calculateHeikinAshi,
   candleCrossesEitherEMA,
   crossedEma,
+  recentEmaCross,
 } from "./util.js";
 
 dotenv.config();
@@ -543,6 +544,7 @@ try {
           ) {
             if (
               md.trendUp &&
+              recentEmaCross(ema14, ema21, 15) === "bullish" &&
               bullish(haOpen, haClose, prevIndex) &&
               haClose[prevIndex] > ema21Then
             ) {
@@ -556,6 +558,7 @@ try {
             }
             if (
               md.trendDown &&
+              recentEmaCross(ema14, ema21, 15) === "bearish" &&
               bearish(haOpen, haClose, prevIndex) &&
               haClose[prevIndex] < ema21Then
             ) {
