@@ -164,7 +164,7 @@ const sendMessage = async (message) => {
 };
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 5;
+  const stopLoss = stake / 4;
   const takeProfit = stopLoss * 3;
   const request = {
     proposal: 1,
@@ -534,7 +534,7 @@ try {
         }
 
         if (
-          !riskyPosition &&
+          multiplierPositions.length === 0 &&
           Math.trunc(balance) !== 0 &&
           tradeSymbols.includes(symbol)
         ) {
@@ -543,8 +543,9 @@ try {
             crossedEma(md.high, md.low, thirdIndex, ema21)
           ) {
             if (
+              md.trendUp15 &&
               md.trendUp &&
-              recentEmaCross(ema14, ema21, 15) === "bullish" &&
+              recentEmaCross(ema14, ema21, 60) === "bullish" &&
               bullish(md.open, md.close, prevIndex) 
               //md.close[prevIndex] > ema21Then
             ) {
@@ -557,8 +558,9 @@ try {
               );
             }
             if (
+              md.trendDown15 &&
               md.trendDown &&
-              recentEmaCross(ema14, ema21, 15) === "bearish" &&
+              recentEmaCross(ema14, ema21, 60) === "bearish" &&
               bearish(md.open, md.close, prevIndex)
               //md.close[prevIndex] < ema21Then
             ) {
@@ -575,7 +577,7 @@ try {
         if (multiplierPositions.length !== 0) {
           for (const contract of multiplierPositions) {
             if (contract?.type === "MULTUP") {
-              if (md.trendDown) {
+              if (md.trendDown15) {
                 loading = true;
                 contract.contract_id &&
                   closePosition(
@@ -586,7 +588,7 @@ try {
               }
             }
             if (contract?.type === "MULTDOWN") {
-              if (md.trendUp) {
+              if (md.trendUp15) {
                 loading = true;
                 contract.contract_id &&
                   closePosition(
