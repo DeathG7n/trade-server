@@ -493,12 +493,12 @@ try {
           md.low[md.low.length - 1] = Number(data.ohlc.low);
         }
 
-        // const ha = calculateHeikinAshi(md.open, md.high, md.low, md.close);
+        const ha = calculateHeikinAshi(md.open, md.high, md.low, md.close);
 
-        // const haOpen = ha.open;
-        // const haHigh = ha.high;
-        // const haLow = ha.low;
-        // const haClose = ha.close;
+        const haOpen = ha.open;
+        const haHigh = ha.high;
+        const haLow = ha.low;
+        const haClose = ha.close;
 
         const len = md.close.length;
         const currIndex = len - 1;
@@ -534,20 +534,19 @@ try {
         }
 
         if (
-          multiplierPositions.length === 0 &&
+          !riskyPosition &&
           Math.trunc(balance) !== 0 &&
           tradeSymbols.includes(symbol)
         ) {
           if (
-            crossedEma(md.high, md.low, prevIndex, ema21) ||
-            crossedEma(md.high, md.low, thirdIndex, ema21)
+            crossedEma(haHigh, haLow, prevIndex, ema21) ||
+            crossedEma(haHigh, haLow, thirdIndex, ema21)
           ) {
             if (
               md.trendUp15 &&
               md.trendUp &&
-              recentEmaCross(ema14, ema21, 60) === "bullish" &&
-              bullish(md.open, md.close, prevIndex) 
-              //md.close[prevIndex] > ema21Then
+              bullish(haOpen, haClose, prevIndex) &&
+              haClose[prevIndex] > ema21Then
             ) {
               loading = true;
               await getMultiProposal(
@@ -560,9 +559,8 @@ try {
             if (
               md.trendDown15 &&
               md.trendDown &&
-              recentEmaCross(ema14, ema21, 60) === "bearish" &&
-              bearish(md.open, md.close, prevIndex)
-              //md.close[prevIndex] < ema21Then
+              bearish(haOpen, haClose, prevIndex) &&
+              haClose[prevIndex] < ema21Then
             ) {
               loading = true;
               await getMultiProposal(
