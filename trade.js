@@ -539,8 +539,8 @@ try {
           tradeSymbols.includes(symbol)
         ) {
           if (
-            crossedEma(haHigh, haLow, prevIndex, ema21) ||
-            crossedEma(haHigh, haLow, thirdIndex, ema21)
+            candleCrossesEitherEMA(prevIndex, ema14, ema21, haHigh, haLow) ||
+            candleCrossesEitherEMA(thirdIndex, ema14, ema21, haHigh, haLow)
           ) {
             if (
               md.trendUp15 &&
@@ -657,14 +657,14 @@ try {
           update(position.stoploss, id, symbol);
         }
         if (
-          profit >= Math.abs(lossAmount * 2) && //0.8
+          pip >= risk * 2 &&
           position.stoploss === Math.abs(commission)
         ) {
           position.stoploss = Math.abs(lossAmount); //0.4
           update(position.stoploss, id, symbol);
         }
         if (
-          profit >= Math.abs(lossAmount * 2.5) && //1
+          pip >= risk * 2.5 &&
           position.stoploss === Math.abs(lossAmount) //0.4
         ) {
           position.stoploss = Math.abs(lossAmount * 1.25); //0.5
