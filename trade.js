@@ -8,10 +8,10 @@ import { wsUrl } from "./server.js";
 import {
   bearish,
   bullish,
-  // calculateHeikinAshi,
+  calculateHeikinAshi,
   candleCrossesEitherEMA,
   crossedEma,
-  recentEmaCross,
+  //recentEmaCross,
 } from "./util.js";
 
 dotenv.config();
