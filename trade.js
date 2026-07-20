@@ -47,7 +47,7 @@ const subscribedContracts = new Set();
 
 const symbols = [
   "stpRNG",
-  "stpRNG2",
+  //"stpRNG2",
   // "stpRNG3",
   // "stpRNG4",
   // "stpRNG5",
