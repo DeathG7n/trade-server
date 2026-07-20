@@ -274,17 +274,17 @@ try {
         lastBalance = balance;
       }
       balance = Math.trunc(balance);
-      if (balance < 12) {
+      if (balance < 7) {
         amount = 1;
-      } else {
-        amount = Math.min(1000, 2 ** Math.floor(Math.log2(balance / 12) + 1));
-      }
-
-      const forefeit = 2 ** Math.floor(Math.log2(balance / 12) + 1);
-      if (forefeit < 1000) {
         trades = 1;
       } else {
-        trades = Math.trunc(forefeit / 1000);
+        const forefeit = 2 ** Math.floor(Math.log2(balance / 7) + 1);
+        amount = Math.min(1000, forefeit);
+        if (forefeit < 1000) {
+         trades = 1;
+        } else {
+         trades = Math.trunc(forefeit / 1000);
+        }
       }
       send({ portfolio: 1 });
     }
