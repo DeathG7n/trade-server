@@ -11,6 +11,7 @@ import {
   calculateHeikinAshi,
   candleCrossesEitherEMA,
   crossedEma,
+  detectCrossover,
   //recentEmaCross,
 } from "./util.js";
 
@@ -165,7 +166,7 @@ const sendMessage = async (message) => {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 4;
-  const takeProfit = stopLoss * 5;
+  const takeProfit = stopLoss * 3;
   const request = {
     proposal: 1,
     amount: stake,
@@ -506,32 +507,10 @@ try {
         const thirdIndex = len - 3;
         if (len < 200) return;
  
-        const ema14 = calculateEMA(md.close, 14);
-        const ema14Then = ema14[prevIndex];
-        const ema21 = calculateEMA(md.close, 21);
-        const ema21Then = ema21[prevIndex];
-
-        md.trendUp = ema14Then > ema21Then
-        md.trendDown = ema14Then < ema21Then
-
-        if (md.canAlert && alertSymbols.includes(symbol)) {
-          if (
-            md.trendUp &&
-            candleCrossesEitherEMA(currIndex, ema21, ema21, md.high, md.low) &&
-            bullish(md.open, md.close, currIndex)
-          ) {
-            sendMessage(`Bullish signal off EMA on ${symbol} 1 minute`);
-            md.canAlert = false;
-          }
-          if (
-            md.trendDown &&
-            candleCrossesEitherEMA(currIndex, ema21, ema21, md.high, md.low) &&
-            bearish(md.open, md.close, currIndex)
-          ) {
-            sendMessage(`Bearish signal off EMA on ${symbol} 1 minute`);
-            md.canAlert = false;
-          }
-        }
+        const ema5 = calculateEMA(md.close, 5);
+        const ema5Then = ema5[prevIndex];
+        const ema9 = calculateEMA(md.close, 9);
+        const ema9Then = ema9[prevIndex];
 
         if (
           !riskyPosition &&
@@ -539,14 +518,8 @@ try {
           tradeSymbols.includes(symbol)
         ) {
           if (
-            candleCrossesEitherEMA(prevIndex, ema14, ema21, haHigh, haLow) ||
-            candleCrossesEitherEMA(thirdIndex, ema14, ema21, haHigh, haLow)
-          ) {
-            if (
               md.trendUp15 &&
-              md.trendUp &&
-              bullish(haOpen, haClose, prevIndex) &&
-              haClose[prevIndex] > ema21Then
+              detectCrossover(ema5, ema9) === "bullish"
             ) {
               loading = true;
               await getMultiProposal(
@@ -558,9 +531,7 @@ try {
             }
             if (
               md.trendDown15 &&
-              md.trendDown &&
-              bearish(haOpen, haClose, prevIndex) &&
-              haClose[prevIndex] < ema21Then
+              detectCrossover(ema5, ema9) === "bearish"
             ) {
               loading = true;
               await getMultiProposal(
@@ -570,7 +541,6 @@ try {
                 md.multiplier_range[0],
               );
             }
-          }
         }
         if (multiplierPositions.length !== 0) {
           for (const contract of multiplierPositions) {
@@ -660,14 +630,21 @@ try {
           pip >= risk * 2 &&
           position.stoploss === Math.abs(commission)
         ) {
-          position.stoploss = Math.abs(lossAmount); //0.4
+          position.stoploss = Math.abs(lossAmount); 
           update(position.stoploss, id, symbol);
         }
         if (
           pip >= risk * 2.5 &&
-          position.stoploss === Math.abs(lossAmount) //0.4
+          position.stoploss === Math.abs(lossAmount)
         ) {
-          position.stoploss = Math.abs(lossAmount * 1.25); //0.5
+          position.stoploss = Math.abs(lossAmount * 1.25);
+          update(position.stoploss, id, symbol);
+        }
+        if (
+          pip >= risk * 4 &&
+          position.stoploss === Math.abs(lossAmount)
+        ) {
+          position.stoploss = Math.abs(lossAmount * 2);
           update(position.stoploss, id, symbol);
         }
         if (
