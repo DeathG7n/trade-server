@@ -48,10 +48,10 @@ const subscribedContracts = new Set();
 
 const symbols = [
   "stpRNG",
-  //"stpRNG2",
-  // "stpRNG3",
-  // "stpRNG4",
-  // "stpRNG5",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
+  "stpRNG5",
   // "1HZ10V",
   // "R_10",
   // "1HZ25V",
@@ -166,7 +166,7 @@ const sendMessage = async (message) => {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 4;
-  const takeProfit = stopLoss * 3;
+  const takeProfit = stopLoss * 10;
   const request = {
     proposal: 1,
     amount: stake,
@@ -457,8 +457,8 @@ try {
         const prevIndex = len - 2;
         if (len < 200) return;
 
-        const ema14 = calculateEMA(md.close15, 14);
-        const ema21 = calculateEMA(md.close15, 21);
+        const ema14 = calculateEMA(md.close15, 5);
+        const ema21 = calculateEMA(md.close15, 9);
 
         md.trendUp15 = ema14[prevIndex] > ema21[prevIndex]
         md.trendDown15 = ema14[prevIndex] < ema21[prevIndex]
@@ -623,29 +623,29 @@ try {
         if (!position) return;
         if (lossAmount == null) return;
         if (pip >= risk && position.stoploss === 0) {
-          position.stoploss = Math.abs(commission);
-          update(position.stoploss, id, symbol);
+          //position.stoploss = Math.abs(commission);
+          //update(position.stoploss, id, symbol);
         }
         if (
           pip >= risk * 2 &&
           position.stoploss === Math.abs(commission)
         ) {
-          position.stoploss = Math.abs(lossAmount); 
-          update(position.stoploss, id, symbol);
+          //position.stoploss = Math.abs(lossAmount); 
+          //update(position.stoploss, id, symbol);
         }
         if (
           pip >= risk * 2.5 &&
           position.stoploss === Math.abs(lossAmount)
         ) {
-          position.stoploss = Math.abs(lossAmount * 1.25);
-          update(position.stoploss, id, symbol);
+          //position.stoploss = Math.abs(lossAmount * 1.25);
+          //update(position.stoploss, id, symbol);
         }
         if (
           pip >= risk * 4 &&
           position.stoploss === Math.abs(lossAmount)
         ) {
-          position.stoploss = Math.abs(lossAmount * 2);
-          update(position.stoploss, id, symbol);
+          //position.stoploss = Math.abs(lossAmount * 2);
+          //update(position.stoploss, id, symbol);
         }
         if (
           position &&
