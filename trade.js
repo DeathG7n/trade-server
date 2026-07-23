@@ -510,21 +510,33 @@ try {
         ) {
           if (md.trendUp15 && detectCrossover(ema5, ema9) === "bullish") {
             loading = true;
-            await getMultiProposal(
-              "MULTUP",
-              symbol,
-              amount,
-              md.multiplier_range[0],
-            );
+            for (let i = 0; i < trades; i++) {
+              try {
+                await getMultiProposal(
+                  "MULTUP",
+                  symbol,
+                  amount,
+                  md.multiplier_range[0],
+                );
+              } catch (err) {
+                sendMessage(String(err));
+              }
+            }
           }
           if (md.trendDown15 && detectCrossover(ema5, ema9) === "bearish") {
             loading = true;
-            await getMultiProposal(
-              "MULTDOWN",
-              symbol,
-              amount,
-              md.multiplier_range[0],
-            );
+            for (let i = 0; i < trades; i++) {
+              try {
+                await getMultiProposal(
+                  "MULTDOWN",
+                  symbol,
+                  amount,
+                  md.multiplier_range[0],
+                );
+              } catch (err) {
+                sendMessage(String(err));
+              }
+            }
           }
         }
         if (multiplierPositions.length !== 0) {
@@ -556,16 +568,14 @@ try {
       }
     }
     if (data.msg_type === "proposal") {
-      for (let i = 0; i < trades; i++) {
-        try {
-          buyContract(
-            data?.echo_req?.contract_type,
-            data?.proposal?.id,
-            data?.proposal?.ask_price,
-          );
-        } catch (err) {
-          sendMessage(String(err));
-        }
+      try {
+        buyContract(
+          data?.echo_req?.contract_type,
+          data?.proposal?.id,
+          data?.proposal?.ask_price,
+        );
+      } catch (err) {
+        sendMessage(String(err));
       }
     }
 
