@@ -282,9 +282,15 @@ try {
         const forefeit = 2 ** Math.floor(Math.log2(balance / 7) + 1);
         amount = Math.min(1000, forefeit);
         if (forefeit < 1000) {
+<<<<<<< HEAD
           trades = 1;
         } else {
           trades = Math.trunc(forefeit / 1000);
+=======
+         trades = 1;
+        } else {
+         trades = Math.trunc(forefeit / 1000);
+>>>>>>> 9db0a361db78307f25c6594b9f51cf27129cd37f
         }
       }
       send({ portfolio: 1 });
@@ -506,7 +512,11 @@ try {
         const prevIndex = len - 2;
         const thirdIndex = len - 3;
         if (len < 200) return;
+<<<<<<< HEAD
 
+=======
+ 
+>>>>>>> 9db0a361db78307f25c6594b9f51cf27129cd37f
         const ema5 = calculateEMA(md.close, 5);
         const ema5Then = ema5[prevIndex];
         const ema9 = calculateEMA(md.close, 9);
@@ -517,6 +527,7 @@ try {
           Math.trunc(balance) !== 0 &&
           tradeSymbols.includes(symbol)
         ) {
+<<<<<<< HEAD
           if (md.trendUp15 && detectCrossover(ema5, ema9) === "bullish") {
             loading = true;
             await getMultiProposal(
@@ -535,6 +546,32 @@ try {
               md.multiplier_range[0],
             );
           }
+=======
+          if (
+              md.trendUp15 &&
+              detectCrossover(ema5, ema9) === "bullish"
+            ) {
+              loading = true;
+              await getMultiProposal(
+                "MULTUP",
+                symbol,
+                amount,
+                md.multiplier_range[0],
+              );
+            }
+            if (
+              md.trendDown15 &&
+              detectCrossover(ema5, ema9) === "bearish"
+            ) {
+              loading = true;
+              await getMultiProposal(
+                "MULTDOWN",
+                symbol,
+                amount,
+                md.multiplier_range[0],
+              );
+            }
+>>>>>>> 9db0a361db78307f25c6594b9f51cf27129cd37f
         }
         if (multiplierPositions.length !== 0) {
           for (const contract of multiplierPositions) {
@@ -620,6 +657,7 @@ try {
           position.stoploss = Math.abs(commission);
           update(position.stoploss, id, symbol);
         }
+<<<<<<< HEAD
         if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
           position.stoploss = Math.abs(lossAmount);
           update(position.stoploss, id, symbol);
@@ -629,6 +667,26 @@ try {
           update(position.stoploss, id, symbol);
         }
         if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount)) {
+=======
+        if (
+          pip >= risk * 2 &&
+          position.stoploss === Math.abs(commission)
+        ) {
+          position.stoploss = Math.abs(lossAmount); 
+          update(position.stoploss, id, symbol);
+        }
+        if (
+          pip >= risk * 2.5 &&
+          position.stoploss === Math.abs(lossAmount)
+        ) {
+          position.stoploss = Math.abs(lossAmount * 1.25);
+          update(position.stoploss, id, symbol);
+        }
+        if (
+          pip >= risk * 4 &&
+          position.stoploss === Math.abs(lossAmount)
+        ) {
+>>>>>>> 9db0a361db78307f25c6594b9f51cf27129cd37f
           position.stoploss = Math.abs(lossAmount * 2);
           update(position.stoploss, id, symbol);
         }
