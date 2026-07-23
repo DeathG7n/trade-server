@@ -6,13 +6,13 @@ import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 import { wsUrl } from "./server.js";
 import {
-  bearish,
-  bullish,
-  calculateHeikinAshi,
-  candleCrossesEitherEMA,
-  crossedEma,
+  // bearish,
+  // bullish,
+  // calculateHeikinAshi,
+  // candleCrossesEitherEMA,
+  // crossedEma,
   detectCrossover,
-  //recentEmaCross,
+  recentEmaCross,
 } from "./util.js";
 
 dotenv.config();
@@ -69,7 +69,7 @@ const symbols = [
   // "JD100",
 ];
 
-const alertSymbols = [];
+// const alertSymbols = [];
 const tradeSymbols = [
   "stpRNG",
   "stpRNG2",
@@ -282,15 +282,9 @@ try {
         const forefeit = 2 ** Math.floor(Math.log2(balance / 7) + 1);
         amount = Math.min(1000, forefeit);
         if (forefeit < 1000) {
-<<<<<<< HEAD
           trades = 1;
         } else {
           trades = Math.trunc(forefeit / 1000);
-=======
-         trades = 1;
-        } else {
-         trades = Math.trunc(forefeit / 1000);
->>>>>>> 9db0a361db78307f25c6594b9f51cf27129cd37f
         }
       }
       send({ portfolio: 1 });
@@ -425,7 +419,7 @@ try {
       const multiplierPositions = matchingPositions.filter(
         (p) => p.type !== "ONETOUCH",
       );
-      const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
+      // const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
       if (!md.multiplier_range?.length) return;
 
       if (data.echo_req.granularity === 900) {
@@ -463,11 +457,15 @@ try {
         const prevIndex = len - 2;
         if (len < 200) return;
 
-        const ema14 = calculateEMA(md.close15, 5);
-        const ema21 = calculateEMA(md.close15, 9);
+        const ema14 = calculateEMA(md.close15, 14);
+        const ema21 = calculateEMA(md.close15, 21);
 
-        md.trendUp15 = ema14[prevIndex] > ema21[prevIndex];
-        md.trendDown15 = ema14[prevIndex] < ema21[prevIndex];
+        const recentCross = recentEmaCross(ema14, ema21, 15);
+
+        md.trendUp15 =
+          ema14[prevIndex] > ema21[prevIndex] && recentCross === "bullish";
+        md.trendDown15 =
+          ema14[prevIndex] < ema21[prevIndex] && recentCross === "bearish";
       }
 
       if (data.echo_req.granularity === 60) {
@@ -500,34 +498,16 @@ try {
           md.low[md.low.length - 1] = Number(data.ohlc.low);
         }
 
-        const ha = calculateHeikinAshi(md.open, md.high, md.low, md.close);
-
-        const haOpen = ha.open;
-        const haHigh = ha.high;
-        const haLow = ha.low;
-        const haClose = ha.close;
-
         const len = md.close.length;
-        const currIndex = len - 1;
-        const prevIndex = len - 2;
-        const thirdIndex = len - 3;
         if (len < 200) return;
-<<<<<<< HEAD
-
-=======
- 
->>>>>>> 9db0a361db78307f25c6594b9f51cf27129cd37f
         const ema5 = calculateEMA(md.close, 5);
-        const ema5Then = ema5[prevIndex];
         const ema9 = calculateEMA(md.close, 9);
-        const ema9Then = ema9[prevIndex];
 
         if (
           multiplierPositions.length === 0 &&
           Math.trunc(balance) !== 0 &&
           tradeSymbols.includes(symbol)
         ) {
-<<<<<<< HEAD
           if (md.trendUp15 && detectCrossover(ema5, ema9) === "bullish") {
             loading = true;
             await getMultiProposal(
@@ -546,32 +526,6 @@ try {
               md.multiplier_range[0],
             );
           }
-=======
-          if (
-              md.trendUp15 &&
-              detectCrossover(ema5, ema9) === "bullish"
-            ) {
-              loading = true;
-              await getMultiProposal(
-                "MULTUP",
-                symbol,
-                amount,
-                md.multiplier_range[0],
-              );
-            }
-            if (
-              md.trendDown15 &&
-              detectCrossover(ema5, ema9) === "bearish"
-            ) {
-              loading = true;
-              await getMultiProposal(
-                "MULTDOWN",
-                symbol,
-                amount,
-                md.multiplier_range[0],
-              );
-            }
->>>>>>> 9db0a361db78307f25c6594b9f51cf27129cd37f
         }
         if (multiplierPositions.length !== 0) {
           for (const contract of multiplierPositions) {
@@ -653,43 +607,22 @@ try {
       if (connection && type !== "ONETOUCH") {
         if (!position) return;
         if (lossAmount == null) return;
-        if (pip >= risk && position.stoploss === 0) {
+        if (pip >= risk * 4 && position.stoploss === 0) {
           position.stoploss = Math.abs(commission);
           update(position.stoploss, id, symbol);
         }
-<<<<<<< HEAD
-        if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
-          position.stoploss = Math.abs(lossAmount);
-          update(position.stoploss, id, symbol);
-        }
-        if (pip >= risk * 2.5 && position.stoploss === Math.abs(lossAmount)) {
-          position.stoploss = Math.abs(lossAmount * 1.25);
-          update(position.stoploss, id, symbol);
-        }
-        if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount)) {
-=======
-        if (
-          pip >= risk * 2 &&
-          position.stoploss === Math.abs(commission)
-        ) {
-          position.stoploss = Math.abs(lossAmount); 
-          update(position.stoploss, id, symbol);
-        }
-        if (
-          pip >= risk * 2.5 &&
-          position.stoploss === Math.abs(lossAmount)
-        ) {
-          position.stoploss = Math.abs(lossAmount * 1.25);
-          update(position.stoploss, id, symbol);
-        }
-        if (
-          pip >= risk * 4 &&
-          position.stoploss === Math.abs(lossAmount)
-        ) {
->>>>>>> 9db0a361db78307f25c6594b9f51cf27129cd37f
-          position.stoploss = Math.abs(lossAmount * 2);
-          update(position.stoploss, id, symbol);
-        }
+        // if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
+        //   position.stoploss = Math.abs(lossAmount);
+        //   update(position.stoploss, id, symbol);
+        // }
+        // if (pip >= risk * 2.5 && position.stoploss === Math.abs(lossAmount)) {
+        //   position.stoploss = Math.abs(lossAmount * 1.25);
+        //   update(position.stoploss, id, symbol);
+        // }
+        // if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount)) {
+        //   position.stoploss = Math.abs(lossAmount * 2);
+        //   update(position.stoploss, id, symbol);
+        // }
         if (
           position &&
           position.stoploss !== 0 &&
