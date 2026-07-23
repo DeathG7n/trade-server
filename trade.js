@@ -513,7 +513,7 @@ try {
         const ema9Then = ema9[prevIndex];
 
         if (
-          !riskyPosition &&
+          multiplierPositions.length === 0 &&
           Math.trunc(balance) !== 0 &&
           tradeSymbols.includes(symbol)
         ) {
