@@ -52,16 +52,16 @@ const symbols = [
   "stpRNG3",
   "stpRNG4",
   "stpRNG5",
-  // "1HZ10V",
-  // "R_10",
-  // "1HZ25V",
-  // "R_25",
-  // "1HZ50V",
-  // "R_50",
-  // "1HZ75V",
-  // "R_75",
-  // "1HZ100V",
-  // "R_100",
+  "1HZ10V",
+  "R_10",
+  "1HZ25V",
+  "R_25",
+  "1HZ50V",
+  "R_50",
+  "1HZ75V",
+  "R_75",
+  "1HZ100V",
+  "R_100",
   // "JD10",
   // "JD25",
   // "JD50",
@@ -166,7 +166,7 @@ const sendMessage = async (message) => {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 4;
-  const takeProfit = stopLoss * 3;
+  const takeProfit = stake;
   const request = {
     proposal: 1,
     amount: stake,
