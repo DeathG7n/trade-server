@@ -9,10 +9,10 @@ import {
   // bearish,
   // bullish,
   // calculateHeikinAshi,
-  // candleCrossesEitherEMA,
+  candleCrossesEitherEMA,
   // crossedEma,
   detectCrossover,
-  recentEmaCross,
+  //recentEmaCross,
 } from "./util.js";
 
 dotenv.config();
@@ -166,7 +166,7 @@ const sendMessage = async (message) => {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 4;
-  const takeProfit = stopLoss * 10;
+  const takeProfit = stopLoss * 3;
   const request = {
     proposal: 1,
     amount: stake,
@@ -455,17 +455,24 @@ try {
 
         const len = md.close15.length;
         const prevIndex = len - 2;
+        const currIndex = len - 2;
         if (len < 200) return;
 
         const ema14 = calculateEMA(md.close15, 14);
         const ema21 = calculateEMA(md.close15, 21);
 
-        const recentCross = recentEmaCross(ema14, ema21, 15);
+        const emaTouch =
+          candleCrossesEitherEMA(
+            prevIndex,
+            ema14,
+            ema21,
+            md.high15,
+            md.low15,
+          ) ||
+          candleCrossesEitherEMA(currIndex, ema14, ema21, md.high15, md.low15);
 
-        md.trendUp15 =
-          ema14[prevIndex] > ema21[prevIndex] && recentCross === "bullish";
-        md.trendDown15 =
-          ema14[prevIndex] < ema21[prevIndex] && recentCross === "bearish";
+        md.trendUp15 = ema14[prevIndex] > ema21[prevIndex] && emaTouch;
+        md.trendDown15 = ema14[prevIndex] < ema21[prevIndex] && emaTouch;
       }
 
       if (data.echo_req.granularity === 60) {
@@ -617,22 +624,22 @@ try {
       if (connection && type !== "ONETOUCH") {
         if (!position) return;
         if (lossAmount == null) return;
-        if (pip >= risk * 4 && position.stoploss === 0) {
+        if (pip >= risk && position.stoploss === 0) {
           position.stoploss = Math.abs(commission);
           update(position.stoploss, id, symbol);
         }
-        // if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
-        //   position.stoploss = Math.abs(lossAmount);
-        //   update(position.stoploss, id, symbol);
-        // }
-        // if (pip >= risk * 2.5 && position.stoploss === Math.abs(lossAmount)) {
-        //   position.stoploss = Math.abs(lossAmount * 1.25);
-        //   update(position.stoploss, id, symbol);
-        // }
-        // if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount)) {
-        //   position.stoploss = Math.abs(lossAmount * 2);
-        //   update(position.stoploss, id, symbol);
-        // }
+        if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
+          position.stoploss = Math.abs(lossAmount);
+          update(position.stoploss, id, symbol);
+        }
+        if (pip >= risk * 2.5 && position.stoploss === Math.abs(lossAmount)) {
+          position.stoploss = Math.abs(lossAmount * 1.25);
+          update(position.stoploss, id, symbol);
+        }
+        if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount)) {
+          position.stoploss = Math.abs(lossAmount * 2);
+          update(position.stoploss, id, symbol);
+        }
         if (
           position &&
           position.stoploss !== 0 &&
