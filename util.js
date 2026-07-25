@@ -190,6 +190,10 @@ export function bullish(open, close, candle) {
   return close?.[candle] > open?.[candle];
 }
 
+export function crossedPrice(high, low, candle, price) {
+  return high?.[candle] > price && price > low?.[candle];
+}
+
 export function crossedEma(high, low, candle, ema) {
   return high?.[candle] > ema?.[candle] && ema?.[candle] > low?.[candle];
 }

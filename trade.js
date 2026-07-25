@@ -11,7 +11,8 @@ import {
   // bullish,
   // calculateHeikinAshi,
   //candleCrossesEitherEMA,
-  crossedEma,
+  // crossedEma,
+  crossedPrice,
   // detectCrossover,
   //recentEmaCross,
 } from "./util.js";
@@ -104,6 +105,7 @@ symbols.forEach((s) => {
     openTime15: 0,
     trendUp15: false,
     trendDown15: false,
+    ema_15: 0,
     multiplier_range: [],
     canAlert: true,
     canAlert15: true,
@@ -454,11 +456,13 @@ try {
         const prevIndex = len - 2;
         if (len < 200) return;
 
-        const ema21 = calculateEMA(md.close15, 21);
-        const ema50 = calculateEMA(md.close15, 50);
+        const ema5 = calculateEMA(md.close15, 5);
+        const ema9 = calculateEMA(md.close15, 9);
 
-        md.trendUp15 = ema21[prevIndex] > ema50[prevIndex];
-        md.trendDown15 = ema21[prevIndex] < ema50[prevIndex];
+        md.ema_15 = ema9[prevIndex];
+
+        md.trendUp15 = ema5[prevIndex] > ema9[prevIndex];
+        md.trendDown15 = ema5[prevIndex] < ema9[prevIndex];
       }
 
       if (data.echo_req.granularity === 60) {
@@ -508,9 +512,9 @@ try {
         ) {
           if (
             md.trendUp15 &&
-            md.trendUp &&
             bullish(md.open, md.close, prevIndex) &&
-            crossedEma(md.high, md.low, prevIndex, ema50)
+            md.close[prevIndex] >= md.ema_15 &&
+            crossedPrice(md.high, md.low, prevIndex, md.ema_15)
           ) {
             loading = true;
             try {
@@ -526,9 +530,9 @@ try {
           }
           if (
             md.trendDown15 &&
-            md.trendDown &&
             bearish(md.open, md.close, prevIndex) &&
-            crossedEma(md.high, md.low, prevIndex, ema50)
+            md.close[prevIndex] <= md.ema_15 &&
+            crossedPrice(md.high, md.low, prevIndex, md.ema_15)
           ) {
             loading = true;
             try {
