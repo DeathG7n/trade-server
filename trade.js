@@ -6,12 +6,13 @@ import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 import { wsUrl } from "./server.js";
 import {
-  // bearish,
+  bullish,
+  bearish,
   // bullish,
   // calculateHeikinAshi,
-  candleCrossesEitherEMA,
-  // crossedEma,
-  detectCrossover,
+  //candleCrossesEitherEMA,
+  crossedEma,
+  // detectCrossover,
   //recentEmaCross,
 } from "./util.js";
 
@@ -43,7 +44,6 @@ let authorized = false;
 let loading = true;
 let lastBalance = null;
 let timeframes = [60, 900];
-let trades = 1;
 const subscribedContracts = new Set();
 
 const symbols = [
@@ -200,6 +200,9 @@ function closePosition(symbol, contract_id, why) {
     console.warn("Position not found for close:", contract_id);
   }
   console.log(`❌ Closing position: ${contract_id}`);
+  sendMessage(
+    `❌ Closing position: ${contract_id} on  ${symbol} because ${why}`,
+  );
 }
 
 async function connect() {
@@ -277,15 +280,9 @@ try {
       balance = Math.trunc(balance);
       if (balance < 7) {
         amount = 1;
-        trades = 1;
       } else {
         const forefeit = 2 ** Math.floor(Math.log2(balance / 7) + 1);
         amount = Math.min(1000, forefeit);
-        if (forefeit < 1000) {
-          trades = 1;
-        } else {
-          trades = Math.trunc(forefeit / 1000);
-        }
       }
       send({ portfolio: 1 });
     }
@@ -455,24 +452,13 @@ try {
 
         const len = md.close15.length;
         const prevIndex = len - 2;
-        const currIndex = len - 2;
         if (len < 200) return;
 
-        const ema14 = calculateEMA(md.close15, 14);
         const ema21 = calculateEMA(md.close15, 21);
+        const ema50 = calculateEMA(md.close15, 50);
 
-        const emaTouch =
-          candleCrossesEitherEMA(
-            prevIndex,
-            ema14,
-            ema21,
-            md.high15,
-            md.low15,
-          ) ||
-          candleCrossesEitherEMA(currIndex, ema14, ema21, md.high15, md.low15);
-
-        md.trendUp15 = ema14[prevIndex] > ema21[prevIndex] && emaTouch;
-        md.trendDown15 = ema14[prevIndex] < ema21[prevIndex] && emaTouch;
+        md.trendUp15 = ema21[prevIndex] > ema50[prevIndex];
+        md.trendDown15 = ema21[prevIndex] < ema50[prevIndex];
       }
 
       if (data.echo_req.granularity === 60) {
@@ -506,43 +492,54 @@ try {
         }
 
         const len = md.close.length;
+        const prevIndex = len - 2;
         if (len < 200) return;
-        const ema5 = calculateEMA(md.close, 5);
-        const ema9 = calculateEMA(md.close, 9);
+
+        const ema21 = calculateEMA(md.close, 21);
+        const ema50 = calculateEMA(md.close, 50);
+
+        md.trendUp = ema21[prevIndex] > ema50[prevIndex];
+        md.trendDown = ema21[prevIndex] < ema50[prevIndex];
 
         if (
           multiplierPositions.length === 0 &&
           Math.trunc(balance) !== 0 &&
           tradeSymbols.includes(symbol)
         ) {
-          if (md.trendUp15 && detectCrossover(ema5, ema9) === "bullish") {
+          if (
+            md.trendUp15 &&
+            md.trendUp &&
+            bullish(md.open, md.close, prevIndex) &&
+            crossedEma(md.high, md.low, prevIndex, ema50)
+          ) {
             loading = true;
-            for (let i = 0; i < trades; i++) {
-              try {
-                await getMultiProposal(
-                  "MULTUP",
-                  symbol,
-                  amount,
-                  md.multiplier_range[0],
-                );
-              } catch (err) {
-                sendMessage(String(err));
-              }
+            try {
+              await getMultiProposal(
+                "MULTUP",
+                symbol,
+                amount,
+                md.multiplier_range[0],
+              );
+            } catch (err) {
+              sendMessage(String(err));
             }
           }
-          if (md.trendDown15 && detectCrossover(ema5, ema9) === "bearish") {
+          if (
+            md.trendDown15 &&
+            md.trendDown &&
+            bearish(md.open, md.close, prevIndex) &&
+            crossedEma(md.high, md.low, prevIndex, ema50)
+          ) {
             loading = true;
-            for (let i = 0; i < trades; i++) {
-              try {
-                await getMultiProposal(
-                  "MULTDOWN",
-                  symbol,
-                  amount,
-                  md.multiplier_range[0],
-                );
-              } catch (err) {
-                sendMessage(String(err));
-              }
+            try {
+              await getMultiProposal(
+                "MULTDOWN",
+                symbol,
+                amount,
+                md.multiplier_range[0],
+              );
+            } catch (err) {
+              sendMessage(String(err));
             }
           }
         }
@@ -551,23 +548,31 @@ try {
             if (contract?.type === "MULTUP") {
               if (md.trendDown15) {
                 loading = true;
-                contract.contract_id &&
-                  closePosition(
-                    symbol,
-                    contract.contract_id,
-                    `Opposite Signal`,
-                  );
+                try {
+                  contract.contract_id &&
+                    closePosition(
+                      symbol,
+                      contract.contract_id,
+                      `Opposite Signal`,
+                    );
+                } catch (err) {
+                  sendMessage(String(err));
+                }
               }
             }
             if (contract?.type === "MULTDOWN") {
               if (md.trendUp15) {
                 loading = true;
-                contract.contract_id &&
-                  closePosition(
-                    symbol,
-                    contract.contract_id,
-                    `Opposite Signal`,
-                  );
+                try {
+                  contract.contract_id &&
+                    closePosition(
+                      symbol,
+                      contract.contract_id,
+                      `Opposite Signal`,
+                    );
+                } catch (err) {
+                  sendMessage(String(err));
+                }
               }
             }
           }
@@ -628,18 +633,18 @@ try {
           position.stoploss = Math.abs(commission);
           update(position.stoploss, id, symbol);
         }
-        if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
+        if (pip >= risk * 3 && position.stoploss === Math.abs(commission)) {
           position.stoploss = Math.abs(lossAmount);
           update(position.stoploss, id, symbol);
         }
-        if (pip >= risk * 2.5 && position.stoploss === Math.abs(lossAmount)) {
-          position.stoploss = Math.abs(lossAmount * 1.25);
-          update(position.stoploss, id, symbol);
-        }
-        if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount)) {
-          position.stoploss = Math.abs(lossAmount * 2);
-          update(position.stoploss, id, symbol);
-        }
+        // if (pip >= risk * 2.5 && position.stoploss === Math.abs(lossAmount)) {
+        //   position.stoploss = Math.abs(lossAmount * 1.25);
+        //   update(position.stoploss, id, symbol);
+        // }
+        // if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount)) {
+        //   position.stoploss = Math.abs(lossAmount * 2);
+        //   update(position.stoploss, id, symbol);
+        // }
         if (
           position &&
           position.stoploss !== 0 &&
