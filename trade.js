@@ -520,7 +520,7 @@ try {
             if (
               md.trendUp15 &&
               bullish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] >= md.ema_15
+              md.close[prevIndex] >= md.ema_15Then
             ) {
               loading = true;
               try {
@@ -537,7 +537,7 @@ try {
             if (
               md.trendDown15 &&
               bearish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] <= md.ema_15
+              md.close[prevIndex] <= md.ema_15Then
             ) {
               loading = true;
               try {
