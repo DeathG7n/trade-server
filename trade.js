@@ -641,24 +641,26 @@ try {
     }
 
     if (data.msg_type === "proposal_open_contract") {
+      console.log(data.proposal_open_contract);
       const id = data?.echo_req?.contract_id;
       const position = positions.find((p) => p.contract_id === id);
       const symbol = data.proposal_open_contract?.underlying_symbol;
       const commission = data.proposal_open_contract?.commission;
       const multiplier = data.proposal_open_contract?.multiplier;
       const type = data.proposal_open_contract?.contract_type;
-      const entrySpot = data.proposal_open_contract?.entry_spot;
-      const currentSpot = data.proposal_open_contract?.current_spot;
+      const entrySpot = Number(data.proposal_open_contract?.entry_spot);
+      const currentSpot = Number(data.proposal_open_contract?.current_spot);
       const orderAmount = data?.proposal_open_contract?.buy_price;
       const lossAmount =
         data.proposal_open_contract?.limit_order?.stop_loss?.order_amount;
       const profitAmount =
         data.proposal_open_contract?.limit_order?.take_profit?.order_amount;
-      const stopOut =
-        data.proposal_open_contract?.limit_order?.stop_out?.order_amount;
-      const stop = data.proposal_open_contract?.limit_order?.stop_loss?.value;
+      const stopOut = Number(
+        data.proposal_open_contract?.limit_order?.stop_out?.value,
+      );
+      const stop = Number(data.proposal_open_contract?.limit_order?.stop_loss?.value);
       const takeProfit =
-        data.proposal_open_contract?.limit_order?.take_profit?.value;
+        Number(data.proposal_open_contract?.limit_order?.take_profit?.value);
       const pip =
         type === "MULTUP" ? currentSpot - entrySpot : entrySpot - currentSpot;
       const loss =
@@ -724,7 +726,7 @@ try {
         type: type,
       };
 
-      if (duration === 2) {
+      if (duration <= 4) {
         sendMessage(JSON.stringify(runningTrade, null, 2));
       }
 
