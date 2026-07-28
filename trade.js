@@ -48,26 +48,26 @@ let timeframes = [60, 900];
 const subscribedContracts = new Set();
 
 const symbols = [
-  // "stpRNG",
-  // "stpRNG2",
-  // "stpRNG3",
-  // "stpRNG4",
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
   "stpRNG5",
-  // "1HZ10V",
-  // "R_10",
-  // "1HZ25V",
-  // "R_25",
-  // "1HZ50V",
-  // "R_50",
-  // "1HZ75V",
-  // "R_75",
-  // "1HZ100V",
-  // "R_100",
-  // "JD10",
-  // "JD25",
-  // "JD50",
-  // "JD75",
-  // "JD100",
+  "1HZ10V",
+  "R_10",
+  "1HZ25V",
+  "R_25",
+  "1HZ50V",
+  "R_50",
+  "1HZ75V",
+  "R_75",
+  "1HZ100V",
+  "R_100",
+  "JD10",
+  "JD25",
+  "JD50",
+  "JD75",
+  "JD100",
 ];
 
 // const alertSymbols = [];
@@ -87,6 +87,11 @@ const tradeSymbols = [
   "R_75",
   "1HZ100V",
   "R_100",
+  "JD10",
+  "JD25",
+  "JD50",
+  "JD75",
+  "JD100",
 ];
 let marketData = {};
 symbols.forEach((s) => {
@@ -168,8 +173,8 @@ const sendMessage = async (message) => {
 };
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 4;
-  const takeProfit = stopLoss * 10;
+  const stopLoss = stake;
+  const takeProfit = stopLoss * 5;
   const request = {
     proposal: 1,
     amount: stake,
@@ -178,7 +183,7 @@ async function getMultiProposal(direction, symbol, stake, multiplier) {
     underlying_symbol: symbol,
     multiplier: multiplier,
     basis: "stake",
-    limit_order: { stop_loss: stopLoss, take_profit: takeProfit },
+    limit_order: { stop_loss: 0, take_profit: takeProfit },
   };
   send(request);
 }
@@ -461,9 +466,9 @@ try {
         const ema9 = calculateEMA(md.close15, 9);
         const ema14 = calculateEMA(md.close15, 14);
 
-        md.ema_15Then = ema9[prevIndex];
-        md.ema_15Now = ema9[currIndex];
-        
+        md.ema_15Then = ema14[prevIndex];
+        md.ema_15Now = ema14[currIndex];
+
         md.trendUp15 = ema9[prevIndex] > ema14[prevIndex];
         md.trendDown15 = ema9[prevIndex] < ema14[prevIndex];
       }
@@ -555,33 +560,46 @@ try {
         }
         if (multiplierPositions.length !== 0) {
           for (const contract of multiplierPositions) {
-            if (contract?.type === "MULTUP") {
-              if (md.trendDown15) {
-                loading = true;
-                try {
-                  contract.contract_id &&
-                    closePosition(
-                      symbol,
-                      contract.contract_id,
-                      `Opposite Signal`,
-                    );
-                } catch (err) {
-                  sendMessage(String(err));
+            if (
+              crossedPrice(md.high, md.low, prevIndex, md.ema_15Then) ||
+              crossedPrice(md.high, md.low, prevIndex, md.ema_15Now)
+            ) {
+              if (contract?.type === "MULTUP") {
+                if (
+                  md.trendDown15 &&
+                  bearish(md.open, md.close, prevIndex) &&
+                  md.close[prevIndex] <= md.ema_15Then
+                ) {
+                  loading = true;
+                  try {
+                    contract.contract_id &&
+                      closePosition(
+                        symbol,
+                        contract.contract_id,
+                        `Opposite Signal`,
+                      );
+                  } catch (err) {
+                    sendMessage(String(err));
+                  }
                 }
               }
-            }
-            if (contract?.type === "MULTDOWN") {
-              if (md.trendUp15) {
-                loading = true;
-                try {
-                  contract.contract_id &&
-                    closePosition(
-                      symbol,
-                      contract.contract_id,
-                      `Opposite Signal`,
-                    );
-                } catch (err) {
-                  sendMessage(String(err));
+              if (contract?.type === "MULTDOWN") {
+                if (
+                  md.trendUp15 &&
+                  bullish(md.open, md.close, prevIndex) &&
+                  md.close[prevIndex] >= md.ema_15Then
+                ) {
+                  loading = true;
+                  try {
+                    contract.contract_id &&
+                      closePosition(
+                        symbol,
+                        contract.contract_id,
+                        `Opposite Signal`,
+                      );
+                  } catch (err) {
+                    sendMessage(String(err));
+                  }
                 }
               }
             }
@@ -639,22 +657,25 @@ try {
       if (connection && type !== "ONETOUCH") {
         if (!position) return;
         if (lossAmount == null) return;
-        if (pip >= risk * 4 && position.stoploss === 0) {
+        if (pip >= risk && position.stoploss === 0) {
           position.stoploss = Math.abs(commission);
           update(position.stoploss, id, symbol);
         }
-        // if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
-        //   position.stoploss = Math.abs(lossAmount);
-        //   update(position.stoploss, id, symbol);
-        // }
-        // if (pip >= risk * 2.5 && position.stoploss === Math.abs(lossAmount)) {
-        //   position.stoploss = Math.abs(lossAmount * 1.25);
-        //   update(position.stoploss, id, symbol);
-        // }
-        // if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount)) {
-        //   position.stoploss = Math.abs(lossAmount * 2);
-        //   update(position.stoploss, id, symbol);
-        // }
+        if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
+          position.stoploss = Math.abs(lossAmount);
+          update(position.stoploss, id, symbol);
+        }
+        if (pip >= risk * 2.5 && position.stoploss === Math.abs(lossAmount)) {
+          position.stoploss = Math.abs(lossAmount * 1.25);
+          update(position.stoploss, id, symbol);
+        }
+        if (
+          pip >= risk * 4 &&
+          position.stoploss === Math.abs(lossAmount * 1.25)
+        ) {
+          position.stoploss = Math.abs(lossAmount * 2);
+          update(position.stoploss, id, symbol);
+        }
         if (
           position &&
           position.stoploss !== 0 &&
