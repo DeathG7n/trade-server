@@ -425,7 +425,7 @@ try {
       const multiplierPositions = matchingPositions.filter(
         (p) => p.type !== "ONETOUCH",
       );
-      // const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
+      const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
       if (!md.multiplier_range?.length) return;
 
       if (data.echo_req.granularity === 900) {
@@ -561,16 +561,9 @@ try {
         }
         if (multiplierPositions.length !== 0) {
           for (const contract of multiplierPositions) {
-            if (
-              crossedPrice(md.high, md.low, prevIndex, md.ema_15Then) ||
-              crossedPrice(md.high, md.low, prevIndex, md.ema_15Now)
-            ) {
+            if (riskyPosition) {
               if (contract?.type === "MULTUP") {
-                if (
-                  md.trendDown15 &&
-                  bearish(md.open, md.close, prevIndex) &&
-                  md.close[prevIndex] <= md.ema_15Then
-                ) {
+                if (md.close[prevIndex] < md.ema_15Then) {
                   loading = true;
                   try {
                     contract.contract_id &&
@@ -585,11 +578,38 @@ try {
                 }
               }
               if (contract?.type === "MULTDOWN") {
-                if (
-                  md.trendUp15 &&
-                  bullish(md.open, md.close, prevIndex) &&
-                  md.close[prevIndex] >= md.ema_15Then
-                ) {
+                if (md.close[prevIndex] > md.ema_15Then) {
+                  loading = true;
+                  try {
+                    contract.contract_id &&
+                      closePosition(
+                        symbol,
+                        contract.contract_id,
+                        `Opposite Signal`,
+                      );
+                  } catch (err) {
+                    sendMessage(String(err));
+                  }
+                }
+              }
+            } else {
+              if (contract?.type === "MULTUP") {
+                if (md.trendDown15) {
+                  loading = true;
+                  try {
+                    contract.contract_id &&
+                      closePosition(
+                        symbol,
+                        contract.contract_id,
+                        `Opposite Signal`,
+                      );
+                  } catch (err) {
+                    sendMessage(String(err));
+                  }
+                }
+              }
+              if (contract?.type === "MULTDOWN") {
+                if (md.trendUp15) {
                   loading = true;
                   try {
                     contract.contract_id &&
