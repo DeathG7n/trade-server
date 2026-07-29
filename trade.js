@@ -53,21 +53,21 @@ const symbols = [
   "stpRNG3",
   "stpRNG4",
   "stpRNG5",
-  "1HZ10V",
-  "R_10",
-  "1HZ25V",
-  "R_25",
-  "1HZ50V",
-  "R_50",
-  "1HZ75V",
-  "R_75",
-  "1HZ100V",
-  "R_100",
-  "JD10",
-  "JD25",
-  "JD50",
-  "JD75",
-  "JD100",
+  // "1HZ10V",
+  // "R_10",
+  // "1HZ25V",
+  // "R_25",
+  // "1HZ50V",
+  // "R_50",
+  // "1HZ75V",
+  // "R_75",
+  // "1HZ100V",
+  // "R_100",
+  // "JD10",
+  // "JD25",
+  // "JD50",
+  // "JD75",
+  // "JD100",
 ];
 
 // const alertSymbols = [];
@@ -174,7 +174,7 @@ const sendMessage = async (message) => {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake;
-  const takeProfit = stopLoss * 5;
+  const takeProfit = stopLoss;
   const request = {
     proposal: 1,
     amount: stake,
@@ -519,14 +519,11 @@ try {
           Math.trunc(balance) !== 0 &&
           tradeSymbols.includes(symbol)
         ) {
-          if (
-            crossedPrice(md.high, md.low, prevIndex, md.ema_15Then) ||
-            crossedPrice(md.high, md.low, prevIndex, md.ema_15Now)
-          ) {
+          if (crossedPrice(md.high, md.low, prevIndex, md.ema_15Now)) {
             if (
               md.trendUp15 &&
               bullish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] >= md.ema_15Then
+              md.close[prevIndex] > md.ema_15Then
             ) {
               loading = true;
               try {
@@ -543,7 +540,7 @@ try {
             if (
               md.trendDown15 &&
               bearish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] <= md.ema_15Then
+              md.close[prevIndex] < md.ema_15Then
             ) {
               loading = true;
               try {
@@ -641,7 +638,6 @@ try {
     }
 
     if (data.msg_type === "proposal_open_contract") {
-      console.log(data.proposal_open_contract);
       const id = data?.echo_req?.contract_id;
       const position = positions.find((p) => p.contract_id === id);
       const symbol = data.proposal_open_contract?.underlying_symbol;
@@ -658,9 +654,12 @@ try {
       const stopOut = Number(
         data.proposal_open_contract?.limit_order?.stop_out?.value,
       );
-      const stop = Number(data.proposal_open_contract?.limit_order?.stop_loss?.value);
-      const takeProfit =
-        Number(data.proposal_open_contract?.limit_order?.take_profit?.value);
+      const stop = Number(
+        data.proposal_open_contract?.limit_order?.stop_loss?.value,
+      );
+      const takeProfit = Number(
+        data.proposal_open_contract?.limit_order?.take_profit?.value,
+      );
       const pip =
         type === "MULTUP" ? currentSpot - entrySpot : entrySpot - currentSpot;
       const loss =
