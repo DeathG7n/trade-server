@@ -695,7 +695,7 @@ try {
         type: type,
       };
 
-      if (duration <= 4) {
+      if (duration <= 2) {
         sendMessage(JSON.stringify(runningTrade, null, 2));
       }
 
