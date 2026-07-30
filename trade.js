@@ -183,8 +183,7 @@ async function getMultiProposal(direction, symbol, stake, multiplier) {
     underlying_symbol: symbol,
     multiplier: multiplier,
     basis: "stake",
-    // limit_order: { stop_loss: 0, take_profit: takeProfit },
-    limit_order: { take_profit: takeProfit },
+    limit_order: { stop_loss: stopLoss, take_profit: takeProfit }
   };
   send(request);
 }
