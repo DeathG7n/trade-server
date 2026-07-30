@@ -173,8 +173,8 @@ const sendMessage = async (message) => {
 };
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake;
-  const takeProfit = stopLoss;
+  const stopLoss = stake / 2.5;
+  const takeProfit = stopLoss * 5;
   const request = {
     proposal: 1,
     amount: stake,
@@ -425,7 +425,7 @@ try {
       const multiplierPositions = matchingPositions.filter(
         (p) => p.type !== "ONETOUCH",
       );
-      const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
+      // const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
       if (!md.multiplier_range?.length) return;
 
       if (data.echo_req.granularity === 900) {
@@ -470,8 +470,12 @@ try {
         md.ema_15Then = ema9[prevIndex];
         md.ema_15Now = ema9[currIndex];
 
-        md.trendUp15 = ema9[prevIndex] > ema14[prevIndex] && ema9[currIndex] > ema9[prevIndex];
-        md.trendDown15 = ema9[prevIndex] < ema14[prevIndex] && ema9[currIndex] < ema9[prevIndex];
+        md.trendUp15 =
+          ema9[prevIndex] > ema14[prevIndex] &&
+          ema9[currIndex] > ema9[prevIndex];
+        md.trendDown15 =
+          ema9[prevIndex] < ema14[prevIndex] &&
+          ema9[currIndex] < ema9[prevIndex];
       }
 
       if (data.echo_req.granularity === 60) {
@@ -523,7 +527,7 @@ try {
             if (
               md.trendUp15 &&
               bullish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] > md.ema_15Then
+              md.close[prevIndex] > md.ema_15Now
             ) {
               loading = true;
               try {
@@ -540,7 +544,7 @@ try {
             if (
               md.trendDown15 &&
               bearish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] < md.ema_15Then
+              md.close[prevIndex] < md.ema_15Now
             ) {
               loading = true;
               try {
@@ -558,66 +562,33 @@ try {
         }
         if (multiplierPositions.length !== 0) {
           for (const contract of multiplierPositions) {
-            if (riskyPosition) {
-              if (contract?.type === "MULTUP") {
-                if (md.close[prevIndex] < md.ema_15Then) {
-                  loading = true;
-                  try {
-                    contract.contract_id &&
-                      closePosition(
-                        symbol,
-                        contract.contract_id,
-                        `Opposite Signal`,
-                      );
-                  } catch (err) {
-                    sendMessage(String(err));
-                  }
+            if (contract?.type === "MULTUP") {
+              if (md.trendDown15) {
+                loading = true;
+                try {
+                  contract.contract_id &&
+                    closePosition(
+                      symbol,
+                      contract.contract_id,
+                      `Opposite Signal`,
+                    );
+                } catch (err) {
+                  sendMessage(String(err));
                 }
               }
-              if (contract?.type === "MULTDOWN") {
-                if (md.close[prevIndex] > md.ema_15Then) {
-                  loading = true;
-                  try {
-                    contract.contract_id &&
-                      closePosition(
-                        symbol,
-                        contract.contract_id,
-                        `Opposite Signal`,
-                      );
-                  } catch (err) {
-                    sendMessage(String(err));
-                  }
-                }
-              }
-            } else {
-              if (contract?.type === "MULTUP") {
-                if (md.trendDown15) {
-                  loading = true;
-                  try {
-                    contract.contract_id &&
-                      closePosition(
-                        symbol,
-                        contract.contract_id,
-                        `Opposite Signal`,
-                      );
-                  } catch (err) {
-                    sendMessage(String(err));
-                  }
-                }
-              }
-              if (contract?.type === "MULTDOWN") {
-                if (md.trendUp15) {
-                  loading = true;
-                  try {
-                    contract.contract_id &&
-                      closePosition(
-                        symbol,
-                        contract.contract_id,
-                        `Opposite Signal`,
-                      );
-                  } catch (err) {
-                    sendMessage(String(err));
-                  }
+            }
+            if (contract?.type === "MULTDOWN") {
+              if (md.trendUp15) {
+                loading = true;
+                try {
+                  contract.contract_id &&
+                    closePosition(
+                      symbol,
+                      contract.contract_id,
+                      `Opposite Signal`,
+                    );
+                } catch (err) {
+                  sendMessage(String(err));
                 }
               }
             }
