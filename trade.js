@@ -465,16 +465,17 @@ try {
 
         const ema9 = calculateEMA(md.close15, 9);
         const ema14 = calculateEMA(md.close15, 14);
+        const ema21 = calculateEMA(md.close15, 21);
 
         md.ema_15Then = ema9[prevIndex];
         md.ema_15Now = ema9[currIndex];
 
         md.trendUp15 =
           ema9[prevIndex] > ema14[prevIndex] &&
-          ema9[currIndex] > ema9[prevIndex];
+          ema14[prevIndex] > ema21[prevIndex];
         md.trendDown15 =
           ema9[prevIndex] < ema14[prevIndex] &&
-          ema9[currIndex] < ema9[prevIndex];
+          ema14[prevIndex] < ema21[prevIndex];
       }
 
       if (data.echo_req.granularity === 60) {
