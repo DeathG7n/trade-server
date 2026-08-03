@@ -44,14 +44,14 @@ let connection = false;
 let authorized = false;
 let loading = true;
 let lastBalance = null;
-let timeframes = [60, 1800];
+let timeframes = [60, 900];
 const subscribedContracts = new Set();
 
 const symbols = [
-  "stpRNG",
-  "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
+  //"stpRNG",
+  //"stpRNG2",
+  //"stpRNG3",
+  //"stpRNG4",
   "stpRNG5",
   // "1HZ10V",
   // "R_10",
@@ -398,7 +398,7 @@ try {
         sendMessage("Bot is still running");
       }
       try {
-        if (data.echo_req.granularity === 1800) {
+        if (data.echo_req.granularity === 900) {
           md.close15 = data.candles.map((c) => c.close);
           md.open15 = data.candles.map((c) => c.open);
           md.high15 = data.candles.map((c) => c.high);
@@ -427,7 +427,7 @@ try {
       // const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
       if (!md.multiplier_range?.length) return;
 
-      if (data.echo_req.granularity === 1800) {
+      if (data.echo_req.granularity === 900) {
         if (md.openTime15 === 0) {
           md.openTime15 = data.ohlc.open_time;
         }
