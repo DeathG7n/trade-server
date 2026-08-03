@@ -173,8 +173,8 @@ const sendMessage = async (message) => {
 };
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 2.5;
-  const takeProfit = stopLoss * 5;
+  const stopLoss = stake / 5;
+  const takeProfit = stopLoss * 10;
   const request = {
     proposal: 1,
     amount: stake,
@@ -424,7 +424,7 @@ try {
       const multiplierPositions = matchingPositions.filter(
         (p) => p.type !== "ONETOUCH",
       );
-      // const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
+      const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
       if (!md.multiplier_range?.length) return;
 
       if (data.echo_req.granularity === 900) {
@@ -522,7 +522,7 @@ try {
         // md.trendDown = ema21[prevIndex] < ema50[prevIndex];
 
         if (
-          multiplierPositions.length === 0 &&
+          !riskyPosition &&
           Math.trunc(balance) !== 0 &&
           tradeSymbols.includes(symbol)
         ) {
