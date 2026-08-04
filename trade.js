@@ -655,18 +655,18 @@ try {
           update(position.stoploss, id, symbol);
         }
         if (pip >= risk * 4 && position.stoploss === Math.abs(commission)) {
-          position.stoploss = Math.abs(lossAmount);
+          position.stoploss = Math.abs(lossAmount * 2);
           update(position.stoploss, id, symbol);
         }
-        if (pip >= risk * 5 && position.stoploss === Math.abs(lossAmount)) {
-          position.stoploss = Math.abs(lossAmount * 1.25);
+        if (pip >= risk * 5 && position.stoploss === Math.abs(lossAmount * 2)) {
+          position.stoploss = Math.abs(lossAmount * 2.5);
           update(position.stoploss, id, symbol);
         }
         if (
           pip >= risk * 8 &&
-          position.stoploss === Math.abs(lossAmount * 1.25)
+          position.stoploss === Math.abs(lossAmount * 2.5)
         ) {
-          position.stoploss = Math.abs(lossAmount * 2);
+          position.stoploss = Math.abs(lossAmount * 4);
           update(position.stoploss, id, symbol);
         }
         if (
