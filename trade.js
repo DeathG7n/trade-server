@@ -653,20 +653,20 @@ try {
       if (connection && type !== "ONETOUCH") {
         if (!position) return;
         if (lossAmount == null) return;
-        if (pip >= risk && position.stoploss === 0) {
+        if (pip >= risk * 2 && position.stoploss === 0) {
           position.stoploss = Math.abs(commission);
           update(position.stoploss, id, symbol);
         }
-        if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
+        if (pip >= risk * 4 && position.stoploss === Math.abs(commission)) {
           position.stoploss = Math.abs(lossAmount);
           update(position.stoploss, id, symbol);
         }
-        if (pip >= risk * 2.5 && position.stoploss === Math.abs(lossAmount)) {
+        if (pip >= risk * 5 && position.stoploss === Math.abs(lossAmount)) {
           position.stoploss = Math.abs(lossAmount * 1.25);
           update(position.stoploss, id, symbol);
         }
         if (
-          pip >= risk * 4 &&
+          pip >= risk * 8 &&
           position.stoploss === Math.abs(lossAmount * 1.25)
         ) {
           position.stoploss = Math.abs(lossAmount * 2);
