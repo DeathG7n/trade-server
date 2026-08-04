@@ -48,10 +48,10 @@ let timeframes = [60, 900];
 const subscribedContracts = new Set();
 
 const symbols = [
-  //"stpRNG",
-  //"stpRNG2",
-  //"stpRNG3",
-  //"stpRNG4",
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
   "stpRNG5",
   // "1HZ10V",
   // "R_10",
@@ -463,22 +463,19 @@ try {
         const currIndex = len - 1;
         if (len < 200) return;
 
-        const ema5 = calculateEMA(md.close15, 5);
         const ema9 = calculateEMA(md.close15, 9);
         const ema14 = calculateEMA(md.close15, 14);
         const ema21 = calculateEMA(md.close15, 21);
 
-        md.ema_15Then = ema9[prevIndex];
-        md.ema_15Now = ema9[currIndex];
+        md.ema_15Then = ema21[prevIndex];
+        md.ema_15Now = ema21[currIndex];
 
         md.trendUp15 =
           ema9[prevIndex] > ema14[prevIndex] &&
-          ema14[prevIndex] > ema21[prevIndex] &&
-          ema5[currIndex] > ema5[prevIndex];
+          ema14[prevIndex] > ema21[prevIndex] 
         md.trendDown15 =
           ema9[prevIndex] < ema14[prevIndex] &&
-          ema14[prevIndex] < ema21[prevIndex] &&
-          ema5[currIndex] < ema5[prevIndex];
+          ema14[prevIndex] < ema21[prevIndex] 
       }
 
       if (data.echo_req.granularity === 60) {
