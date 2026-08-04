@@ -48,10 +48,10 @@ let timeframes = [60, 900];
 const subscribedContracts = new Set();
 
 const symbols = [
-  //"stpRNG",
-  //"stpRNG2",
-  //"stpRNG3",
-  //"stpRNG4",
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
   "stpRNG5",
   // "1HZ10V",
   // "R_10",
