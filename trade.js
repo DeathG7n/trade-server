@@ -48,10 +48,10 @@ let timeframes = [60, 900];
 const subscribedContracts = new Set();
 
 const symbols = [
-  //"stpRNG",
-  //"stpRNG2",
-  //"stpRNG3",
-  //"stpRNG4",
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
   "stpRNG5",
   // "1HZ10V",
   // "R_10",
@@ -424,7 +424,7 @@ try {
       const multiplierPositions = matchingPositions.filter(
         (p) => p.type !== "ONETOUCH",
       );
-      const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
+      const riskyPosition = positions.find((p) => p.stoploss === 0);
       if (!md.multiplier_range?.length) return;
 
       if (data.echo_req.granularity === 900) {
