@@ -173,8 +173,8 @@ const sendMessage = async (message) => {
 };
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 5;
-  const takeProfit = stopLoss * 10;
+  const stopLoss = stake / 2.5;
+  const takeProfit = stopLoss * 5;
   const request = {
     proposal: 1,
     amount: stake,
@@ -650,23 +650,23 @@ try {
       if (connection && type !== "ONETOUCH") {
         if (!position) return;
         if (lossAmount == null) return;
-        if (pip >= risk * 2 && position.stoploss === 0) {
+        if (pip >= risk && position.stoploss === 0) {
           position.stoploss = Math.abs(commission);
           update(position.stoploss, id, symbol);
         }
-        if (pip >= risk * 4 && position.stoploss === Math.abs(commission)) {
-          position.stoploss = Math.abs(lossAmount * 2);
+        if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
+          position.stoploss = Math.abs(lossAmount);
           update(position.stoploss, id, symbol);
         }
-        if (pip >= risk * 5 && position.stoploss === Math.abs(lossAmount * 2)) {
-          position.stoploss = Math.abs(lossAmount * 2.5);
+        if (pip >= risk * 2.5 && position.stoploss === Math.abs(lossAmount)) {
+          position.stoploss = Math.abs(lossAmount * 1.25);
           update(position.stoploss, id, symbol);
         }
         if (
-          pip >= risk * 8 &&
-          position.stoploss === Math.abs(lossAmount * 2.5)
+          pip >= risk * 4 &&
+          position.stoploss === Math.abs(lossAmount * 1.25)
         ) {
-          position.stoploss = Math.abs(lossAmount * 4);
+          position.stoploss = Math.abs(lossAmount * 2);
           update(position.stoploss, id, symbol);
         }
         if (
