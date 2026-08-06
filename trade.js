@@ -44,14 +44,14 @@ let connection = false;
 let authorized = false;
 let loading = true;
 let lastBalance = null;
-let timeframes = [60, 1800];
+let timeframes = [60, 900];
 const subscribedContracts = new Set();
 
 const symbols = [
-  //"stpRNG",
-  //"stpRNG2",
-  //"stpRNG3",
-  //"stpRNG4",
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
   "stpRNG5",
   // "1HZ10V",
   // "R_10",
@@ -398,7 +398,7 @@ try {
         sendMessage("Bot is still running");
       }
       try {
-        if (data.echo_req.granularity === 1800) {
+        if (data.echo_req.granularity === 900) {
           md.close15 = data.candles.map((c) => c.close);
           md.open15 = data.candles.map((c) => c.open);
           md.high15 = data.candles.map((c) => c.high);
@@ -424,10 +424,10 @@ try {
       const multiplierPositions = matchingPositions.filter(
         (p) => p.type !== "ONETOUCH",
       );
-      const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
+      // const riskyPosition = multiplierPositions.find((p) => p.stoploss === 0);
       if (!md.multiplier_range?.length) return;
 
-      if (data.echo_req.granularity === 1800) {
+      if (data.echo_req.granularity === 900) {
         if (md.openTime15 === 0) {
           md.openTime15 = data.ohlc.open_time;
         }
@@ -463,19 +463,22 @@ try {
         const currIndex = len - 1;
         if (len < 200) return;
 
+        const ema5 = calculateEMA(md.close15, 5);
         const ema9 = calculateEMA(md.close15, 9);
         const ema14 = calculateEMA(md.close15, 14);
         const ema21 = calculateEMA(md.close15, 21);
 
-        md.ema_15Then = ema21[prevIndex];
-        md.ema_15Now = ema21[currIndex];
+        md.ema_15Then = ema9[prevIndex];
+        md.ema_15Now = ema9[currIndex];
 
         md.trendUp15 =
           ema9[prevIndex] > ema14[prevIndex] &&
-          ema14[prevIndex] > ema21[prevIndex] 
+          ema14[prevIndex] > ema21[prevIndex] &&
+          ema5[currIndex] > ema5[prevIndex];
         md.trendDown15 =
           ema9[prevIndex] < ema14[prevIndex] &&
-          ema14[prevIndex] < ema21[prevIndex] 
+          ema14[prevIndex] < ema21[prevIndex] &&
+          ema5[currIndex] < ema5[prevIndex];
       }
 
       if (data.echo_req.granularity === 60) {
@@ -510,7 +513,6 @@ try {
 
         const len = md.close.length;
         const prevIndex = len - 2;
-        const thirdIndex = len - 3;
         if (len < 200) return;
 
         // const ema21 = calculateEMA(md.close, 21);
@@ -520,7 +522,7 @@ try {
         // md.trendDown = ema21[prevIndex] < ema50[prevIndex];
 
         if (
-          !riskyPosition &&
+          multiplierPositions.length === 0 &&
           Math.trunc(balance) !== 0 &&
           tradeSymbols.includes(symbol)
         ) {
