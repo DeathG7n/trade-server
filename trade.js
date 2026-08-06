@@ -524,7 +524,7 @@ try {
           Math.trunc(balance) !== 0 &&
           tradeSymbols.includes(symbol)
         ) {
-          if (crossedPrice(md.high, md.low, prevIndex, md.ema_15Now) || crossedPrice(md.high, md.low, thirdIndex, md.ema_15Now)) {
+          if (crossedPrice(md.high, md.low, prevIndex, md.ema_15Now)) {
             if (
               md.trendUp15 &&
               bullish(md.open, md.close, prevIndex) &&
