@@ -6,7 +6,7 @@ import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 import { wsUrl } from "./server.js";
 
-import { bullish, bearish, crossedPrice } from "./util.js";
+import { bullish, bearish, crossedPrice, recentEmaCross } from "./util.js";
 
 dotenv.config();
 
@@ -341,7 +341,7 @@ function clearSymbolPending(symbol) {
 */
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 2.5;
+  const stopLoss = stake / 2;
   const takeProfit = stopLoss * 5;
 
   const request = {
@@ -1004,11 +1004,13 @@ try {
 
         md.trendUp15 =
           ema9[prevIndex] > ema14[prevIndex] &&
-          ema5[currIndex] > ema5[prevIndex];
+          ema5[currIndex] > ema5[prevIndex] &&
+          recentEmaCross(ema9, ema14, 15) === "bullish";
 
         md.trendDown15 =
           ema9[prevIndex] < ema14[prevIndex] &&
-          ema5[currIndex] < ema5[prevIndex];
+          ema5[currIndex] < ema5[prevIndex] &&
+          recentEmaCross(ema9, ema14, 15) === "bearish";
       }
 
       /*
@@ -1134,8 +1136,7 @@ try {
                 sendMessage(String(error));
               }
             } else if (
-
-            /*
+              /*
             |--------------------------------------------------------------------------
             | MULTDOWN
             |--------------------------------------------------------------------------
@@ -1205,8 +1206,7 @@ try {
                 sendMessage(String(error));
               }
             } else if (position.type === "MULTDOWN" && md.trendUp15) {
-
-            /*
+              /*
             |--------------------------------------------------------------------------
             | MULTDOWN
             |--------------------------------------------------------------------------
