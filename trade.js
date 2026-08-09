@@ -6,7 +6,7 @@ import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 import { wsUrl } from "./server.js";
 
-import { recentEmaCross, detectCrossover } from "./util.js";
+import { detectCrossover } from "./util.js";
 
 dotenv.config();
 
@@ -986,31 +986,17 @@ try {
 
         const prevIndex = len - 2;
 
-        const currIndex = len - 1;
-
         if (len < 200) {
           return;
         }
 
+        const ema3 = calculateEMA(md.close15, 3);
+
         const ema5 = calculateEMA(md.close15, 5);
 
-        const ema9 = calculateEMA(md.close15, 9);
+        md.trendUp15 = ema3[prevIndex] > ema5[prevIndex];
 
-        const ema14 = calculateEMA(md.close15, 14);
-
-        md.ema_15Then = ema9[prevIndex];
-
-        md.ema_15Now = ema9[currIndex];
-
-        md.trendUp15 =
-          ema9[prevIndex] > ema14[prevIndex] &&
-          ema5[currIndex] > ema5[prevIndex] &&
-          recentEmaCross(ema9, ema14, 15) === "bullish";
-
-        md.trendDown15 =
-          ema9[prevIndex] < ema14[prevIndex] &&
-          ema5[currIndex] < ema5[prevIndex] &&
-          recentEmaCross(ema9, ema14, 15) === "bearish";
+        md.trendDown15 = ema3[prevIndex] < ema5[prevIndex];
       }
 
       /*
@@ -1111,7 +1097,7 @@ try {
           md.tradeState === "IDLE"
         ) {
           if (md.tradeState === "IDLE") {
-            if (detectCrossover(ema3, ema5) === "bullish") {
+            if (md.trendUp15 && detectCrossover(ema3, ema5) === "bullish") {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
               try {
@@ -1126,7 +1112,10 @@ try {
 
                 sendMessage(String(error));
               }
-            } else if (detectCrossover(ema3, ema5) === "bearish") {
+            } else if (
+              md.trendDown15 &&
+              detectCrossover(ema3, ema5) === "bearish"
+            ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
               try {
@@ -1183,6 +1172,7 @@ try {
 
             if (
               position.type === "MULTUP" &&
+              md.trendDown15 &&
               detectCrossover(ema3, ema5) === "bearish"
             ) {
               try {
@@ -1192,6 +1182,7 @@ try {
               }
             } else if (
               position.type === "MULTDOWN" &&
+              md.trendUp15 &&
               detectCrossover(ema3, ema5) === "bullish"
             ) {
               /*
