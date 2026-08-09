@@ -6,7 +6,7 @@ import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 import { wsUrl } from "./server.js";
 
-import { recentEmaCross, detectCrossover, calculateADX } from "./util.js";
+import { recentEmaCross, detectCrossover } from "./util.js";
 
 dotenv.config();
 
@@ -341,7 +341,7 @@ function clearSymbolPending(symbol) {
 */
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 2;
+  const stopLoss = stake / 5;
   const takeProfit = stopLoss * 5;
 
   const request = {
@@ -1083,10 +1083,7 @@ try {
         }
 
         const ema5 = calculateEMA(md.close, 5);
-        const ema9 = calculateEMA(md.close, 9);
-        const adx = calculateADX(md.high, md.low, md.close, 14);
-        const currentADX = adx.adx[adx.adx.length - 1];
-        const previousADX = adx.adx[adx.adx.length - 2];
+        const ema3 = calculateEMA(md.close, 3);
 
         /*
         |--------------------------------------------------------------------------
@@ -1113,8 +1110,8 @@ try {
           tradeSymbols.includes(symbol) &&
           md.tradeState === "IDLE"
         ) {
-          if (currentADX > 20 || previousADX > 20) {
-            if (detectCrossover(ema5, ema9) === "bullish") {
+          if (md.tradeState === "IDLE") {
+            if (detectCrossover(ema3, ema5) === "bullish") {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
               try {
@@ -1129,7 +1126,7 @@ try {
 
                 sendMessage(String(error));
               }
-            } else if (detectCrossover(ema5, ema9) === "bearish") {
+            } else if (detectCrossover(ema3, ema5) === "bearish") {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
               try {
@@ -1186,7 +1183,7 @@ try {
 
             if (
               position.type === "MULTUP" &&
-              detectCrossover(ema5, ema9) === "bearish"
+              detectCrossover(ema3, ema5) === "bearish"
             ) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
@@ -1195,7 +1192,7 @@ try {
               }
             } else if (
               position.type === "MULTDOWN" &&
-              detectCrossover(ema5, ema9) === "bullish"
+              detectCrossover(ema3, ema5) === "bullish"
             ) {
               /*
             |--------------------------------------------------------------------------
