@@ -1085,6 +1085,7 @@ try {
         const ema5 = calculateEMA(md.close, 5);
         const ema9 = calculateEMA(md.close, 9);
         const adx = calculateADX(md.high, md.low, md.close, 14);
+        const currentADX = adx.adx[adx.adx.length - 1];
 
         /*
         |--------------------------------------------------------------------------
@@ -1111,7 +1112,7 @@ try {
           tradeSymbols.includes(symbol) &&
           md.tradeState === "IDLE"
         ) {
-          if (adx.adx > 20) {
+          if (currentADX > 20) {
             if (detectCrossover(ema5, ema9) === "bullish") {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
