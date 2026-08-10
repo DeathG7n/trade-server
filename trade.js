@@ -1379,7 +1379,7 @@ try {
         |--------------------------------------------------------------------------
         */
 
-        if (pip >= risk && position.stoploss === 0) {
+        if (pip >= risk * 2 && position.stoploss === 0) {
           position.stoploss = Math.abs(commission);
 
           await update(position.stoploss, id, symbol);
@@ -1391,7 +1391,7 @@ try {
         |--------------------------------------------------------------------------
         */
 
-        if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
+        if (pip >= risk * 3 && position.stoploss === Math.abs(commission)) {
           position.stoploss = Math.abs(lossAmount);
 
           await update(position.stoploss, id, symbol);
@@ -1403,11 +1403,11 @@ try {
         |--------------------------------------------------------------------------
         */
 
-        if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
-          position.stoploss = Math.abs(lossAmount * 2);
+        // if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
+        //   position.stoploss = Math.abs(lossAmount * 2);
 
-          await update(position.stoploss, id, symbol);
-        }
+        //   await update(position.stoploss, id, symbol);
+        // }
 
         /*
         |--------------------------------------------------------------------------
@@ -1415,14 +1415,14 @@ try {
         |--------------------------------------------------------------------------
         */
 
-        if (
-          pip >= risk * 4 &&
-          position.stoploss === Math.abs(lossAmount * 2)
-        ) {
-          position.stoploss = Math.abs(lossAmount * 3);
+        // if (
+        //   pip >= risk * 4 &&
+        //   position.stoploss === Math.abs(lossAmount * 2)
+        // ) {
+        //   position.stoploss = Math.abs(lossAmount * 3);
 
-          await update(position.stoploss, id, symbol);
-        }
+        //   await update(position.stoploss, id, symbol);
+        // }
 
         /*
         |--------------------------------------------------------------------------
