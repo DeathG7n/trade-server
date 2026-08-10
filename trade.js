@@ -342,7 +342,7 @@ function clearSymbolPending(symbol) {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 5;
-  const takeProfit = stopLoss * 5;
+  const takeProfit = stopLoss * 3;
 
   const request = {
     proposal: 1,
@@ -1063,6 +1063,7 @@ try {
         }
 
         const len = md.close.length;
+        const prevIndex = len - 2;
 
         if (len < 200) {
           return;
@@ -1070,6 +1071,11 @@ try {
 
         const ema5 = calculateEMA(md.close, 5);
         const ema3 = calculateEMA(md.close, 3);
+        const ema21 = calculateEMA(md.close, 21);
+        const ema50 = calculateEMA(md.close, 50);
+
+        md.trendUp = ema21[prevIndex] > ema50[prevIndex];
+        md.trendDown = ema21[prevIndex] < ema50[prevIndex];
 
         /*
         |--------------------------------------------------------------------------
@@ -1097,7 +1103,7 @@ try {
           md.tradeState === "IDLE"
         ) {
           if (md.tradeState === "IDLE") {
-            if (md.trendUp15 && detectCrossover(ema3, ema5) === "bullish") {
+            if (md.trendUp && detectCrossover(ema3, ema5) === "bullish") {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
               try {
@@ -1113,7 +1119,7 @@ try {
                 sendMessage(String(error));
               }
             } else if (
-              md.trendDown15 &&
+              md.trendDown &&
               detectCrossover(ema3, ema5) === "bearish"
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
@@ -1172,7 +1178,7 @@ try {
 
             if (
               position.type === "MULTUP" &&
-              md.trendDown15 &&
+              md.trendDown &&
               detectCrossover(ema3, ema5) === "bearish"
             ) {
               try {
@@ -1182,7 +1188,7 @@ try {
               }
             } else if (
               position.type === "MULTDOWN" &&
-              md.trendUp15 &&
+              md.trendUp &&
               detectCrossover(ema3, ema5) === "bullish"
             ) {
               /*
@@ -1397,8 +1403,8 @@ try {
         |--------------------------------------------------------------------------
         */
 
-        if (pip >= risk * 2.5 && position.stoploss === Math.abs(lossAmount)) {
-          position.stoploss = Math.abs(lossAmount * 1.25);
+        if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
+          position.stoploss = Math.abs(lossAmount * 2);
 
           await update(position.stoploss, id, symbol);
         }
@@ -1411,9 +1417,9 @@ try {
 
         if (
           pip >= risk * 4 &&
-          position.stoploss === Math.abs(lossAmount * 1.25)
+          position.stoploss === Math.abs(lossAmount * 2)
         ) {
-          position.stoploss = Math.abs(lossAmount * 2);
+          position.stoploss = Math.abs(lossAmount * 3);
 
           await update(position.stoploss, id, symbol);
         }
