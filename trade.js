@@ -990,8 +990,8 @@ try {
           return;
         }
 
-        const ema21 = calculateEMA(md.close, 21);
-        const ema50 = calculateEMA(md.close, 50);
+        const ema21 = calculateEMA(md.close15, 21);
+        const ema50 = calculateEMA(md.close15, 50);
 
         md.trendUp15 = ema21[prevIndex] > ema50[prevIndex];
         md.trendDown15 = ema21[prevIndex] < ema50[prevIndex];
