@@ -341,7 +341,7 @@ function clearSymbolPending(symbol) {
 */
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 5;
+  const stopLoss = stake / 2;
   const takeProfit = stopLoss * 3;
 
   const request = {
@@ -990,13 +990,11 @@ try {
           return;
         }
 
-        const ema3 = calculateEMA(md.close15, 3);
+        const ema21 = calculateEMA(md.close, 21);
+        const ema50 = calculateEMA(md.close, 50);
 
-        const ema5 = calculateEMA(md.close15, 5);
-
-        md.trendUp15 = ema3[prevIndex] > ema5[prevIndex];
-
-        md.trendDown15 = ema3[prevIndex] < ema5[prevIndex];
+        md.trendUp15 = ema21[prevIndex] > ema50[prevIndex];
+        md.trendDown15 = ema21[prevIndex] < ema50[prevIndex];
       }
 
       /*
@@ -1070,7 +1068,7 @@ try {
         }
 
         const ema5 = calculateEMA(md.close, 5);
-        const ema3 = calculateEMA(md.close, 3);
+        const ema9 = calculateEMA(md.close, 9);
         const ema21 = calculateEMA(md.close, 21);
         const ema50 = calculateEMA(md.close, 50);
 
@@ -1103,7 +1101,11 @@ try {
           md.tradeState === "IDLE"
         ) {
           if (md.tradeState === "IDLE") {
-            if (md.trendUp && detectCrossover(ema3, ema5) === "bullish") {
+            if (
+              md.trendUp15 &&
+              md.trendDown &&
+              detectCrossover(ema5, ema9) === "bullish"
+            ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
               try {
@@ -1119,8 +1121,9 @@ try {
                 sendMessage(String(error));
               }
             } else if (
-              md.trendDown &&
-              detectCrossover(ema3, ema5) === "bearish"
+              md.trendDown15 &&
+              md.trendUp &&
+              detectCrossover(ema5, ema9) === "bearish"
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
@@ -1176,21 +1179,13 @@ try {
             |--------------------------------------------------------------------------
             */
 
-            if (
-              position.type === "MULTUP" &&
-              md.trendDown &&
-              detectCrossover(ema3, ema5) === "bearish"
-            ) {
+            if (position.type === "MULTUP" && md.trendDown15) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
               } catch (error) {
                 sendMessage(String(error));
               }
-            } else if (
-              position.type === "MULTDOWN" &&
-              md.trendUp &&
-              detectCrossover(ema3, ema5) === "bullish"
-            ) {
+            } else if (position.type === "MULTDOWN" && md.trendUp15) {
               /*
             |--------------------------------------------------------------------------
             | MULTDOWN
@@ -1379,7 +1374,7 @@ try {
         |--------------------------------------------------------------------------
         */
 
-        if (pip >= risk * 2 && position.stoploss === 0) {
+        if (pip >= risk && position.stoploss === 0) {
           position.stoploss = Math.abs(commission);
 
           await update(position.stoploss, id, symbol);
@@ -1391,7 +1386,7 @@ try {
         |--------------------------------------------------------------------------
         */
 
-        if (pip >= risk * 3 && position.stoploss === Math.abs(commission)) {
+        if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
           position.stoploss = Math.abs(lossAmount);
 
           await update(position.stoploss, id, symbol);
@@ -1403,11 +1398,11 @@ try {
         |--------------------------------------------------------------------------
         */
 
-        // if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
-        //   position.stoploss = Math.abs(lossAmount * 2);
+        if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
+          position.stoploss = Math.abs(lossAmount * 2);
 
-        //   await update(position.stoploss, id, symbol);
-        // }
+          await update(position.stoploss, id, symbol);
+        }
 
         /*
         |--------------------------------------------------------------------------
