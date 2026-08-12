@@ -39,7 +39,7 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const timeframes = [60, 900];
+const timeframes = [300, 3600];
 
 /*
 |--------------------------------------------------------------------------
@@ -94,7 +94,28 @@ const pendingTrades = new Map();
 |--------------------------------------------------------------------------
 */
 
-const symbols = ["stpRNG", "stpRNG2", "stpRNG3", "stpRNG4", "stpRNG5"];
+const symbols = [
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
+  "stpRNG5",
+  "1HZ10V",
+  "R_10",
+  "1HZ25V",
+  "R_25",
+  "1HZ50V",
+  "R_50",
+  "1HZ75V",
+  "R_75",
+  "1HZ100V",
+  "R_100",
+  "JD10",
+  "JD25",
+  "JD50",
+  "JD75",
+  "JD100",
+];
 
 /*
 |--------------------------------------------------------------------------
@@ -856,7 +877,7 @@ try {
       }
 
       try {
-        if (data.echo_req.granularity === 900) {
+        if (data.echo_req.granularity === 3600) {
           md.close15 = data.candles.map((c) => c.close);
 
           md.open15 = data.candles.map((c) => c.open);
@@ -866,7 +887,7 @@ try {
           md.low15 = data.candles.map((c) => c.low);
         }
 
-        if (data.echo_req.granularity === 60) {
+        if (data.echo_req.granularity === 300) {
           md.close = data.candles.map((c) => c.close);
 
           md.open = data.candles.map((c) => c.open);
@@ -925,7 +946,7 @@ try {
       |--------------------------------------------------------------------------
       */
 
-      if (data.echo_req.granularity === 900) {
+      if (data.echo_req.granularity === 3600) {
         if (md.openTime15 === 0) {
           md.openTime15 = data.ohlc.open_time;
         }
@@ -1003,7 +1024,7 @@ try {
       |--------------------------------------------------------------------------
       */
 
-      if (data.echo_req.granularity === 60) {
+      if (data.echo_req.granularity === 300) {
         if (md.openTime === 0) {
           md.openTime = data.ohlc.open_time;
         }
@@ -1179,23 +1200,13 @@ try {
             |--------------------------------------------------------------------------
             */
 
-            if (
-              position.type === "MULTUP" &&
-              md.trendUp15 &&
-              md.trendDown &&
-              detectCrossover(ema5, ema9) === "bearish"
-            ) {
+            if (position.type === "MULTUP" && md.trendDown15) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
               } catch (error) {
                 sendMessage(String(error));
               }
-            } else if (
-              position.type === "MULTDOWN" &&
-              md.trendDown15 &&
-              md.trendUp &&
-              detectCrossover(ema5, ema9) === "bullish"
-            ) {
+            } else if (position.type === "MULTDOWN" && md.trendUp15) {
               /*
             |--------------------------------------------------------------------------
             | MULTDOWN
