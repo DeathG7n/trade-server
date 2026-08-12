@@ -1179,13 +1179,23 @@ try {
             |--------------------------------------------------------------------------
             */
 
-            if (position.type === "MULTUP" && md.trendDown15) {
+            if (
+              position.type === "MULTUP" &&
+              md.trendUp15 &&
+              md.trendDown &&
+              detectCrossover(ema5, ema9) === "bearish"
+            ) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
               } catch (error) {
                 sendMessage(String(error));
               }
-            } else if (position.type === "MULTDOWN" && md.trendUp15) {
+            } else if (
+              position.type === "MULTDOWN" &&
+              md.trendDown15 &&
+              md.trendUp &&
+              detectCrossover(ema5, ema9) === "bullish"
+            ) {
               /*
             |--------------------------------------------------------------------------
             | MULTDOWN
