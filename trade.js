@@ -26,73 +26,21 @@ const DEPLOY_HOOK = process.env.DEPLOY_HOOK;
 const uri = process.env.MONGODB_URI;
 
 const client = new MongoClient(uri);
-
 let positions = [];
-
 let count = 0;
 let amount = null;
 let balance = null;
 let now = new Date();
-
 let connection = false;
 let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
 const timeframes = [300, 3600];
-
-/*
-|--------------------------------------------------------------------------
-| CONTRACT SUBSCRIPTIONS
-|--------------------------------------------------------------------------
-*/
-
 const subscribedContracts = new Set();
-
-/*
-|--------------------------------------------------------------------------
-| CONTRACT STATE
-|--------------------------------------------------------------------------
-|
-| IMPORTANT:
-|
-| Do NOT use marketData[symbol].tradeState for an existing contract.
-|
-| Every contract gets its own state here.
-|
-| IDLE
-| PROPOSAL_PENDING
-| BUY_PENDING
-| OPEN
-| CLOSING
-|
-*/
-
 const contractStates = new Map();
 
-/*
-|--------------------------------------------------------------------------
-| PENDING TRADE STATE
-|--------------------------------------------------------------------------
-|
-| This is per SYMBOL.
-|
-| Example:
-|
-| stpRNG -> PROPOSAL_PENDING
-|
-| This prevents the same symbol from requesting multiple proposals
-| while waiting for a response.
-|
-*/
-
 const pendingTrades = new Map();
-
-/*
-|--------------------------------------------------------------------------
-| SYMBOLS
-|--------------------------------------------------------------------------
-*/
 
 const symbols = [
   "stpRNG",
@@ -100,28 +48,22 @@ const symbols = [
   "stpRNG3",
   "stpRNG4",
   "stpRNG5",
-  "1HZ10V",
-  "R_10",
-  "1HZ25V",
-  "R_25",
-  "1HZ50V",
-  "R_50",
-  "1HZ75V",
-  "R_75",
-  "1HZ100V",
-  "R_100",
-  "JD10",
-  "JD25",
-  "JD50",
-  "JD75",
-  "JD100",
+  // "1HZ10V",
+  // "R_10",
+  // "1HZ25V",
+  // "R_25",
+  // "1HZ50V",
+  // "R_50",
+  // "1HZ75V",
+  // "R_75",
+  // "1HZ100V",
+  // "R_100",
+  // "JD10",
+  // "JD25",
+  // "JD50",
+  // "JD75",
+  // "JD100",
 ];
-
-/*
-|--------------------------------------------------------------------------
-| SYMBOLS ALLOWED TO TRADE
-|--------------------------------------------------------------------------
-*/
 
 const tradeSymbols = [
   "stpRNG",
@@ -145,13 +87,6 @@ const tradeSymbols = [
   "JD75",
   "JD100",
 ];
-
-/*
-|--------------------------------------------------------------------------
-| MARKET DATA
-|--------------------------------------------------------------------------
-*/
-
 const marketData = {};
 
 symbols.forEach((symbol) => {
@@ -160,49 +95,25 @@ symbols.forEach((symbol) => {
     open: [],
     high: [],
     low: [],
-
     openTime: 0,
-
     trendUp: false,
     trendDown: false,
-
     close15: [],
     open15: [],
     high15: [],
     low15: [],
-
     openTime15: 0,
-
     trendUp15: false,
     trendDown15: false,
-
     ema_15Then: 0,
     ema_15Now: 0,
-
     multiplier_range: [],
-
     canAlert: true,
     canAlert15: true,
-
-    /*
-    |--------------------------------------------------------------------------
-    | SYMBOL-LEVEL STATE
-    |--------------------------------------------------------------------------
-    |
-    | This is ONLY for pending entry requests.
-    |
-    */
-
     tradeState: "IDLE",
     pendingProposalId: null,
   };
 });
-
-/*
-|--------------------------------------------------------------------------
-| EXPRESS
-|--------------------------------------------------------------------------
-*/
 
 app.use(cors());
 
@@ -214,23 +125,11 @@ app.listen(3000, () => {
   console.log("Server is running");
 });
 
-/*
-|--------------------------------------------------------------------------
-| WEBSOCKET SEND
-|--------------------------------------------------------------------------
-*/
-
 function send(message) {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(message));
   }
 }
-
-/*
-|--------------------------------------------------------------------------
-| SLEEP
-|--------------------------------------------------------------------------
-*/
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -239,12 +138,6 @@ function sleep(ms) {
 async function run(ms) {
   await sleep(ms);
 }
-
-/*
-|--------------------------------------------------------------------------
-| EMA
-|--------------------------------------------------------------------------
-*/
 
 function calculateEMA(prices, period) {
   const k = 2 / (period + 1);
@@ -264,12 +157,6 @@ function calculateEMA(prices, period) {
   return emaArray;
 }
 
-/*
-|--------------------------------------------------------------------------
-| TELEGRAM
-|--------------------------------------------------------------------------
-*/
-
 const sendMessage = async (message) => {
   try {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
@@ -287,12 +174,6 @@ const sendMessage = async (message) => {
     );
   }
 };
-
-/*
-|--------------------------------------------------------------------------
-| CONTRACT STATE HELPERS
-|--------------------------------------------------------------------------
-*/
 
 function getContractState(contractId) {
   return contractStates.get(contractId);
@@ -318,12 +199,6 @@ function deleteContractState(contractId) {
 
   contractStates.delete(contractId);
 }
-
-/*
-|--------------------------------------------------------------------------
-| PENDING SYMBOL STATE
-|--------------------------------------------------------------------------
-*/
 
 function setSymbolPending(symbol, state, proposalId = null) {
   const md = marketData[symbol];
@@ -354,13 +229,6 @@ function clearSymbolPending(symbol) {
 
   console.log(`🔄 ${symbol} state -> IDLE`);
 }
-
-/*
-|--------------------------------------------------------------------------
-| PROPOSAL
-|--------------------------------------------------------------------------
-*/
-
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 2;
   const takeProfit = stopLoss * 3;
@@ -383,12 +251,6 @@ async function getMultiProposal(direction, symbol, stake, multiplier) {
   send(request);
 }
 
-/*
-|--------------------------------------------------------------------------
-| BUY CONTRACT
-|--------------------------------------------------------------------------
-*/
-
 function buyContract(direction, id, stake) {
   console.log(`📈 Buying ${direction} contract...`);
 
@@ -398,39 +260,16 @@ function buyContract(direction, id, stake) {
   });
 }
 
-/*
-|--------------------------------------------------------------------------
-| CLOSE POSITION
-|--------------------------------------------------------------------------
-|
-| IMPORTANT:
-|
-| State is changed using CONTRACT ID, not just symbol.
-|
-*/
-
 function closePosition(symbol, contractId, reason) {
   if (!contractId) return;
 
   const state = getContractState(contractId);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Prevent duplicate sells
-  |--------------------------------------------------------------------------
-  */
 
   if (state?.state === "CLOSING") {
     console.log(`⏳ Contract ${contractId} is already CLOSING`);
 
     return;
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Make sure the contract actually exists
-  |--------------------------------------------------------------------------
-  */
 
   const position = positions.find((p) => p.contract_id === contractId);
 
@@ -439,12 +278,6 @@ function closePosition(symbol, contractId, reason) {
 
     return;
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Set THIS contract to CLOSING
-  |--------------------------------------------------------------------------
-  */
 
   setContractState(contractId, "CLOSING", {
     symbol,
@@ -465,12 +298,6 @@ function closePosition(symbol, contractId, reason) {
   );
 }
 
-/*
-|--------------------------------------------------------------------------
-| MONGODB CONNECTION
-|--------------------------------------------------------------------------
-*/
-
 async function connect() {
   try {
     await client.connect();
@@ -483,12 +310,6 @@ async function connect() {
     console.error(error);
   }
 }
-
-/*
-|--------------------------------------------------------------------------
-| UPDATE STOP LOSS
-|--------------------------------------------------------------------------
-*/
 
 async function update(stop, id, symbol) {
   try {
@@ -516,19 +337,7 @@ async function update(stop, id, symbol) {
   }
 }
 
-/*
-|--------------------------------------------------------------------------
-| LOAD MONGODB
-|--------------------------------------------------------------------------
-*/
-
 connect();
-
-/*
-|--------------------------------------------------------------------------
-| WEBSOCKET OPEN
-|--------------------------------------------------------------------------
-*/
 
 ws.on("open", () => {
   console.log("🔌 Connected");
@@ -546,21 +355,9 @@ ws.on("open", () => {
   }, 1000);
 });
 
-/*
-|--------------------------------------------------------------------------
-| WEBSOCKET MESSAGE
-|--------------------------------------------------------------------------
-*/
-
 try {
   ws.on("message", async (msg) => {
     const data = JSON.parse(msg);
-
-    /*
-    |--------------------------------------------------------------------------
-    | AUTHORIZE
-    |--------------------------------------------------------------------------
-    */
 
     if (data.msg_type === "authorize") {
       console.log("✅ Authorized");
@@ -588,12 +385,6 @@ try {
       });
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | BALANCE
-    |--------------------------------------------------------------------------
-    */
-
     if (data.msg_type === "balance") {
       balance = data.balance.balance;
 
@@ -618,17 +409,6 @@ try {
       });
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | PORTFOLIO
-    |--------------------------------------------------------------------------
-    |
-    | THIS IS THE IMPORTANT FIX.
-    |
-    | We reconcile contracts individually.
-    |
-    */
-
     if (data.msg_type === "portfolio") {
       const database = client.db("trading");
       const collection = database.collection("trade");
@@ -639,19 +419,7 @@ try {
         portfolioContracts.map((contract) => contract.contract_id),
       );
 
-      /*
-      |--------------------------------------------------------------------------
-      | GET CURRENT DATABASE POSITIONS ONCE
-      |--------------------------------------------------------------------------
-      */
-
       const assets = await collection.find({}).toArray();
-
-      /*
-      |--------------------------------------------------------------------------
-      | REMOVE CONTRACTS THAT ARE ACTUALLY CLOSED
-      |--------------------------------------------------------------------------
-      */
 
       for (const asset of assets) {
         const contractId = asset.contract_id;
@@ -659,29 +427,11 @@ try {
         if (!activeContractIds.has(contractId)) {
           console.log(`🗑️ Contract ${contractId} is no longer in portfolio`);
 
-          /*
-          |--------------------------------------------------------------------------
-          | Remove from state
-          |--------------------------------------------------------------------------
-          */
-
           deleteContractState(contractId);
 
           subscribedContracts.delete(contractId);
 
-          /*
-          |--------------------------------------------------------------------------
-          | Remove from memory
-          |--------------------------------------------------------------------------
-          */
-
           positions = positions.filter((p) => p.contract_id !== contractId);
-
-          /*
-          |--------------------------------------------------------------------------
-          | Remove from database
-          |--------------------------------------------------------------------------
-          */
 
           await collection.deleteOne({
             contract_id: contractId,
@@ -689,32 +439,14 @@ try {
         }
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | PROCESS EVERY ACTIVE CONTRACT
-      |--------------------------------------------------------------------------
-      */
-
       for (const contract of portfolioContracts) {
         const contractId = contract.contract_id;
 
         const symbol = contract.underlying_symbol;
 
-        /*
-        |--------------------------------------------------------------------------
-        | Check existing DB record
-        |--------------------------------------------------------------------------
-        */
-
         let position = await collection.findOne({
           contract_id: contractId,
         });
-
-        /*
-        |--------------------------------------------------------------------------
-        | Create DB record if necessary
-        |--------------------------------------------------------------------------
-        */
 
         if (!position) {
           position = {
@@ -730,12 +462,6 @@ try {
           console.log(`📝 Document created for ${contractId}`);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Update in-memory position
-        |--------------------------------------------------------------------------
-        */
-
         const existingIndex = positions.findIndex(
           (p) => p.contract_id === contractId,
         );
@@ -744,28 +470,7 @@ try {
           positions.push(position);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | INITIALIZE CONTRACT STATE
-        |--------------------------------------------------------------------------
-        */
-
         const currentState = getContractState(contractId);
-
-        /*
-        |--------------------------------------------------------------------------
-        | CRITICAL:
-        |
-        | Portfolio says this contract exists.
-        |
-        | Therefore:
-        |
-        | - If CLOSING -> KEEP CLOSING
-        | - Otherwise -> OPEN
-        |
-        | We NEVER modify another contract's state.
-        |--------------------------------------------------------------------------
-        */
 
         if (currentState?.state === "CLOSING") {
           console.log(`⏳ ${contractId} remains CLOSING`);
@@ -775,16 +480,6 @@ try {
             type: contract.contract_type,
           });
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | The symbol may have been waiting for a buy.
-        |
-        | Once the actual contract exists,
-        | clear the symbol's pending state.
-        |--------------------------------------------------------------------------
-        */
-
         const md = marketData[symbol];
 
         if (
@@ -794,13 +489,6 @@ try {
         ) {
           clearSymbolPending(symbol);
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Subscribe to this contract ONCE
-        |--------------------------------------------------------------------------
-        */
-
         if (!subscribedContracts.has(contractId)) {
           console.log(`📡 Subscribing to contract ${contractId}`);
 
@@ -814,25 +502,12 @@ try {
         }
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | PORTFOLIO SYNCHRONIZATION COMPLETE
-      |--------------------------------------------------------------------------
-      */
-
       if (!portfolioSynced) {
         portfolioSynced = true;
 
         console.log("✅ Portfolio synchronized");
       }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | CONTRACTS FOR
-    |--------------------------------------------------------------------------
-    */
-
     if (data.msg_type === "contracts_for") {
       const symbol = data.echo_req.contracts_for;
 
@@ -854,12 +529,6 @@ try {
         }
       }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | HISTORICAL CANDLES
-    |--------------------------------------------------------------------------
-    */
 
     if (data.msg_type === "candles") {
       const symbol = data.echo_req.ticks_history;
@@ -905,12 +574,6 @@ try {
       console.log(`Candles loaded: ${count}`);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | OHLC
-    |--------------------------------------------------------------------------
-    */
-
     if (data.msg_type === "ohlc" && portfolioSynced) {
       const symbol = data.echo_req.ticks_history;
 
@@ -918,44 +581,20 @@ try {
 
       if (!md) return;
 
-      /*
-      |--------------------------------------------------------------------------
-      | POSITIONS FOR THIS SYMBOL ONLY
-      |--------------------------------------------------------------------------
-      */
-
       const matchingPositions = positions.filter((p) => p?.name === symbol);
 
       const multiplierPositions = matchingPositions.filter(
         (p) => p.type !== "ONETOUCH",
       );
 
-      /*
-      |--------------------------------------------------------------------------
-      | MULTIPLIER RANGE
-      |--------------------------------------------------------------------------
-      */
-
       if (!md.multiplier_range?.length) {
         return;
       }
-
-      /*
-      |--------------------------------------------------------------------------
-      | 15 MINUTE
-      |--------------------------------------------------------------------------
-      */
 
       if (data.echo_req.granularity === 3600) {
         if (md.openTime15 === 0) {
           md.openTime15 = data.ohlc.open_time;
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | NEW 15M CANDLE
-        |--------------------------------------------------------------------------
-        */
 
         if (md.openTime15 !== data.ohlc.open_time) {
           md.openTime15 = data.ohlc.open_time;
@@ -976,12 +615,6 @@ try {
 
           return;
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | UPDATE CURRENT CANDLE
-        |--------------------------------------------------------------------------
-        */
 
         if (md.close15.length === 0) {
           md.close15.push(Number(data.ohlc.close));
@@ -1018,22 +651,10 @@ try {
         md.trendDown15 = ema21[prevIndex] < ema50[prevIndex];
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | 1 MINUTE
-      |--------------------------------------------------------------------------
-      */
-
       if (data.echo_req.granularity === 300) {
         if (md.openTime === 0) {
           md.openTime = data.ohlc.open_time;
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | NEW 1M CANDLE
-        |--------------------------------------------------------------------------
-        */
 
         if (md.openTime !== data.ohlc.open_time) {
           md.openTime = data.ohlc.open_time;
@@ -1054,12 +675,6 @@ try {
 
           return;
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | UPDATE CURRENT CANDLE
-        |--------------------------------------------------------------------------
-        */
 
         if (md.close.length === 0) {
           md.close.push(Number(data.ohlc.close));
@@ -1096,18 +711,6 @@ try {
         md.trendUp = ema21[prevIndex] > ema50[prevIndex];
         md.trendDown = ema21[prevIndex] < ema50[prevIndex];
 
-        /*
-        |--------------------------------------------------------------------------
-        | ENTRY
-        |--------------------------------------------------------------------------
-        |
-        | No open multiplier contract on THIS symbol.
-        |
-        | Also make sure this symbol is not already
-        | waiting for a proposal/buy.
-        |--------------------------------------------------------------------------
-        */
-
         const symbolIsPending =
           md.tradeState === "PROPOSAL_PENDING" ||
           md.tradeState === "BUY_PENDING";
@@ -1122,11 +725,7 @@ try {
           md.tradeState === "IDLE"
         ) {
           if (md.tradeState === "IDLE") {
-            if (
-              md.trendUp15 &&
-              md.trendDown &&
-              detectCrossover(ema5, ema9) === "bullish"
-            ) {
+            if (detectCrossover(ema5, ema9) === "bullish") {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
               try {
@@ -1141,11 +740,7 @@ try {
 
                 sendMessage(String(error));
               }
-            } else if (
-              md.trendDown15 &&
-              md.trendUp &&
-              detectCrossover(ema5, ema9) === "bearish"
-            ) {
+            } else if (detectCrossover(ema5, ema9) === "bearish") {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
               try {
@@ -1163,55 +758,28 @@ try {
             }
           }
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | OPPOSITE SIGNAL EXIT
-        |--------------------------------------------------------------------------
-        |
-        | IMPORTANT:
-        |
-        | Each contract is checked individually.
-        |
-        | Closing contract A does NOT affect
-        | contract B.
-        |--------------------------------------------------------------------------
-        */
-
         if (multiplierPositions.length > 0) {
           for (const position of multiplierPositions) {
             const contractId = position.contract_id;
 
             const contractState = getContractState(contractId);
 
-            /*
-            |--------------------------------------------------------------------------
-            | Never send another sell while CLOSING
-            |--------------------------------------------------------------------------
-            */
-
             if (contractState?.state === "CLOSING") {
               continue;
             }
-
-            /*
-            |--------------------------------------------------------------------------
-            | MULTUP
-            |--------------------------------------------------------------------------
-            */
-
-            if (position.type === "MULTUP" && md.trendDown15) {
+            if (
+              position.type === "MULTUP" &&
+              detectCrossover(ema5, ema9) === "bearish"
+            ) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
               } catch (error) {
                 sendMessage(String(error));
               }
-            } else if (position.type === "MULTDOWN" && md.trendUp15) {
-              /*
-            |--------------------------------------------------------------------------
-            | MULTDOWN
-            |--------------------------------------------------------------------------
-            */
+            } else if (
+              position.type === "MULTDOWN" &&
+              detectCrossover(ema5, ema9) === "bullish"
+            ) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
               } catch (error) {
@@ -1223,12 +791,6 @@ try {
       }
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | PROPOSAL RESPONSE
-    |--------------------------------------------------------------------------
-    */
-
     if (data.msg_type === "proposal") {
       const symbol = data?.echo_req?.underlying_symbol;
 
@@ -1238,12 +800,6 @@ try {
 
       const proposalId = data?.proposal?.id;
 
-      /*
-      |--------------------------------------------------------------------------
-      | Validate proposal
-      |--------------------------------------------------------------------------
-      */
-
       if (!proposalId) {
         console.log(`⚠️ Proposal response without ID for ${symbol}`);
 
@@ -1251,13 +807,6 @@ try {
 
         return;
       }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Set symbol to BUY_PENDING
-      |--------------------------------------------------------------------------
-      */
-
       setSymbolPending(symbol, "BUY_PENDING", proposalId);
 
       try {
@@ -1272,13 +821,6 @@ try {
         sendMessage(String(error));
       }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | PROPOSAL OPEN CONTRACT
-    |--------------------------------------------------------------------------
-    */
-
     if (data.msg_type === "proposal_open_contract") {
       const id = data?.echo_req?.contract_id;
 
@@ -1327,20 +869,7 @@ try {
 
       const duration = contract?.current_spot_time - contract?.date_start;
 
-      /*
-      |--------------------------------------------------------------------------
-      | CONTRACT STATE
-      |--------------------------------------------------------------------------
-      */
-
       const state = getContractState(id);
-
-      /*
-      |--------------------------------------------------------------------------
-      | If we don't know this contract yet,
-      | initialize it as OPEN.
-      |--------------------------------------------------------------------------
-      */
 
       if (!state) {
         setContractState(id, "OPEN", {
@@ -1349,23 +878,11 @@ try {
         });
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | UPDATE POSITION
-      |--------------------------------------------------------------------------
-      */
-
       if (position) {
         position.subscribed = true;
 
         position.profit = profit;
       }
-
-      /*
-      |--------------------------------------------------------------------------
-      | TRAILING STOP
-      |--------------------------------------------------------------------------
-      */
 
       if (connection && type !== "ONETOUCH") {
         if (!position) {
@@ -1376,24 +893,11 @@ try {
           return;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | If contract is closing,
-        | don't perform another stop update.
-        |--------------------------------------------------------------------------
-        */
-
         const currentContractState = getContractState(id);
 
         if (currentContractState?.state === "CLOSING") {
           return;
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | FIRST TRAIL
-        |--------------------------------------------------------------------------
-        */
 
         if (pip >= risk && position.stoploss === 0) {
           position.stoploss = Math.abs(commission);
@@ -1401,35 +905,17 @@ try {
           await update(position.stoploss, id, symbol);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | SECOND TRAIL
-        |--------------------------------------------------------------------------
-        */
-
         if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
           position.stoploss = Math.abs(lossAmount);
 
           await update(position.stoploss, id, symbol);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | THIRD TRAIL
-        |--------------------------------------------------------------------------
-        */
-
         if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
           position.stoploss = Math.abs(lossAmount * 2);
 
           await update(position.stoploss, id, symbol);
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | FOURTH TRAIL
-        |--------------------------------------------------------------------------
-        */
 
         // if (
         //   pip >= risk * 4 &&
@@ -1450,12 +936,6 @@ try {
           closePosition(symbol, id, "Stop Loss Hit");
         }
       }
-
-      /*
-      |--------------------------------------------------------------------------
-      | RUNNING TRADE DATA
-      |--------------------------------------------------------------------------
-      */
 
       const runningTrade = {
         contractId: id,
@@ -1482,36 +962,15 @@ try {
       console.log(runningTrade);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | BUY RESPONSE
-    |--------------------------------------------------------------------------
-    */
-
     if (data.msg_type === "buy") {
       const contractId = data?.buy?.contract_id;
 
       console.log(`🟢 Bought contract ${contractId}`);
 
-      /*
-      |--------------------------------------------------------------------------
-      | Do NOT immediately mark it OPEN here.
-      |
-      | Portfolio will confirm that the contract
-      | actually exists.
-      |--------------------------------------------------------------------------
-      */
-
       if (contractId) {
         setContractState(contractId, "BUY_PENDING");
       }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | SELL RESPONSE
-    |--------------------------------------------------------------------------
-    */
 
     if (data.msg_type === "sell") {
       const database = client.db("trading");
@@ -1542,35 +1001,11 @@ try {
         `💸 Position closed at ${data.sell?.sold_for} USD on ${symbol}`,
       );
 
-      /*
-      |--------------------------------------------------------------------------
-      | REMOVE CONTRACT STATE
-      |--------------------------------------------------------------------------
-      */
-
       deleteContractState(contractId);
-
-      /*
-      |--------------------------------------------------------------------------
-      | REMOVE SUBSCRIPTION
-      |--------------------------------------------------------------------------
-      */
 
       subscribedContracts.delete(contractId);
 
-      /*
-      |--------------------------------------------------------------------------
-      | REMOVE MEMORY POSITION
-      |--------------------------------------------------------------------------
-      */
-
       positions = positions.filter((p) => p.contract_id !== contractId);
-
-      /*
-      |--------------------------------------------------------------------------
-      | REMOVE DATABASE POSITION
-      |--------------------------------------------------------------------------
-      */
 
       await collection.deleteOne({
         contract_id: contractId,
@@ -1578,12 +1013,6 @@ try {
 
       console.log(`🗑️ Deleted closed contract ${contractId}`);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | CONTRACT UPDATE
-    |--------------------------------------------------------------------------
-    */
 
     if (data.msg_type === "contract_update") {
       const contractId = data.echo_req?.contract_id;
@@ -1595,27 +1024,12 @@ try {
       }
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | ERRORS
-    |--------------------------------------------------------------------------
-    */
-
     if (data.error) {
       const error = data.error.message;
 
       const echoReq = data.echo_req;
 
       console.error("❗ Error:", error);
-
-      /*
-      |--------------------------------------------------------------------------
-      | SELL ERROR
-      |--------------------------------------------------------------------------
-      |
-      | ONLY reset the contract that failed.
-      |--------------------------------------------------------------------------
-      */
 
       if (echoReq?.sell) {
         const contractId = echoReq.sell;
@@ -1638,15 +1052,6 @@ try {
         }
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | PROPOSAL / BUY ERROR
-      |--------------------------------------------------------------------------
-      |
-      | Only reset the affected SYMBOL.
-      |--------------------------------------------------------------------------
-      */
-
       if (echoReq?.underlying_symbol) {
         const symbol = echoReq.underlying_symbol;
 
@@ -1664,12 +1069,6 @@ try {
       }
 
       sendMessage(`❗ Error: ${error}`);
-
-      /*
-      |--------------------------------------------------------------------------
-      | RATE LIMIT
-      |--------------------------------------------------------------------------
-      */
 
       if (error === "You have reached the rate limit for ticks_history.") {
         await run(30000);
@@ -1699,12 +1098,6 @@ try {
         sendMessage("Candles Resubscribed");
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | LOGIN ERROR
-      |--------------------------------------------------------------------------
-      */
-
       if (error === "Please log in.") {
         fetch(DEPLOY_HOOK).then(() => sendMessage("Login Reinitiated"));
       }
@@ -1713,12 +1106,6 @@ try {
 } catch (error) {
   sendMessage(String(error));
 }
-
-/*
-|--------------------------------------------------------------------------
-| WEBSOCKET CLOSE
-|--------------------------------------------------------------------------
-*/
 
 ws.on("close", () => {
   sendMessage("WebSocket disconnected. Reconnecting...");
