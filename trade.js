@@ -62,7 +62,7 @@ const symbols = [
   // "JD25",
   // "JD50",
   // "JD75",
-  // "JD100",
+  "JD100",
 ];
 
 const tradeSymbols = [
@@ -731,6 +731,10 @@ try {
               md.close[prevIndex] > ema100
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
+              if (md.canAlert) {
+                symbol === "JD100" && sendMessage("Bullish Signal on JD100");
+                md.canAlert = false;
+              }
 
               try {
                 await getMultiProposal(
@@ -751,7 +755,10 @@ try {
               md.close[prevIndex] < ema100
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
-
+              if (md.canAlert) {
+                symbol === "JD100" && sendMessage("Bearish Signal on JD100");
+                md.canAlert = false;
+              }
               try {
                 await getMultiProposal(
                   "MULTDOWN",
