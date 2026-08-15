@@ -588,8 +588,11 @@ try {
       );
 
       if (!md.multiplier_range?.length) {
+        console.log(`⛔ ${symbol}: No multiplier range available`);
         return;
       }
+
+      console.log(`✅ ${symbol}: multiplier range =`, md.multiplier_range);
 
       if (data.echo_req.granularity === 900) {
         if (md.openTime15 === 0) {
@@ -728,7 +731,7 @@ try {
               md.trendUp15 &&
               md.trendDown &&
               crossedEma(md.high, md.low, prevIndex, ema100) &&
-              md.close[prevIndex] > ema100
+              md.close[prevIndex] > ema100[prevIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
@@ -752,7 +755,7 @@ try {
               md.trendDown15 &&
               md.trendUp &&
               crossedEma(md.high, md.low, prevIndex, ema100) &&
-              md.close[prevIndex] < ema100
+              md.close[prevIndex] < ema100[prevIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
