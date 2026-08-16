@@ -6,7 +6,7 @@ import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 import { wsUrl } from "./server.js";
 
-import { crossedEma } from "./util.js";
+import { detectCrossover } from "./util.js";
 
 dotenv.config();
 
@@ -43,10 +43,10 @@ const contractStates = new Map();
 const pendingTrades = new Map();
 
 const symbols = [
-  "stpRNG",
-  "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
+  // "stpRNG",
+  // "stpRNG2",
+  // "stpRNG3",
+  // "stpRNG4",
   "stpRNG5",
   // "1HZ10V",
   // "R_10",
@@ -62,7 +62,7 @@ const symbols = [
   // "JD25",
   // "JD50",
   // "JD75",
-  "JD100",
+  // "JD100",
 ];
 
 const tradeSymbols = [
@@ -230,7 +230,7 @@ function clearSymbolPending(symbol) {
   console.log(`🔄 ${symbol} state -> IDLE`);
 }
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 4;
+  const stopLoss = stake / 2;
   const takeProfit = stopLoss * 5;
 
   const request = {
@@ -546,7 +546,7 @@ try {
       }
 
       try {
-        if (data.echo_req.granularity === 900) {
+        if (data.echo_req.granularity === 60) {
           md.close15 = data.candles.map((c) => c.close);
 
           md.open15 = data.candles.map((c) => c.open);
@@ -556,7 +556,7 @@ try {
           md.low15 = data.candles.map((c) => c.low);
         }
 
-        if (data.echo_req.granularity === 60) {
+        if (data.echo_req.granularity === 900) {
           md.close = data.candles.map((c) => c.close);
 
           md.open = data.candles.map((c) => c.open);
@@ -594,7 +594,7 @@ try {
 
       console.log(`✅ ${symbol}: multiplier range =`, md.multiplier_range);
 
-      if (data.echo_req.granularity === 900) {
+      if (data.echo_req.granularity === 60) {
         if (md.openTime15 === 0) {
           md.openTime15 = data.ohlc.open_time;
         }
@@ -654,7 +654,7 @@ try {
         md.trendDown15 = ema21[prevIndex] < ema50[prevIndex];
       }
 
-      if (data.echo_req.granularity === 60) {
+      if (data.echo_req.granularity === 900) {
         if (md.openTime === 0) {
           md.openTime = data.ohlc.open_time;
         }
@@ -706,9 +706,10 @@ try {
           return;
         }
 
+        const ema2 = calculateEMA(md.close, 2);
+        const ema5 = calculateEMA(md.close, 5);
         const ema21 = calculateEMA(md.close, 21);
         const ema50 = calculateEMA(md.close, 50);
-        const ema100 = calculateEMA(md.close, 100);
 
         md.trendUp = ema21[prevIndex] > ema50[prevIndex];
         md.trendDown = ema21[prevIndex] < ema50[prevIndex];
@@ -727,12 +728,7 @@ try {
           md.tradeState === "IDLE"
         ) {
           if (md.tradeState === "IDLE") {
-            if (
-              md.trendUp15 &&
-              md.trendDown &&
-              crossedEma(md.high, md.low, prevIndex, ema100) &&
-              md.close[prevIndex] > ema100[prevIndex]
-            ) {
+            if (detectCrossover(ema2, ema5) === "bullish") {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
                 symbol === "JD100" && sendMessage("Bullish Signal on JD100");
@@ -751,12 +747,7 @@ try {
 
                 sendMessage(String(error));
               }
-            } else if (
-              md.trendDown15 &&
-              md.trendUp &&
-              crossedEma(md.high, md.low, prevIndex, ema100) &&
-              md.close[prevIndex] < ema100[prevIndex]
-            ) {
+            } else if (detectCrossover(ema2, ema5) === "bearish") {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
                 symbol === "JD100" && sendMessage("Bearish Signal on JD100");
@@ -786,13 +777,19 @@ try {
             if (contractState?.state === "CLOSING") {
               continue;
             }
-            if (position.type === "MULTUP" && md.trendDown15) {
+            if (
+              position.type === "MULTUP" &&
+              detectCrossover(ema2, ema5) === "bearish"
+            ) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
               } catch (error) {
                 sendMessage(String(error));
               }
-            } else if (position.type === "MULTDOWN" && md.trendUp15) {
+            } else if (
+              position.type === "MULTDOWN" &&
+              detectCrossover(ema2, ema5) === "bullish"
+            ) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
               } catch (error) {
@@ -912,32 +909,29 @@ try {
           return;
         }
 
-        if (pip >= risk * 2 && position.stoploss === 0) {
+        if (pip >= risk && position.stoploss === 0) {
           position.stoploss = Math.abs(commission);
 
           await update(position.stoploss, id, symbol);
         }
 
-        if (pip >= risk * 4 && position.stoploss === Math.abs(commission)) {
+        if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
           position.stoploss = Math.abs(lossAmount);
 
           await update(position.stoploss, id, symbol);
         }
 
-        // if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
-        //   position.stoploss = Math.abs(lossAmount * 2);
+        if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
+          position.stoploss = Math.abs(lossAmount * 2);
 
-        //   await update(position.stoploss, id, symbol);
-        // }
+          await update(position.stoploss, id, symbol);
+        }
 
-        // if (
-        //   pip >= risk * 4 &&
-        //   position.stoploss === Math.abs(lossAmount * 2)
-        // ) {
-        //   position.stoploss = Math.abs(lossAmount * 3);
+        if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount * 2)) {
+          position.stoploss = Math.abs(lossAmount * 3);
 
-        //   await update(position.stoploss, id, symbol);
-        // }
+          await update(position.stoploss, id, symbol);
+        }
 
         /*
         |--------------------------------------------------------------------------
