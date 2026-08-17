@@ -546,7 +546,7 @@ try {
       }
 
       try {
-        if (data.echo_req.granularity === 60) {
+        if (data.echo_req.granularity === 900) {
           md.close15 = data.candles.map((c) => c.close);
 
           md.open15 = data.candles.map((c) => c.open);
@@ -556,7 +556,7 @@ try {
           md.low15 = data.candles.map((c) => c.low);
         }
 
-        if (data.echo_req.granularity === 900) {
+        if (data.echo_req.granularity === 60) {
           md.close = data.candles.map((c) => c.close);
 
           md.open = data.candles.map((c) => c.open);
@@ -594,7 +594,7 @@ try {
 
       console.log(`✅ ${symbol}: multiplier range =`, md.multiplier_range);
 
-      if (data.echo_req.granularity === 60) {
+      if (data.echo_req.granularity === 900) {
         if (md.openTime15 === 0) {
           md.openTime15 = data.ohlc.open_time;
         }
@@ -647,14 +647,14 @@ try {
           return;
         }
 
+        const ema14 = calculateEMA(md.close15, 14);
         const ema21 = calculateEMA(md.close15, 21);
-        const ema50 = calculateEMA(md.close15, 50);
 
-        md.trendUp15 = ema21[prevIndex] > ema50[prevIndex];
-        md.trendDown15 = ema21[prevIndex] < ema50[prevIndex];
+        md.trendUp15 = ema14[prevIndex] > ema21[prevIndex];
+        md.trendDown15 = ema14[prevIndex] < ema21[prevIndex];
       }
 
-      if (data.echo_req.granularity === 900) {
+      if (data.echo_req.granularity === 60) {
         if (md.openTime === 0) {
           md.openTime = data.ohlc.open_time;
         }
@@ -706,8 +706,7 @@ try {
           return;
         }
 
-        const ema2 = calculateEMA(md.close, 2);
-        const ema5 = calculateEMA(md.close, 5);
+        const ema14 = calculateEMA(md.close, 14);
         const ema21 = calculateEMA(md.close, 21);
         const ema50 = calculateEMA(md.close, 50);
 
@@ -728,7 +727,7 @@ try {
           md.tradeState === "IDLE"
         ) {
           if (md.tradeState === "IDLE") {
-            if (detectCrossover(ema2, ema5) === "bullish") {
+            if (md.trendUp15 && detectCrossover(ema14, ema21) === "bullish") {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
                 symbol === "JD100" && sendMessage("Bullish Signal on JD100");
@@ -747,7 +746,10 @@ try {
 
                 sendMessage(String(error));
               }
-            } else if (detectCrossover(ema2, ema5) === "bearish") {
+            } else if (
+              md.trendDown15 &&
+              detectCrossover(ema14, ema21) === "bearish"
+            ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
                 symbol === "JD100" && sendMessage("Bearish Signal on JD100");
@@ -777,19 +779,13 @@ try {
             if (contractState?.state === "CLOSING") {
               continue;
             }
-            if (
-              position.type === "MULTUP" &&
-              detectCrossover(ema2, ema5) === "bearish"
-            ) {
+            if (position.type === "MULTUP" && md.trendDown15) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
               } catch (error) {
                 sendMessage(String(error));
               }
-            } else if (
-              position.type === "MULTDOWN" &&
-              detectCrossover(ema2, ema5) === "bullish"
-            ) {
+            } else if (position.type === "MULTDOWN" && md.trendUp15) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
               } catch (error) {
