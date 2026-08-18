@@ -231,7 +231,7 @@ function clearSymbolPending(symbol) {
 }
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 2;
-  const takeProfit = stopLoss * 5;
+  const takeProfit = stopLoss * 10;
 
   const request = {
     proposal: 1,
@@ -917,14 +917,14 @@ try {
           await update(position.stoploss, id, symbol);
         }
 
-        if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
+        if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount)) {
           position.stoploss = Math.abs(lossAmount * 2);
 
           await update(position.stoploss, id, symbol);
         }
 
-        if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount * 2)) {
-          position.stoploss = Math.abs(lossAmount * 3);
+        if (pip >= risk * 8 && position.stoploss === Math.abs(lossAmount * 2)) {
+          position.stoploss = Math.abs(lossAmount * 4);
 
           await update(position.stoploss, id, symbol);
         }
