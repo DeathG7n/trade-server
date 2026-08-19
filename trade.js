@@ -6,7 +6,7 @@ import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 import { wsUrl } from "./server.js";
 
-import { detectCrossover } from "./util.js";
+import { detectCrossover, trendContinuation } from "./util.js";
 
 dotenv.config();
 
@@ -43,10 +43,10 @@ const contractStates = new Map();
 const pendingTrades = new Map();
 
 const symbols = [
-  // "stpRNG",
-  // "stpRNG2",
-  // "stpRNG3",
-  // "stpRNG4",
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
   "stpRNG5",
   // "1HZ10V",
   // "R_10",
@@ -727,7 +727,11 @@ try {
           md.tradeState === "IDLE"
         ) {
           if (md.tradeState === "IDLE") {
-            if (md.trendUp15 && detectCrossover(ema14, ema21) === "bullish") {
+            if (
+              md.trendUp15 &&
+              trendContinuation("up", md.open15, md.close15) &&
+              detectCrossover(ema14, ema21) === "bullish"
+            ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
                 symbol === "JD100" && sendMessage("Bullish Signal on JD100");
@@ -748,6 +752,7 @@ try {
               }
             } else if (
               md.trendDown15 &&
+              trendContinuation("down", md.open15, md.close15) &&
               detectCrossover(ema14, ema21) === "bearish"
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");

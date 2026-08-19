@@ -1,5 +1,3 @@
-
-
 export function detectCrossover(emaFast, emaSlow) {
   const len = emaFast.length;
 
@@ -60,10 +58,7 @@ export function recentEmaCross(emaFast, emaSlow, lookback = 15) {
 }
 
 export function calculateADX(high, low, close, period = 14) {
-  if (
-    high.length !== low.length ||
-    high.length !== close.length
-  ) {
+  if (high.length !== low.length || high.length !== close.length) {
     throw new Error("High, Low and Close arrays must have equal lengths.");
   }
 
@@ -86,16 +81,14 @@ export function calculateADX(high, low, close, period = 14) {
     const upMove = high[i] - high[i - 1];
     const downMove = low[i - 1] - low[i];
 
-    plusDM[i] =
-      upMove > downMove && upMove > 0 ? upMove : 0;
+    plusDM[i] = upMove > downMove && upMove > 0 ? upMove : 0;
 
-    minusDM[i] =
-      downMove > upMove && downMove > 0 ? downMove : 0;
+    minusDM[i] = downMove > upMove && downMove > 0 ? downMove : 0;
 
     tr[i] = Math.max(
       high[i] - low[i],
       Math.abs(high[i] - close[i - 1]),
-      Math.abs(low[i] - close[i - 1])
+      Math.abs(low[i] - close[i - 1]),
     );
   }
 
@@ -120,20 +113,13 @@ export function calculateADX(high, low, close, period = 14) {
 
   // Wilder smoothing
   for (let i = period + 1; i < len; i++) {
-    smoothTR[i] =
-      smoothTR[i - 1] -
-      smoothTR[i - 1] / period +
-      tr[i];
+    smoothTR[i] = smoothTR[i - 1] - smoothTR[i - 1] / period + tr[i];
 
     smoothPlusDM[i] =
-      smoothPlusDM[i - 1] -
-      smoothPlusDM[i - 1] / period +
-      plusDM[i];
+      smoothPlusDM[i - 1] - smoothPlusDM[i - 1] / period + plusDM[i];
 
     smoothMinusDM[i] =
-      smoothMinusDM[i - 1] -
-      smoothMinusDM[i - 1] / period +
-      minusDM[i];
+      smoothMinusDM[i - 1] - smoothMinusDM[i - 1] / period + minusDM[i];
   }
 
   const plusDI = Array(len).fill(null);
@@ -148,15 +134,12 @@ export function calculateADX(high, low, close, period = 14) {
       continue;
     }
 
-    plusDI[i] = 100 * smoothPlusDM[i] / smoothTR[i];
-    minusDI[i] = 100 * smoothMinusDM[i] / smoothTR[i];
+    plusDI[i] = (100 * smoothPlusDM[i]) / smoothTR[i];
+    minusDI[i] = (100 * smoothMinusDM[i]) / smoothTR[i];
 
     const sum = plusDI[i] + minusDI[i];
 
-    dx[i] =
-      sum === 0
-        ? 0
-        : (100 * Math.abs(plusDI[i] - minusDI[i])) / sum;
+    dx[i] = sum === 0 ? 0 : (100 * Math.abs(plusDI[i] - minusDI[i])) / sum;
   }
 
   const adx = Array(len).fill(null);
@@ -172,8 +155,7 @@ export function calculateADX(high, low, close, period = 14) {
 
   // Wilder smoothing of ADX
   for (let i = period * 2; i < len; i++) {
-    adx[i] =
-      ((adx[i - 1] * (period - 1)) + dx[i]) / period;
+    adx[i] = (adx[i - 1] * (period - 1) + dx[i]) / period;
   }
 
   return {
@@ -228,8 +210,8 @@ export function calculateATR(high, low, close, period = 14) {
       Math.max(
         high[i] - low[i],
         Math.abs(high[i] - close[i - 1]),
-        Math.abs(low[i] - close[i - 1])
-      )
+        Math.abs(low[i] - close[i - 1]),
+      ),
     );
   }
 
@@ -246,7 +228,7 @@ export function calculateATR(high, low, close, period = 14) {
 
   // Wilder smoothing
   for (let i = period; i < tr.length; i++) {
-    atr[i] = ((atr[i - 1] * (period - 1)) + tr[i]) / period;
+    atr[i] = (atr[i - 1] * (period - 1) + tr[i]) / period;
   }
 
   return atr;
@@ -291,4 +273,38 @@ export function calculateHeikinAshi(open, high, low, close) {
     low: haLow,
     close: haClose,
   };
+}
+
+export function trendContinuation(trend, open, close) {
+  const len = open.length;
+  const prevIndex = len - 2;
+  const thirdIndex = len - 3;
+  const fourthIndex = len - 4;
+  if (trend === "up") {
+    if (
+      (bearish(open, close, thirdIndex) && bullish(open, close, prevIndex)) ||
+      (bearish(open, close, fourthIndex) &&
+        bullish(open, close, thirdIndex) &&
+        bullish(open, close, prevIndex)) ||
+      (bearish(open, close, fourthIndex) &&
+        bullish(open, close, thirdIndex) &&
+        bearish(open, close, prevIndex))
+    ) {
+      return true;
+    }
+  }
+  if (trend === "down") {
+    if (
+      (bullish(open, close, thirdIndex) && bearish(open, close, prevIndex)) ||
+      (bullish(open, close, fourthIndex) &&
+        bearish(open, close, thirdIndex) &&
+        bearish(open, close, prevIndex)) ||
+      (bullish(open, close, fourthIndex) &&
+        bearish(open, close, thirdIndex) &&
+        bullish(open, close, prevIndex))
+    ) {
+      return true;
+    }
+  }
+  return null
 }
