@@ -6,7 +6,7 @@ import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 import { wsUrl } from "./server.js";
 
-import { detectCrossover, trendContinuation } from "./util.js";
+import { bearish, bullish, crossedEma, trendContinuation } from "./util.js";
 
 dotenv.config();
 
@@ -231,7 +231,7 @@ function clearSymbolPending(symbol) {
 }
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 2;
-  const takeProfit = stopLoss * 10;
+  const takeProfit = stopLoss * 3;
 
   const request = {
     proposal: 1,
@@ -708,10 +708,9 @@ try {
 
         const ema14 = calculateEMA(md.close, 14);
         const ema21 = calculateEMA(md.close, 21);
-        const ema50 = calculateEMA(md.close, 50);
 
-        md.trendUp = ema21[prevIndex] > ema50[prevIndex];
-        md.trendDown = ema21[prevIndex] < ema50[prevIndex];
+        md.trendUp = ema14[prevIndex] > ema21[prevIndex];
+        md.trendDown = ema14[prevIndex] < ema21[prevIndex];
 
         const symbolIsPending =
           md.tradeState === "PROPOSAL_PENDING" ||
@@ -726,11 +725,12 @@ try {
           tradeSymbols.includes(symbol) &&
           md.tradeState === "IDLE"
         ) {
-          if (md.tradeState === "IDLE") {
+          if (crossedEma(md.high, md.low, prevIndex, ema21)) {
             if (
               md.trendUp15 &&
+              md.trendUp &&
               trendContinuation("up", md.open15, md.close15) &&
-              detectCrossover(ema14, ema21) === "bullish"
+              bullish(md.open, md.close, prevIndex)
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
@@ -752,8 +752,9 @@ try {
               }
             } else if (
               md.trendDown15 &&
+              md.trendDown &&
               trendContinuation("down", md.open15, md.close15) &&
-              detectCrossover(ema14, ema21) === "bearish"
+              bearish(md.open, md.close, prevIndex, ema21)
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
@@ -922,7 +923,7 @@ try {
           await update(position.stoploss, id, symbol);
         }
 
-        if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount)) {
+        if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
           position.stoploss = Math.abs(lossAmount * 2);
 
           await update(position.stoploss, id, symbol);
