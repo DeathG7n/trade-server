@@ -725,10 +725,10 @@ try {
           tradeSymbols.includes(symbol) &&
           md.tradeState === "IDLE"
         ) {
-          if (crossedEma(md.high, md.low, prevIndex, ema21)) {
+          if (crossedEma(md.high, md.low, prevIndex, ema14)) {
             if (
               md.trendUp15 &&
-              md.trendUp &&
+              md.trendDowwn &&
               trendContinuation("up", md.open15, md.close15) &&
               bullish(md.open, md.close, prevIndex)
             ) {
@@ -752,7 +752,7 @@ try {
               }
             } else if (
               md.trendDown15 &&
-              md.trendDown &&
+              md.trendup &&
               trendContinuation("down", md.open15, md.close15) &&
               bearish(md.open, md.close, prevIndex, ema21)
             ) {
