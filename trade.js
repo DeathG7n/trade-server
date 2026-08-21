@@ -36,7 +36,7 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const timeframes = [60, 900];
+const timeframes = [300, 3600];
 const subscribedContracts = new Set();
 const contractStates = new Map();
 
@@ -48,21 +48,21 @@ const symbols = [
   "stpRNG3",
   "stpRNG4",
   "stpRNG5",
-  // "1HZ10V",
-  // "R_10",
-  // "1HZ25V",
-  // "R_25",
-  // "1HZ50V",
-  // "R_50",
-  // "1HZ75V",
-  // "R_75",
-  // "1HZ100V",
-  // "R_100",
-  // "JD10",
-  // "JD25",
-  // "JD50",
-  // "JD75",
-  // "JD100",
+  "1HZ10V",
+  "R_10",
+  "1HZ25V",
+  "R_25",
+  "1HZ50V",
+  "R_50",
+  "1HZ75V",
+  "R_75",
+  "1HZ100V",
+  "R_100",
+  "JD10",
+  "JD25",
+  "JD50",
+  "JD75",
+  "JD100",
 ];
 
 const tradeSymbols = [
@@ -546,7 +546,7 @@ try {
       }
 
       try {
-        if (data.echo_req.granularity === 900) {
+        if (data.echo_req.granularity === 3600) {
           md.close15 = data.candles.map((c) => c.close);
 
           md.open15 = data.candles.map((c) => c.open);
@@ -556,7 +556,7 @@ try {
           md.low15 = data.candles.map((c) => c.low);
         }
 
-        if (data.echo_req.granularity === 60) {
+        if (data.echo_req.granularity === 300) {
           md.close = data.candles.map((c) => c.close);
 
           md.open = data.candles.map((c) => c.open);
@@ -594,7 +594,7 @@ try {
 
       console.log(`✅ ${symbol}: multiplier range =`, md.multiplier_range);
 
-      if (data.echo_req.granularity === 900) {
+      if (data.echo_req.granularity === 3600) {
         if (md.openTime15 === 0) {
           md.openTime15 = data.ohlc.open_time;
         }
@@ -654,7 +654,7 @@ try {
         md.trendDown15 = ema14[prevIndex] < ema21[prevIndex];
       }
 
-      if (data.echo_req.granularity === 60) {
+      if (data.echo_req.granularity === 300) {
         if (md.openTime === 0) {
           md.openTime = data.ohlc.open_time;
         }
