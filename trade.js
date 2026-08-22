@@ -6,7 +6,7 @@ import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 import { wsUrl } from "./server.js";
 
-import { bearish, bullish, crossedEma, trendContinuation } from "./util.js";
+import { bearish, bullish, crossedEma } from "./util.js";
 
 dotenv.config();
 
@@ -36,7 +36,7 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const timeframes = [300, 3600];
+const timeframes = [60, 900];
 const subscribedContracts = new Set();
 const contractStates = new Map();
 
@@ -546,7 +546,7 @@ try {
       }
 
       try {
-        if (data.echo_req.granularity === 3600) {
+        if (data.echo_req.granularity === 900) {
           md.close15 = data.candles.map((c) => c.close);
 
           md.open15 = data.candles.map((c) => c.open);
@@ -556,7 +556,7 @@ try {
           md.low15 = data.candles.map((c) => c.low);
         }
 
-        if (data.echo_req.granularity === 300) {
+        if (data.echo_req.granularity === 60) {
           md.close = data.candles.map((c) => c.close);
 
           md.open = data.candles.map((c) => c.open);
@@ -594,7 +594,7 @@ try {
 
       console.log(`✅ ${symbol}: multiplier range =`, md.multiplier_range);
 
-      if (data.echo_req.granularity === 3600) {
+      if (data.echo_req.granularity === 900) {
         if (md.openTime15 === 0) {
           md.openTime15 = data.ohlc.open_time;
         }
@@ -654,7 +654,7 @@ try {
         md.trendDown15 = ema14[prevIndex] < ema21[prevIndex];
       }
 
-      if (data.echo_req.granularity === 300) {
+      if (data.echo_req.granularity === 60) {
         if (md.openTime === 0) {
           md.openTime = data.ohlc.open_time;
         }
@@ -729,8 +729,8 @@ try {
             if (
               md.trendUp15 &&
               md.trendDown &&
-              trendContinuation("up", md.open15, md.close15) &&
-              bullish(md.open, md.close, prevIndex)
+              bullish(md.open, md.close, prevIndex) &&
+              md.close[prevIndex] > ema14[prevIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
@@ -753,8 +753,8 @@ try {
             } else if (
               md.trendDown15 &&
               md.trendUp &&
-              trendContinuation("down", md.open15, md.close15) &&
-              bearish(md.open, md.close, prevIndex, ema21)
+              bearish(md.open, md.close, prevIndex, ema21) &&
+              md.close[prevIndex] < ema14[prevIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
