@@ -36,7 +36,7 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const timeframes = [60, 900];
+const timeframes = [60, 300];
 const subscribedContracts = new Set();
 const contractStates = new Map();
 
@@ -546,7 +546,7 @@ try {
       }
 
       try {
-        if (data.echo_req.granularity === 900) {
+        if (data.echo_req.granularity === 300) {
           md.close15 = data.candles.map((c) => c.close);
 
           md.open15 = data.candles.map((c) => c.open);
@@ -594,7 +594,7 @@ try {
 
       console.log(`✅ ${symbol}: multiplier range =`, md.multiplier_range);
 
-      if (data.echo_req.granularity === 900) {
+      if (data.echo_req.granularity === 300) {
         if (md.openTime15 === 0) {
           md.openTime15 = data.ohlc.open_time;
         }
