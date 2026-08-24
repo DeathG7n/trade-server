@@ -36,7 +36,7 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const timeframes = [60, 300];
+const timeframes = [120, 300];
 const subscribedContracts = new Set();
 const contractStates = new Map();
 
@@ -556,7 +556,7 @@ try {
           md.low15 = data.candles.map((c) => c.low);
         }
 
-        if (data.echo_req.granularity === 60) {
+        if (data.echo_req.granularity === 120) {
           md.close = data.candles.map((c) => c.close);
 
           md.open = data.candles.map((c) => c.open);
@@ -654,7 +654,7 @@ try {
         md.trendDown15 = ema14[prevIndex] < ema21[prevIndex];
       }
 
-      if (data.echo_req.granularity === 60) {
+      if (data.echo_req.granularity === 120) {
         if (md.openTime === 0) {
           md.openTime = data.ohlc.open_time;
         }
