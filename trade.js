@@ -570,9 +570,7 @@ try {
         sendMessage(String(error));
       }
 
-      count++;
-
-      console.log(`Candles loaded: ${count}`);
+      count = count + 1;
     }
 
     if (data.msg_type === "ohlc" && portfolioSynced) {
@@ -592,8 +590,6 @@ try {
         console.log(`⛔ ${symbol}: No multiplier range available`);
         return;
       }
-
-      console.log(`✅ ${symbol}: multiplier range =`, md.multiplier_range);
 
       if (data.echo_req.granularity === 300) {
         if (md.openTime15 === 0) {
@@ -969,7 +965,7 @@ try {
         sendMessage(JSON.stringify(runningTrade, null, 2));
       }
 
-      console.log(runningTrade);
+      //console.log(runningTrade);
     }
 
     if (data.msg_type === "buy") {
