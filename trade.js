@@ -510,7 +510,7 @@ try {
     }
     if (data.msg_type === "contracts_for") {
       const symbol = data.echo_req.contracts_for;
-      sendMessage(data);
+      console.log(data);
 
       const md = marketData[symbol];
 
