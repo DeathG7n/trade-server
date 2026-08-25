@@ -524,7 +524,6 @@ try {
           data?.contracts_for?.available[index]?.contract_category ===
           "multiplier"
         ) {
-          console.log(data?.contracts_for?.available[index]);
           md.multiplier_range =
             data?.contracts_for?.available[index]?.multiplier_range;
         }
@@ -965,7 +964,7 @@ try {
         sendMessage(JSON.stringify(runningTrade, null, 2));
       }
 
-      //console.log(runningTrade);
+      console.log(runningTrade);
     }
 
     if (data.msg_type === "buy") {
