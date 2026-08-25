@@ -510,7 +510,6 @@ try {
     }
     if (data.msg_type === "contracts_for") {
       const symbol = data.echo_req.contracts_for;
-      console.log(data);
 
       const md = marketData[symbol];
 
@@ -525,6 +524,7 @@ try {
           data?.contracts_for?.available[index]?.contract_category ===
           "multiplier"
         ) {
+          console.log(data?.contracts_for?.available[index]);
           md.multiplier_range =
             data?.contracts_for?.available[index]?.multiplier_range;
         }
