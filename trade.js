@@ -36,7 +36,7 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const timeframes = [120, 300];
+const timeframes = [60, 300];
 const subscribedContracts = new Set();
 const contractStates = new Map();
 
@@ -230,8 +230,8 @@ function clearSymbolPending(symbol) {
   console.log(`🔄 ${symbol} state -> IDLE`);
 }
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 2;
-  const takeProfit = stopLoss * 3;
+  const stopLoss = stake / 4;
+  const takeProfit = stopLoss * 5;
 
   const request = {
     proposal: 1,
@@ -556,7 +556,7 @@ try {
           md.low15 = data.candles.map((c) => c.low);
         }
 
-        if (data.echo_req.granularity === 120) {
+        if (data.echo_req.granularity === 60) {
           md.close = data.candles.map((c) => c.close);
 
           md.open = data.candles.map((c) => c.open);
@@ -650,7 +650,7 @@ try {
         md.trendDown15 = ema14[prevIndex] < ema21[prevIndex];
       }
 
-      if (data.echo_req.granularity === 120) {
+      if (data.echo_req.granularity === 60) {
         if (md.openTime === 0) {
           md.openTime = data.ohlc.open_time;
         }
@@ -721,12 +721,11 @@ try {
           tradeSymbols.includes(symbol) &&
           md.tradeState === "IDLE"
         ) {
-          if (crossedEma(md.high, md.low, prevIndex, ema14)) {
+          if (crossedEma(md.high, md.low, prevIndex, ema21)) {
             if (
               md.trendUp15 &&
-              md.trendDown &&
-              bullish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] > ema14[prevIndex]
+              md.trendUp &&
+              bullish(md.open, md.close, prevIndex)
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
@@ -748,9 +747,8 @@ try {
               }
             } else if (
               md.trendDown15 &&
-              md.trendUp &&
-              bearish(md.open, md.close, prevIndex, ema21) &&
-              md.close[prevIndex] < ema14[prevIndex]
+              md.trendDown &&
+              bearish(md.open, md.close, prevIndex, ema21)
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
@@ -919,17 +917,17 @@ try {
           await update(position.stoploss, id, symbol);
         }
 
-        if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
-          position.stoploss = Math.abs(lossAmount * 2);
+        // if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
+        //   position.stoploss = Math.abs(lossAmount * 2);
 
-          await update(position.stoploss, id, symbol);
-        }
+        //   await update(position.stoploss, id, symbol);
+        // }
 
-        if (pip >= risk * 8 && position.stoploss === Math.abs(lossAmount * 2)) {
-          position.stoploss = Math.abs(lossAmount * 4);
+        // if (pip >= risk * 8 && position.stoploss === Math.abs(lossAmount * 2)) {
+        //   position.stoploss = Math.abs(lossAmount * 4);
 
-          await update(position.stoploss, id, symbol);
-        }
+        //   await update(position.stoploss, id, symbol);
+        // }
 
         /*
         |--------------------------------------------------------------------------
