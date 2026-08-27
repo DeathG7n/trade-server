@@ -702,11 +702,11 @@ try {
           return;
         }
 
-        const ema14 = calculateEMA(md.close, 14);
         const ema21 = calculateEMA(md.close, 21);
+        const ema50 = calculateEMA(md.close, 50);
 
-        md.trendUp = ema14[prevIndex] > ema21[prevIndex];
-        md.trendDown = ema14[prevIndex] < ema21[prevIndex];
+        md.trendUp = ema21[prevIndex] > ema50[prevIndex];
+        md.trendDown = ema21[prevIndex] < ema50[prevIndex];
 
         const symbolIsPending =
           md.tradeState === "PROPOSAL_PENDING" ||
@@ -721,11 +721,11 @@ try {
           tradeSymbols.includes(symbol) &&
           md.tradeState === "IDLE"
         ) {
-          if (crossedEma(md.high, md.low, prevIndex, ema21)) {
+          if (crossedEma(md.high, md.low, prevIndex, ema50)) {
             if (
-              md.trendUp15 &&
-              md.trendUp &&
-              bullish(md.open, md.close, prevIndex)
+              md.trendDown &&
+              bullish(md.open, md.close, prevIndex) &&
+              md.close[prevIndex] > ema50[prevIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
@@ -746,9 +746,9 @@ try {
                 sendMessage(String(error));
               }
             } else if (
-              md.trendDown15 &&
-              md.trendDown &&
-              bearish(md.open, md.close, prevIndex, ema21)
+              md.trendUp &&
+              bearish(md.open, md.close, prevIndex) &&
+              md.close[prevIndex] < ema50[prevIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
@@ -779,13 +779,23 @@ try {
             if (contractState?.state === "CLOSING") {
               continue;
             }
-            if (position.type === "MULTUP" && md.trendDown15) {
+            if (
+              position.type === "MULTUP" &&
+              md.trendUp &&
+              bearish(md.open, md.close, prevIndex) &&
+              md.close[prevIndex] < ema50[prevIndex]
+            ) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
               } catch (error) {
                 sendMessage(String(error));
               }
-            } else if (position.type === "MULTDOWN" && md.trendUp15) {
+            } else if (
+              position.type === "MULTDOWN" &&
+              md.trendDown &&
+              bullish(md.open, md.close, prevIndex) &&
+              md.close[prevIndex] > ema50[prevIndex]
+            ) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
               } catch (error) {
@@ -911,11 +921,11 @@ try {
           await update(position.stoploss, id, symbol);
         }
 
-        if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
-          position.stoploss = Math.abs(lossAmount);
+        // if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
+        //   position.stoploss = Math.abs(lossAmount);
 
-          await update(position.stoploss, id, symbol);
-        }
+        //   await update(position.stoploss, id, symbol);
+        // }
 
         // if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
         //   position.stoploss = Math.abs(lossAmount * 2);
