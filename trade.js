@@ -36,7 +36,7 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const timeframes = [60, 300];
+const timeframes = [3600, 300];
 const subscribedContracts = new Set();
 const contractStates = new Map();
 
@@ -48,16 +48,16 @@ const symbols = [
   "stpRNG3",
   "stpRNG4",
   "stpRNG5",
-  // "1HZ10V",
-  // "R_10",
-  // "1HZ25V",
-  // "R_25",
-  // "1HZ50V",
-  // "R_50",
-  // "1HZ75V",
-  // "R_75",
-  // "1HZ100V",
-  // "R_100",
+  "1HZ10V",
+  "R_10",
+  "1HZ25V",
+  "R_25",
+  "1HZ50V",
+  "R_50",
+  "1HZ75V",
+  "R_75",
+  "1HZ100V",
+  "R_100",
   // "JD10",
   // "JD25",
   // "JD50",
@@ -230,8 +230,8 @@ function clearSymbolPending(symbol) {
   console.log(`🔄 ${symbol} state -> IDLE`);
 }
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 4;
-  const takeProfit = stopLoss * 5;
+  const stopLoss = stake / 2;
+  const takeProfit = stopLoss * 3;
 
   const request = {
     proposal: 1,
@@ -546,7 +546,7 @@ try {
       }
 
       try {
-        if (data.echo_req.granularity === 300) {
+        if (data.echo_req.granularity === 3600) {
           md.close15 = data.candles.map((c) => c.close);
 
           md.open15 = data.candles.map((c) => c.open);
@@ -556,7 +556,7 @@ try {
           md.low15 = data.candles.map((c) => c.low);
         }
 
-        if (data.echo_req.granularity === 60) {
+        if (data.echo_req.granularity === 300) {
           md.close = data.candles.map((c) => c.close);
 
           md.open = data.candles.map((c) => c.open);
@@ -590,7 +590,7 @@ try {
         return;
       }
 
-      if (data.echo_req.granularity === 300) {
+      if (data.echo_req.granularity === 3600) {
         if (md.openTime15 === 0) {
           md.openTime15 = data.ohlc.open_time;
         }
@@ -650,7 +650,7 @@ try {
         md.trendDown15 = ema14[prevIndex] < ema21[prevIndex];
       }
 
-      if (data.echo_req.granularity === 60) {
+      if (data.echo_req.granularity === 300) {
         if (md.openTime === 0) {
           md.openTime = data.ohlc.open_time;
         }
@@ -723,6 +723,7 @@ try {
         ) {
           if (crossedEma(md.high, md.low, prevIndex, ema50)) {
             if (
+              md.trendUp15 &&
               md.trendDown &&
               bullish(md.open, md.close, prevIndex) &&
               md.close[prevIndex] > ema50[prevIndex]
@@ -746,6 +747,7 @@ try {
                 sendMessage(String(error));
               }
             } else if (
+              md.trendDown15 &&
               md.trendUp &&
               bearish(md.open, md.close, prevIndex) &&
               md.close[prevIndex] < ema50[prevIndex]
@@ -779,23 +781,13 @@ try {
             if (contractState?.state === "CLOSING") {
               continue;
             }
-            if (
-              position.type === "MULTUP" &&
-              md.trendUp &&
-              bearish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] < ema50[prevIndex]
-            ) {
+            if (position.type === "MULTUP" && md.trendDown15) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
               } catch (error) {
                 sendMessage(String(error));
               }
-            } else if (
-              position.type === "MULTDOWN" &&
-              md.trendDown &&
-              bullish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] > ema50[prevIndex]
-            ) {
+            } else if (position.type === "MULTDOWN" && md.trendUp15) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
               } catch (error) {
@@ -921,11 +913,11 @@ try {
           await update(position.stoploss, id, symbol);
         }
 
-        // if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
-        //   position.stoploss = Math.abs(lossAmount);
+        if (pip >= risk * 3 && position.stoploss === Math.abs(commission)) {
+          position.stoploss = Math.abs(lossAmount);
 
-        //   await update(position.stoploss, id, symbol);
-        // }
+          await update(position.stoploss, id, symbol);
+        }
 
         // if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
         //   position.stoploss = Math.abs(lossAmount * 2);
