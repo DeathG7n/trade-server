@@ -730,7 +730,7 @@ try {
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
-                symbol === "JD100" && sendMessage("Bullish Signal on JD100");
+                sendMessage(`Bullish Signal on ${symbol}`);
                 md.canAlert = false;
               }
 
@@ -754,7 +754,7 @@ try {
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
-                symbol === "JD100" && sendMessage("Bearish Signal on JD100");
+                sendMessage(`Bearish Signal on ${symbol}`);
                 md.canAlert = false;
               }
               try {
