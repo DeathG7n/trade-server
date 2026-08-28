@@ -781,13 +781,27 @@ try {
             if (contractState?.state === "CLOSING") {
               continue;
             }
-            if (position.type === "MULTUP" && md.trendDown15) {
+            if (
+              position.type === "MULTUP" &&
+              md.trendUp15 &&
+              md.trendDown &&
+              bearish(md.open, md.close, prevIndex) &&
+              md.close[prevIndex] < ema50[prevIndex] &&
+              crossedEma(md.high, md.low, prevIndex, ema50)
+            ) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
               } catch (error) {
                 sendMessage(String(error));
               }
-            } else if (position.type === "MULTDOWN" && md.trendUp15) {
+            } else if (
+              position.type === "MULTDOWN" &&
+              md.trendDown15 &&
+              md.trendUp &&
+              bullish(md.open, md.close, prevIndex) &&
+              md.close[prevIndex] > ema50[prevIndex] &&
+              crossedEma(md.high, md.low, prevIndex, ema50)
+            ) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
               } catch (error) {
