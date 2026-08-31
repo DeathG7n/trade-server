@@ -39,7 +39,7 @@ export function isNumberBetween(number, lowerBound, upperBound) {
   return number >= lowerBound && number <= upperBound;
 }
 
-export function recentEmaCross(emaFast, emaSlow, lookback = 15) {
+export function recentEmaCross(emaFast, emaSlow, lookback) {
   const len = emaFast.length;
 
   for (let i = len - 2; i >= len - lookback - 1 && i > 0; i--) {

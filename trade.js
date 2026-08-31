@@ -6,7 +6,7 @@ import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 import { wsUrl } from "./server.js";
 
-import { bearish, bullish, crossedEma } from "./util.js";
+import { bearish, bullish, crossedEma, recentEmaCross } from "./util.js";
 
 dotenv.config();
 
@@ -702,11 +702,11 @@ try {
           return;
         }
 
-        const ema21 = calculateEMA(md.close, 21);
-        const ema50 = calculateEMA(md.close, 50);
+        const ema100 = calculateEMA(md.close, 100);
+        const ema200 = calculateEMA(md.close, 200);
 
-        md.trendUp = ema21[prevIndex] > ema50[prevIndex];
-        md.trendDown = ema21[prevIndex] < ema50[prevIndex];
+        md.trendUp = ema100[prevIndex] > ema200[prevIndex];
+        md.trendDown = ema100[prevIndex] < ema200[prevIndex];
 
         const symbolIsPending =
           md.tradeState === "PROPOSAL_PENDING" ||
@@ -721,12 +721,13 @@ try {
           tradeSymbols.includes(symbol) &&
           md.tradeState === "IDLE"
         ) {
-          if (crossedEma(md.high, md.low, prevIndex, ema50)) {
+          if (crossedEma(md.high, md.low, prevIndex, ema200)) {
             if (
               md.trendUp15 &&
-              md.trendDown &&
+              (md.trendDown ||
+                recentEmaCross(ema100, ema200, 200) === "bullish") &&
               bullish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] > ema50[prevIndex]
+              md.close[prevIndex] > ema200[prevIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
@@ -748,9 +749,10 @@ try {
               }
             } else if (
               md.trendDown15 &&
-              md.trendUp &&
+              (md.trendUp ||
+                recentEmaCross(ema100, ema200, 200) === "bearish") &&
               bearish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] < ema50[prevIndex]
+              md.close[prevIndex] < ema200[prevIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
@@ -786,8 +788,8 @@ try {
               position.type === "MULTUP" &&
               md.trendUp15 &&
               bearish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] < ema50[prevIndex] &&
-              crossedEma(md.high, md.low, prevIndex, ema50)
+              md.close[prevIndex] < ema200[prevIndex] &&
+              crossedEma(md.high, md.low, prevIndex, ema200)
             ) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
@@ -799,8 +801,8 @@ try {
               position.type === "MULTDOWN" &&
               md.trendDown15 &&
               bullish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] > ema50[prevIndex] &&
-              crossedEma(md.high, md.low, prevIndex, ema50)
+              md.close[prevIndex] > ema200[prevIndex] &&
+              crossedEma(md.high, md.low, prevIndex, ema200)
             ) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
