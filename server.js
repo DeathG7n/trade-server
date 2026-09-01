@@ -1,12 +1,10 @@
+/* eslint-disable no-undef */
 import dotenv from "dotenv";
 
 dotenv.config();
 
-// eslint-disable-next-line no-undef
 const API_TOKEN = process.env.API_TOKEN;
-// eslint-disable-next-line no-undef
 const APP_ID = process.env.APP_ID;
-// eslint-disable-next-line no-undef
 const ACCOUNT_ID = process.env.ACCOUNT_ID;
 
 if (!API_TOKEN) {
@@ -23,47 +21,93 @@ if (!ACCOUNT_ID) {
 
 const url = `https://api.derivws.com/trading/v1/options/accounts/${ACCOUNT_ID}/otp`;
 
-console.log("Requesting Deriv OTP...");
-console.log("Account ID:", ACCOUNT_ID);
-
-const otpResponse = await fetch(url, {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${API_TOKEN}`,
-    "Deriv-App-ID": APP_ID,
-    "Content-Type": "application/json",
-  },
-});
-
-const responseText = await otpResponse.text();
-
-console.log("OTP Status:", otpResponse.status);
-console.log("OTP Response:", responseText);
-
-if (!otpResponse.ok) {
-  throw new Error(
-    `Deriv OTP request failed (${otpResponse.status}): ${responseText}`,
-  );
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-let otpResult;
+async function getWsUrl() {
+  let delay = 10_000;
 
-try {
-  otpResult = JSON.parse(responseText);
-} catch {
-  throw new Error(
-    `Deriv returned non-JSON response: ${responseText.substring(0, 300)}`,
-  );
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    try {
+      console.log(`Requesting Deriv OTP... Attempt ${attempt}/6`);
+      console.log("Account ID:", ACCOUNT_ID);
+
+      const otpResponse = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${API_TOKEN}`,
+          "Deriv-App-ID": APP_ID,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const responseText = await otpResponse.text();
+
+      console.log("OTP Status:", otpResponse.status);
+
+      if (otpResponse.ok) {
+        let otpResult;
+
+        try {
+          otpResult = JSON.parse(responseText);
+        } catch {
+          throw new Error(
+            `Deriv returned non-JSON response: ${responseText.substring(0, 300)}`
+          );
+        }
+
+        const wsUrl = otpResult?.data?.url;
+
+        if (!wsUrl) {
+          throw new Error(
+            `WebSocket URL was not returned by Deriv: ${JSON.stringify(
+              otpResult
+            )}`
+          );
+        }
+
+        console.log("✅ WebSocket URL obtained successfully");
+
+        return wsUrl;
+      }
+
+      // Cloudflare / rate limit
+      if (otpResponse.status === 1015 || otpResponse.status === 429) {
+        console.error(
+          `⚠️ Deriv rate limited request (${otpResponse.status})`
+        );
+
+        console.log(`Waiting ${delay / 1000}s before retrying...`);
+
+        await sleep(delay);
+
+        delay = Math.min(delay * 2, 300_000);
+
+        continue;
+      }
+
+      // Other HTTP errors
+      throw new Error(
+        `Deriv OTP request failed (${otpResponse.status}): ${responseText.substring(
+          0,
+          500
+        )}`
+      );
+    } catch (error) {
+      console.error("❌ OTP request error:", error.message);
+
+      if (attempt === 6) {
+        throw error;
+      }
+
+      console.log(`Retrying in ${delay / 1000}s...`);
+
+      await sleep(delay);
+
+      delay = Math.min(delay * 2, 300_000);
+    }
+  }
 }
 
-console.log("Parsed OTP Result:", otpResult);
-
-export const wsUrl = otpResult?.data?.url;
-
-if (!wsUrl) {
-  throw new Error(
-    `WebSocket URL was not returned by Deriv: ${JSON.stringify(otpResult)}`,
-  );
-}
-
-console.log("WebSocket URL obtained successfully");
+export const wsUrl = await getWsUrl();
