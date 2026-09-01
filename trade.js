@@ -6,7 +6,14 @@ import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 import { wsUrl } from "./server.js";
 
-import { bearish, bullish, crossedEma, recentEmaCross } from "./util.js";
+import {
+  bearish,
+  bullish,
+  calculateATR,
+  crossedEma,
+  detectCrossover,
+  recentEmaCross,
+} from "./util.js";
 
 dotenv.config();
 
@@ -36,7 +43,7 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const timeframes = [3600, 60];
+const timeframes = [900, 300];
 const subscribedContracts = new Set();
 const contractStates = new Map();
 
@@ -546,7 +553,7 @@ try {
       }
 
       try {
-        if (data.echo_req.granularity === 3600) {
+        if (data.echo_req.granularity === 900) {
           md.close15 = data.candles.map((c) => c.close);
 
           md.open15 = data.candles.map((c) => c.open);
@@ -556,7 +563,7 @@ try {
           md.low15 = data.candles.map((c) => c.low);
         }
 
-        if (data.echo_req.granularity === 60) {
+        if (data.echo_req.granularity === 300) {
           md.close = data.candles.map((c) => c.close);
 
           md.open = data.candles.map((c) => c.open);
@@ -590,7 +597,7 @@ try {
         return;
       }
 
-      if (data.echo_req.granularity === 3600) {
+      if (data.echo_req.granularity === 900) {
         if (md.openTime15 === 0) {
           md.openTime15 = data.ohlc.open_time;
         }
@@ -650,7 +657,7 @@ try {
         md.trendDown15 = ema21[prevIndex] < ema50[prevIndex];
       }
 
-      if (data.echo_req.granularity === 60) {
+      if (data.echo_req.granularity === 300) {
         if (md.openTime === 0) {
           md.openTime = data.ohlc.open_time;
         }
@@ -702,12 +709,15 @@ try {
           return;
         }
 
-        const ema100 = calculateEMA(md.close, 100);
-        const ema200 = calculateEMA(md.close, 200);
+        const atr = calculateATR(md.high, md.low, md.close, 14);
 
-        md.trendUp = ema100[prevIndex] > ema200[prevIndex];
-        md.trendDown = ema100[prevIndex] < ema200[prevIndex];
+        const ema21 = calculateEMA(md.close, 21);
+        const ema50 = calculateEMA(md.close, 50);
 
+        md.trendUp = ema21[prevIndex] > ema50[prevIndex];
+        md.trendDown = ema21[prevIndex] < ema50[prevIndex];
+
+        const distance = Math.abs(md.close[prevIndex] - ema50[prevIndex]);
         const symbolIsPending =
           md.tradeState === "PROPOSAL_PENDING" ||
           md.tradeState === "BUY_PENDING";
@@ -721,13 +731,14 @@ try {
           tradeSymbols.includes(symbol) &&
           md.tradeState === "IDLE"
         ) {
-          if (crossedEma(md.high, md.low, prevIndex, ema200)) {
+          if (distance <= (atr[prevIndex] * 2)) {
             if (
-              md.trendUp15 &&
-              (md.trendDown ||
-                recentEmaCross(ema100, ema200, 200) === "bullish") &&
-              bullish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] > ema200[prevIndex]
+              detectCrossover(ema21, ema50) === bullish ||
+              (md.trendUp &&
+                recentEmaCross(ema21, ema50, 50) === "bullish" &&
+                crossedEma(md.high, md.low, prevIndex, ema50) &&
+                bullish(md.open, md.close, prevIndex) &&
+                md.close[prevIndex] > ema50[prevIndex])
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
@@ -748,11 +759,12 @@ try {
                 sendMessage(String(error));
               }
             } else if (
-              md.trendDown15 &&
-              (md.trendUp ||
-                recentEmaCross(ema100, ema200, 200) === "bearish") &&
-              bearish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] < ema200[prevIndex]
+              detectCrossover(ema21, ema50) === bearish ||
+              (md.trendDown &&
+                recentEmaCross(ema21, ema50, 50) === "bearish" &&
+                crossedEma(md.high, md.low, prevIndex, ema50) &&
+                bearish(md.open, md.close, prevIndex) &&
+                md.close[prevIndex] < ema50[prevIndex])
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               if (md.canAlert) {
@@ -784,12 +796,12 @@ try {
               continue;
             }
             if (
-              position.stoploss === 0 &&
               position.type === "MULTUP" &&
-              md.trendUp15 &&
-              bearish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] < ema200[prevIndex] &&
-              crossedEma(md.high, md.low, prevIndex, ema200)
+              ((position.stoploss === 0 &&
+                bearish(md.open, md.close, prevIndex) &&
+                md.close[prevIndex] < ema50[prevIndex] &&
+                crossedEma(md.high, md.low, prevIndex, ema50)) ||
+                detectCrossover(ema21, ema50) === "bearish")
             ) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
@@ -797,12 +809,12 @@ try {
                 sendMessage(String(error));
               }
             } else if (
-              position.stoploss === 0 &&
               position.type === "MULTDOWN" &&
-              md.trendDown15 &&
-              bullish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] > ema200[prevIndex] &&
-              crossedEma(md.high, md.low, prevIndex, ema200)
+              ((position.stoploss === 0 &&
+                bullish(md.open, md.close, prevIndex) &&
+                md.close[prevIndex] > ema50[prevIndex] &&
+                crossedEma(md.high, md.low, prevIndex, ema50)) ||
+                detectCrossover(ema21, ema50) === "bullish")
             ) {
               try {
                 closePosition(symbol, contractId, "Opposite Signal");
@@ -935,11 +947,11 @@ try {
           await update(position.stoploss, id, symbol);
         }
 
-        // if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
-        //   position.stoploss = Math.abs(lossAmount * 2);
+        if (pip >= risk * 5 && position.stoploss === Math.abs(lossAmount)) {
+          position.stoploss = Math.abs(lossAmount * 4);
 
-        //   await update(position.stoploss, id, symbol);
-        // }
+          await update(position.stoploss, id, symbol);
+        }
 
         // if (pip >= risk * 8 && position.stoploss === Math.abs(lossAmount * 2)) {
         //   position.stoploss = Math.abs(lossAmount * 4);
