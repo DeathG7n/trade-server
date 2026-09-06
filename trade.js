@@ -6,7 +6,7 @@ import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
-import { bearish, bullish, calculateATR } from "./util.js";
+import { bearish, bullish, calculateATR, crossedPrice } from "./util.js";
 
 dotenv.config();
 
@@ -27,19 +27,43 @@ const uri = process.env.MONGODB_URI;
 const client = new MongoClient(uri);
 
 let positions = [];
-let count = 0;
 let amount = null;
 let balance = null;
 let now = new Date();
+
 let connection = false;
 let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const timeframes = [3600, 60];
+/*
+|--------------------------------------------------------------------------
+| CONFIGURATION
+|--------------------------------------------------------------------------
+*/
+
+const ONE_HOUR = 3600;
+const ONE_MINUTE = 60;
+
+const timeframes = [ONE_HOUR, ONE_MINUTE];
+
+const HISTORY_COUNT = 200;
+const MAX_CANDLES = 250;
+
+const reconnectBaseDelay = 5000;
+const reconnectMaxDelay = 300000;
+
+const INITIAL_REQUEST_DELAY = 350;
+
 const subscribedContracts = new Set();
 const contractStates = new Map();
 const pendingTrades = new Map();
+
+/*
+|--------------------------------------------------------------------------
+| SYMBOLS
+|--------------------------------------------------------------------------
+*/
 
 const symbols = [
   "stpRNG",
@@ -47,16 +71,27 @@ const symbols = [
   "stpRNG3",
   "stpRNG4",
   "stpRNG5",
+
   "1HZ10V",
   "R_10",
+
   "1HZ25V",
   "R_25",
+
   "1HZ50V",
   "R_50",
+
   "1HZ75V",
   "R_75",
+
   "1HZ100V",
   "R_100",
+
+  // "JD10",
+  // "JD25",
+  // "JD50",
+  // "JD75",
+  "JD100",
 ];
 
 const tradeSymbols = [
@@ -65,39 +100,22 @@ const tradeSymbols = [
   "stpRNG3",
   "stpRNG4",
   "stpRNG5",
+
   "1HZ10V",
   "R_10",
+
   "1HZ25V",
   "R_25",
+
   "1HZ50V",
   "R_50",
+
   "1HZ75V",
   "R_75",
+
   "1HZ100V",
   "R_100",
-  "JD10",
-  "JD25",
-  "JD50",
-  "JD75",
-  "JD100",
-];
 
-const alertSymbols = [
-  // "stpRNG",
-  // "stpRNG2",
-  // "stpRNG3",
-  // "stpRNG4",
-  // "stpRNG5",
-  // "1HZ10V",
-  "R_10",
-  // "1HZ25V",
-  // "R_25",
-  // "1HZ50V",
-  "R_50",
-  "1HZ75V",
-  // "R_75",
-  // "1HZ100V",
-  // "R_100",
   // "JD10",
   // "JD25",
   // "JD50",
@@ -105,33 +123,73 @@ const alertSymbols = [
   // "JD100",
 ];
 
+const alertSymbols = ["R_10", "R_50", "1HZ75V", "JD100"];
+
+/*
+|--------------------------------------------------------------------------
+| MARKET DATA
+|--------------------------------------------------------------------------
+*/
+
 const marketData = {};
 
 symbols.forEach((symbol) => {
   marketData[symbol] = {
+    // 1-minute candles
     close: [],
     open: [],
     high: [],
     low: [],
     openTime: 0,
+
+    // 1-hour candles
+    close1h: [],
+    open1h: [],
+    high1h: [],
+    low1h: [],
+    openTime1h: 0,
+
+    // 1-minute trend
     trendUp: false,
     trendDown: false,
-    close15: [],
-    open15: [],
-    high15: [],
-    low15: [],
-    openTime15: 0,
-    trendUp15: false,
-    trendDown15: false,
-    ema_15_21: 0,
-    ema_15_50: 0,
+
+    // 1-hour trend
+    trendUp1h: false,
+    trendDown1h: false,
+
+    // EMA values
+    ema1h21: 0,
+    ema1h50: 0,
+
+    ema1m21: 0,
+    ema1m50: 0,
+
     multiplier_range: [],
+
+    // Alerts
     canAlert: true,
-    canAlert15: true,
+
+    // Entry state
     tradeState: "IDLE",
     pendingProposalId: null,
+
+    // Stream readiness
+    history1mLoaded: false,
+    history1hLoaded: false,
+
+    // Last EMA values
+    lastEma1h21: null,
+    lastEma1h50: null,
+    lastEma1m21: null,
+    lastEma1m50: null,
   };
 });
+
+/*
+|--------------------------------------------------------------------------
+| EXPRESS
+|--------------------------------------------------------------------------
+*/
 
 app.use(cors());
 
@@ -143,8 +201,22 @@ app.listen(3000, () => {
   console.log("Server is running");
 });
 
+/*
+|--------------------------------------------------------------------------
+| BASIC HELPERS
+|--------------------------------------------------------------------------
+*/
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isSocketOpen() {
+  return ws && ws.readyState === WebSocket.OPEN;
+}
+
 function send(message) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
+  if (!isSocketOpen()) {
     console.log("⚠️ Cannot send message: WebSocket is not open");
     return false;
   }
@@ -158,33 +230,18 @@ function send(message) {
   }
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function run(ms) {
-  await sleep(ms);
-}
-
-function calculateEMA(prices, period) {
-  const k = 2 / (period + 1);
-
-  const emaArray = [];
-
-  if (!prices.length) {
-    return emaArray;
-  }
-
-  emaArray[0] = prices[0];
-
-  for (let i = 1; i < prices.length; i++) {
-    emaArray[i] = prices[i] * k + emaArray[i - 1] * (1 - k);
-  }
-
-  return emaArray;
-}
+/*
+|--------------------------------------------------------------------------
+| TELEGRAM
+|--------------------------------------------------------------------------
+*/
 
 const sendMessage = async (message) => {
+  if (!BOT_TOKEN || !CHAT_ID) {
+    console.log("⚠️ Telegram credentials are missing");
+    return;
+  }
+
   try {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
 
@@ -201,6 +258,12 @@ const sendMessage = async (message) => {
     );
   }
 };
+
+/*
+|--------------------------------------------------------------------------
+| CONTRACT STATE
+|--------------------------------------------------------------------------
+*/
 
 function getContractState(contractId) {
   return contractStates.get(contractId);
@@ -226,6 +289,12 @@ function deleteContractState(contractId) {
 
   contractStates.delete(contractId);
 }
+
+/*
+|--------------------------------------------------------------------------
+| SYMBOL ENTRY STATE
+|--------------------------------------------------------------------------
+*/
 
 function setSymbolPending(symbol, state, proposalId = null) {
   const md = marketData[symbol];
@@ -257,17 +326,275 @@ function clearSymbolPending(symbol) {
   console.log(`🔄 ${symbol} state -> IDLE`);
 }
 
+/*
+|--------------------------------------------------------------------------
+| EMA
+|--------------------------------------------------------------------------
+*/
+
+function calculateEMA(prices, period) {
+  if (!Array.isArray(prices) || prices.length === 0) {
+    return [];
+  }
+
+  const k = 2 / (period + 1);
+  const emaArray = new Array(prices.length);
+
+  emaArray[0] = Number(prices[0]);
+
+  for (let i = 1; i < prices.length; i++) {
+    const price = Number(prices[i]);
+
+    emaArray[i] = price * k + emaArray[i - 1] * (1 - k);
+  }
+
+  return emaArray;
+}
+
+function calculateNextEMA(previousEMA, price, period) {
+  if (!Number.isFinite(previousEMA)) {
+    return Number(price);
+  }
+
+  const numericPrice = Number(price);
+
+  if (!Number.isFinite(numericPrice)) {
+    return previousEMA;
+  }
+
+  const k = 2 / (period + 1);
+
+  return numericPrice * k + previousEMA * (1 - k);
+}
+
+/*
+|--------------------------------------------------------------------------
+| CANDLE HELPERS
+|--------------------------------------------------------------------------
+*/
+
+function appendCandle(md, timeframe, candle) {
+  const isOneHour = timeframe === ONE_HOUR;
+
+  const closeArray = isOneHour ? md.close1h : md.close;
+  const openArray = isOneHour ? md.open1h : md.open;
+  const highArray = isOneHour ? md.high1h : md.high;
+  const lowArray = isOneHour ? md.low1h : md.low;
+
+  const openTimeKey = isOneHour ? "openTime1h" : "openTime";
+
+  const openTime = Number(candle.open_time);
+
+  const open = Number(candle.open);
+  const high = Number(candle.high);
+  const low = Number(candle.low);
+  const close = Number(candle.close);
+
+  if (
+    !Number.isFinite(openTime) ||
+    !Number.isFinite(open) ||
+    !Number.isFinite(high) ||
+    !Number.isFinite(low) ||
+    !Number.isFinite(close)
+  ) {
+    return false;
+  }
+
+  const currentOpenTime = md[openTimeKey];
+
+  /*
+   * First live candle after history.
+   */
+  if (currentOpenTime === 0) {
+    md[openTimeKey] = openTime;
+
+    closeArray.push(close);
+    openArray.push(open);
+    highArray.push(high);
+    lowArray.push(low);
+
+    return true;
+  }
+
+  /*
+   * Same candle:
+   * Update the current candle rather than adding another one.
+   */
+  if (currentOpenTime === openTime) {
+    const last = closeArray.length - 1;
+
+    if (last < 0) {
+      closeArray.push(close);
+      openArray.push(open);
+      highArray.push(high);
+      lowArray.push(low);
+    } else {
+      closeArray[last] = close;
+      openArray[last] = open;
+      highArray[last] = high;
+      lowArray[last] = low;
+    }
+
+    return true;
+  }
+
+  /*
+   * New candle:
+   * Append it.
+   *
+   * IMPORTANT:
+   * We do NOT call ticks_history here.
+   * The existing OHLC subscription continues delivering data.
+   */
+  md[openTimeKey] = openTime;
+
+  closeArray.push(close);
+  openArray.push(open);
+  highArray.push(high);
+  lowArray.push(low);
+
+  /*
+   * Keep arrays bounded.
+   */
+  while (closeArray.length > MAX_CANDLES) {
+    closeArray.shift();
+    openArray.shift();
+    highArray.shift();
+    lowArray.shift();
+  }
+
+  if (isOneHour) {
+    md.canAlert = true;
+  } else {
+    md.canAlert = true;
+  }
+
+  return true;
+}
+
+/*
+|--------------------------------------------------------------------------
+| TREND / EMA UPDATE
+|--------------------------------------------------------------------------
+*/
+
+function updateOneHourIndicators(md) {
+  const len = md.close1h.length;
+
+  if (len < 50) {
+    md.trendUp1h = false;
+    md.trendDown1h = false;
+    return false;
+  }
+
+  const previousIndex = len - 2;
+  const currentIndex = len - 1;
+
+  if (previousIndex < 0) {
+    return false;
+  }
+
+  /*
+   * Initial calculation.
+   */
+  if (md.lastEma1h21 == null || md.lastEma1h50 == null) {
+    const ema21 = calculateEMA(md.close1h, 21);
+    const ema50 = calculateEMA(md.close1h, 50);
+
+    md.lastEma1h21 = ema21[currentIndex];
+    md.lastEma1h50 = ema50[currentIndex];
+
+    md.ema1h21 = ema21[currentIndex];
+    md.ema1h50 = ema50[currentIndex];
+
+    md.trendUp1h = ema21[previousIndex] > ema50[previousIndex];
+    md.trendDown1h = ema21[previousIndex] < ema50[previousIndex];
+
+    return true;
+  }
+
+  /*
+   * Recalculate because historical data may have changed.
+   *
+   * 250 candles is small enough for this operation,
+   * but this only occurs on 1-hour OHLC updates.
+   */
+  const ema21 = calculateEMA(md.close1h, 21);
+  const ema50 = calculateEMA(md.close1h, 50);
+
+  md.ema1h21 = ema21[currentIndex];
+  md.ema1h50 = ema50[currentIndex];
+
+  md.lastEma1h21 = ema21[currentIndex];
+  md.lastEma1h50 = ema50[currentIndex];
+
+  /*
+   * IMPORTANT:
+   * Trend is determined from the previous CLOSED candle.
+   */
+  md.trendUp1h = ema21[previousIndex] > ema50[previousIndex];
+  md.trendDown1h = ema21[previousIndex] < ema50[previousIndex];
+
+  return true;
+}
+
+function updateOneMinuteIndicators(md) {
+  const len = md.close.length;
+
+  if (len < 50) {
+    md.trendUp = false;
+    md.trendDown = false;
+    return false;
+  }
+
+  const previousIndex = len - 2;
+
+  if (previousIndex < 0) {
+    return false;
+  }
+
+  const ema21 = calculateEMA(md.close, 21);
+  const ema50 = calculateEMA(md.close, 50);
+
+  const currentIndex = len - 1;
+
+  md.ema1m21 = ema21[currentIndex];
+  md.ema1m50 = ema50[currentIndex];
+
+  md.lastEma1m21 = ema21[currentIndex];
+  md.lastEma1m50 = ema50[currentIndex];
+
+  md.trendUp = ema21[previousIndex] > ema50[previousIndex];
+  md.trendDown = ema21[previousIndex] < ema50[previousIndex];
+
+  return true;
+}
+
+/*
+|--------------------------------------------------------------------------
+| DERIV PROPOSAL
+|--------------------------------------------------------------------------
+*/
+
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 2;
+  if (!Number.isFinite(Number(stake)) || Number(stake) <= 0) {
+    throw new Error(`Invalid stake for ${symbol}: ${stake}`);
+  }
+
+  if (!Number.isFinite(Number(multiplier)) || Number(multiplier) <= 0) {
+    throw new Error(`Invalid multiplier for ${symbol}: ${multiplier}`);
+  }
+
+  const stopLoss = Number(stake) / 2;
   const takeProfit = stopLoss * 3;
 
   const request = {
     proposal: 1,
-    amount: stake,
+    amount: Number(stake),
     contract_type: direction,
     currency: "USD",
     underlying_symbol: symbol,
-    multiplier: multiplier,
+    multiplier: Number(multiplier),
     basis: "stake",
 
     limit_order: {
@@ -276,25 +603,56 @@ async function getMultiProposal(direction, symbol, stake, multiplier) {
     },
   };
 
-  send(request);
+  const sent = send(request);
+
+  if (!sent) {
+    throw new Error(`Failed to send proposal request for ${symbol}`);
+  }
 }
+
+/*
+|--------------------------------------------------------------------------
+| BUY
+|--------------------------------------------------------------------------
+*/
 
 function buyContract(direction, id, stake) {
+  if (!id) {
+    throw new Error("Cannot buy contract without proposal ID");
+  }
+
+  if (!Number.isFinite(Number(stake)) || Number(stake) <= 0) {
+    throw new Error(`Invalid buy price: ${stake}`);
+  }
+
   console.log(`📈 Buying ${direction} contract...`);
 
-  send({
+  const sent = send({
     buy: id,
-    price: stake,
+    price: Number(stake),
   });
+
+  if (!sent) {
+    throw new Error(`Failed to send buy request for proposal ${id}`);
+  }
 }
 
+/*
+|--------------------------------------------------------------------------
+| CLOSE POSITION
+|--------------------------------------------------------------------------
+*/
+
 function closePosition(symbol, contractId, reason) {
-  if (!contractId) return;
+  if (!contractId) {
+    return;
+  }
 
   const state = getContractState(contractId);
 
   if (state?.state === "CLOSING") {
     console.log(`⏳ Contract ${contractId} is already CLOSING`);
+
     return;
   }
 
@@ -302,27 +660,44 @@ function closePosition(symbol, contractId, reason) {
 
   if (!position) {
     console.log(`⚠️ Cannot close unknown contract ${contractId}`);
+
     return;
   }
 
   setContractState(contractId, "CLOSING", {
     symbol,
     reason,
+    type: position.type,
   });
 
   position.reason = reason;
 
   console.log(`❌ Closing position ${contractId} on ${symbol}`);
 
-  send({
+  const sent = send({
     sell: contractId,
     price: 0,
   });
+
+  if (!sent) {
+    setContractState(contractId, "OPEN", {
+      symbol,
+      type: position.type,
+    });
+
+    return;
+  }
 
   sendMessage(
     `❌ Closing contract ${contractId} on ${symbol} because ${reason}`,
   );
 }
+
+/*
+|--------------------------------------------------------------------------
+| MONGODB
+|--------------------------------------------------------------------------
+*/
 
 async function connect() {
   try {
@@ -333,37 +708,111 @@ async function connect() {
     connection = true;
     authorized = false;
   } catch (error) {
-    console.error("MongoDB connection error:", error);
+    connection = false;
+
+    console.error("MongoDB connection error:", error.message);
   }
 }
 
 async function update(stop, id, symbol) {
   try {
-    if (!symbol || !id) return;
+    if (!symbol || !id) {
+      return;
+    }
+
+    const numericStop = Number(stop);
+
+    if (!Number.isFinite(numericStop)) {
+      console.log(`⚠️ Invalid stop-loss value for ${id}: ${stop}`);
+
+      return;
+    }
 
     const database = client.db("trading");
     const collection = database.collection("trade");
 
-    await collection.findOneAndUpdate(
+    await collection.updateOne(
       {
         contract_id: id,
       },
       {
         $set: {
-          stoploss: stop,
+          stoploss: numericStop,
+          updatedAt: new Date(),
         },
       },
     );
 
-    send({
-      portfolio: 1,
-    });
+    /*
+     * IMPORTANT:
+     * Do NOT request portfolio here.
+     *
+     * Previously:
+     *
+     * DB update
+     * → portfolio request
+     * → portfolio response
+     * → contract subscription
+     *
+     * This could create unnecessary traffic.
+     */
   } catch (error) {
-    console.error(error);
+    console.error(
+      `❌ MongoDB stop-loss update failed for ${id}:`,
+      error.message,
+    );
   }
 }
 
 await connect();
+
+/*
+|--------------------------------------------------------------------------
+| RESET MARKET DATA
+|--------------------------------------------------------------------------
+*/
+
+function resetMarketData() {
+  for (const symbol of symbols) {
+    const md = marketData[symbol];
+
+    md.close = [];
+    md.open = [];
+    md.high = [];
+    md.low = [];
+
+    md.close1h = [];
+    md.open1h = [];
+    md.high1h = [];
+    md.low1h = [];
+
+    md.openTime = 0;
+    md.openTime1h = 0;
+
+    md.trendUp = false;
+    md.trendDown = false;
+
+    md.trendUp1h = false;
+    md.trendDown1h = false;
+
+    md.ema1h21 = 0;
+    md.ema1h50 = 0;
+
+    md.ema1m21 = 0;
+    md.ema1m50 = 0;
+
+    md.lastEma1h21 = null;
+    md.lastEma1h50 = null;
+
+    md.lastEma1m21 = null;
+    md.lastEma1m50 = null;
+
+    md.history1mLoaded = false;
+    md.history1hLoaded = false;
+
+    md.canAlert = true;
+  }
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -391,6 +840,7 @@ async function getFreshWsUrl() {
 
   const otpResponse = await fetch(url, {
     method: "POST",
+
     headers: {
       Authorization: `Bearer ${API_TOKEN}`,
       "Deriv-App-ID": APP_ID,
@@ -433,12 +883,9 @@ async function getFreshWsUrl() {
 
 /*
 |--------------------------------------------------------------------------
-| WEBSOCKET CONNECTION MANAGEMENT
+| CONNECTION STATE
 |--------------------------------------------------------------------------
 */
-
-const reconnectBaseDelay = 5000;
-const reconnectMaxDelay = 300000;
 
 function resetConnectionState() {
   authorized = false;
@@ -446,7 +893,19 @@ function resetConnectionState() {
   connection = false;
 
   subscribedContracts.clear();
+
+  /*
+   * Historical market data belongs to the previous
+   * WebSocket session, so clear it.
+   */
+  resetMarketData();
 }
+
+/*
+|--------------------------------------------------------------------------
+| RECONNECT
+|--------------------------------------------------------------------------
+*/
 
 function scheduleReconnect() {
   if (intentionalClose) {
@@ -472,9 +931,71 @@ function scheduleReconnect() {
 
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
+
     connectWebSocket();
   }, delay);
 }
+
+/*
+|--------------------------------------------------------------------------
+| INITIAL MARKET SUBSCRIPTIONS
+|--------------------------------------------------------------------------
+*/
+
+async function subscribeMarketData() {
+  if (!isSocketOpen() || !authorized) {
+    return;
+  }
+
+  console.log("📡 Starting market data subscriptions...");
+
+  for (const symbol of symbols) {
+    if (!isSocketOpen() || !authorized) {
+      return;
+    }
+
+    /*
+     * contracts_for is needed for multiplier ranges.
+     */
+    send({
+      contracts_for: symbol,
+    });
+
+    await sleep(INITIAL_REQUEST_DELAY);
+
+    /*
+     * Request each historical timeframe once.
+     *
+     * IMPORTANT:
+     * These are initial history requests.
+     * The returned subscription continues through OHLC.
+     */
+    for (const timeframe of timeframes) {
+      if (!isSocketOpen() || !authorized) {
+        return;
+      }
+
+      send({
+        ticks_history: symbol,
+        style: "candles",
+        count: HISTORY_COUNT,
+        granularity: timeframe,
+        end: "latest",
+        subscribe: 1,
+      });
+
+      await sleep(INITIAL_REQUEST_DELAY);
+    }
+  }
+
+  console.log("✅ Initial market data subscriptions sent");
+}
+
+/*
+|--------------------------------------------------------------------------
+| WEBSOCKET CONNECTION
+|--------------------------------------------------------------------------
+*/
 
 async function connectWebSocket() {
   if (intentionalClose) {
@@ -486,6 +1007,7 @@ async function connectWebSocket() {
     (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)
   ) {
     console.log("⚠️ WebSocket is already connected/connecting");
+
     return;
   }
 
@@ -493,12 +1015,6 @@ async function connectWebSocket() {
 
   resetConnectionState();
 
-  /*
-   * IMPORTANT:
-   * Request a NEW OTP every time we create a WebSocket.
-   * This prevents reconnects from reusing an expired/used
-   * OTP WebSocket URL.
-   */
   let freshWsUrl;
 
   try {
@@ -507,6 +1023,7 @@ async function connectWebSocket() {
     console.error("❌ Failed to obtain fresh Deriv OTP:", error.message);
 
     scheduleReconnect();
+
     return;
   }
 
@@ -516,41 +1033,57 @@ async function connectWebSocket() {
 
   ws = new WebSocket(freshWsUrl);
 
-  ws.on("open", () => {
+  /*
+   * Prevent stale WebSocket events from affecting state.
+   */
+  const currentSocket = ws;
+
+  currentSocket.on("open", () => {
+    if (ws !== currentSocket) {
+      return;
+    }
+
     console.log("🔌 Connected to Deriv WebSocket");
 
     reconnectAttempts = 0;
+
     connection = true;
     authorized = false;
 
-    const authorizationInterval = setInterval(() => {
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        clearInterval(authorizationInterval);
-        return;
-      }
+    /*
+     * Authorize once.
+     *
+     * No 1-second authorization interval.
+     */
+    const sent = send({
+      authorize: API_TOKEN,
+    });
 
-      if (!authorized) {
-        console.log("🔐 Authorizing Deriv account...");
-
-        send({
-          authorize: API_TOKEN,
-        });
-      } else {
-        clearInterval(authorizationInterval);
-      }
-    }, 1000);
+    if (!sent) {
+      console.log("⚠️ Authorization request could not be sent");
+    }
   });
 
-  ws.on("error", (error) => {
+  currentSocket.on("error", (error) => {
     console.error("❌ WebSocket error:", error.message);
   });
 
-  ws.on("close", (code, reason) => {
+  currentSocket.on("close", (code, reason) => {
+    /*
+     * Only the active socket is allowed to update
+     * global connection state.
+     */
+    if (ws !== currentSocket) {
+      return;
+    }
+
     console.log(
       `🔌 WebSocket disconnected. Code: ${code}, Reason: ${
         reason?.toString() || "Unknown"
       }`,
     );
+
+    ws = null;
 
     resetConnectionState();
 
@@ -561,9 +1094,22 @@ async function connectWebSocket() {
     }
   });
 
-  ws.on("message", async (msg) => {
+  currentSocket.on("message", async (msg) => {
+    /*
+     * Ignore messages from an old socket.
+     */
+    if (ws !== currentSocket) {
+      return;
+    }
+
     try {
       const data = JSON.parse(msg);
+
+      /*
+      |--------------------------------------------------------------------------
+      | AUTHORIZE
+      |--------------------------------------------------------------------------
+      */
 
       if (data.msg_type === "authorize") {
         console.log("✅ Authorized");
@@ -571,41 +1117,53 @@ async function connectWebSocket() {
         authorized = true;
         connection = true;
 
+        /*
+         * Balance subscription.
+         */
         send({
           balance: 1,
           subscribe: 1,
         });
 
-        symbols.forEach((symbol) => {
-          send({
-            contracts_for: symbol,
-          });
-
-          timeframes.forEach((timeframe) => {
-            send({
-              ticks_history: symbol,
-              style: "candles",
-              count: 500,
-              granularity: timeframe,
-              end: "latest",
-              subscribe: 1,
-            });
-          });
+        /*
+         * Existing portfolio.
+         */
+        send({
+          portfolio: 1,
         });
+
+        /*
+         * Start market data subscriptions.
+         *
+         * This is done only once after authorization.
+         */
+        await subscribeMarketData();
 
         return;
       }
 
+      /*
+      |--------------------------------------------------------------------------
+      | BALANCE
+      |--------------------------------------------------------------------------
+      */
+
       if (data.msg_type === "balance") {
-        balance = data.balance.balance;
+        const rawBalance = Number(data?.balance?.balance);
 
-        if (balance !== lastBalance) {
-          console.log(`💸 Balance is currently ${balance}`);
+        if (!Number.isFinite(rawBalance)) {
+          console.log("⚠️ Invalid balance received");
 
-          lastBalance = balance;
+          return;
         }
 
-        balance = Math.trunc(balance);
+        if (rawBalance !== lastBalance) {
+          console.log(`💸 Balance is currently ${rawBalance}`);
+
+          lastBalance = rawBalance;
+        }
+
+        balance = Math.trunc(rawBalance);
 
         if (balance < 7) {
           amount = 1;
@@ -615,12 +1173,14 @@ async function connectWebSocket() {
           amount = Math.min(1000, forefeit);
         }
 
-        send({
-          portfolio: 1,
-        });
-
         return;
       }
+
+      /*
+      |--------------------------------------------------------------------------
+      | PORTFOLIO
+      |--------------------------------------------------------------------------
+      */
 
       if (data.msg_type === "portfolio") {
         const database = client.db("trading");
@@ -634,12 +1194,20 @@ async function connectWebSocket() {
 
         const assets = await collection.find({}).toArray();
 
+        /*
+         * Remove contracts no longer in portfolio.
+         */
         for (const asset of assets) {
           const contractId = asset.contract_id;
 
           if (!activeContractIds.has(contractId)) {
             console.log(`🗑️ Contract ${contractId} is no longer in portfolio`);
 
+            /*
+             * Don't delete a contract that is currently
+             * waiting for a sell response unless the
+             * portfolio confirms it is gone.
+             */
             deleteContractState(contractId);
 
             subscribedContracts.delete(contractId);
@@ -652,10 +1220,17 @@ async function connectWebSocket() {
           }
         }
 
+        /*
+         * Process active contracts.
+         */
         for (const contract of portfolioContracts) {
           const contractId = contract.contract_id;
 
           const symbol = contract.underlying_symbol;
+
+          if (!symbol || !contractId) {
+            continue;
+          }
 
           let position = await collection.findOne({
             contract_id: contractId,
@@ -675,12 +1250,21 @@ async function connectWebSocket() {
             console.log(`📝 Document created for ${contractId}`);
           }
 
+          /*
+           * Keep in-memory position synchronized
+           * with MongoDB.
+           */
           const existingIndex = positions.findIndex(
             (p) => p.contract_id === contractId,
           );
 
           if (existingIndex === -1) {
             positions.push(position);
+          } else {
+            positions[existingIndex] = {
+              ...positions[existingIndex],
+              ...position,
+            };
           }
 
           const currentState = getContractState(contractId);
@@ -696,24 +1280,34 @@ async function connectWebSocket() {
 
           const md = marketData[symbol];
 
-          if (
-            md &&
-            (md.tradeState === "PROPOSAL_PENDING" ||
-              md.tradeState === "BUY_PENDING")
-          ) {
-            clearSymbolPending(symbol);
+          /*
+           * The proposal/buy process has successfully
+           * resulted in an actual portfolio contract.
+           */
+          if (md) {
+            if (
+              md.tradeState === "PROPOSAL_PENDING" ||
+              md.tradeState === "BUY_PENDING"
+            ) {
+              clearSymbolPending(symbol);
+            }
           }
 
+          /*
+           * Subscribe to contract updates only once.
+           */
           if (!subscribedContracts.has(contractId)) {
             console.log(`📡 Subscribing to contract ${contractId}`);
 
-            send({
+            const sent = send({
               proposal_open_contract: 1,
               contract_id: contractId,
               subscribe: 1,
             });
 
-            subscribedContracts.add(contractId);
+            if (sent) {
+              subscribedContracts.add(contractId);
+            }
           }
         }
 
@@ -726,36 +1320,104 @@ async function connectWebSocket() {
         return;
       }
 
+      /*
+      |--------------------------------------------------------------------------
+      | CONTRACTS FOR
+      |--------------------------------------------------------------------------
+      */
+
       if (data.msg_type === "contracts_for") {
-        const symbol = data.echo_req.contracts_for;
+        const symbol = data.echo_req?.contracts_for;
 
         const md = marketData[symbol];
 
-        if (!md) return;
+        if (!md) {
+          return;
+        }
 
-        for (
-          let index = 0;
-          index < data?.contracts_for?.available?.length;
-          index++
-        ) {
-          if (
-            data?.contracts_for?.available[index]?.contract_category ===
-            "multiplier"
-          ) {
-            md.multiplier_range =
-              data?.contracts_for?.available[index]?.multiplier_range;
+        const available = data?.contracts_for?.available || [];
+
+        for (const contract of available) {
+          if (contract?.contract_category === "multiplier") {
+            md.multiplier_range = contract.multiplier_range || [];
+
+            break;
           }
+        }
+
+        if (!md.multiplier_range.length) {
+          console.log(`⚠️ ${symbol}: No multiplier range returned`);
         }
 
         return;
       }
 
+      /*
+      |--------------------------------------------------------------------------
+      | CANDLES
+      |--------------------------------------------------------------------------
+      */
+
       if (data.msg_type === "candles") {
-        const symbol = data.echo_req.ticks_history;
+        const symbol = data.echo_req?.ticks_history;
+
+        const timeframe = Number(data.echo_req?.granularity);
 
         const md = marketData[symbol];
 
-        if (!md) return;
+        if (!md) {
+          return;
+        }
+
+        if (!Array.isArray(data.candles) || data.candles.length === 0) {
+          console.log(`⚠️ Empty candle history for ${symbol} ${timeframe}`);
+
+          return;
+        }
+
+        /*
+         * Replace historical data completely.
+         *
+         * This happens only when the initial history
+         * request is received.
+         */
+        if (timeframe === ONE_HOUR) {
+          md.close1h = data.candles.map((c) => Number(c.close));
+
+          md.open1h = data.candles.map((c) => Number(c.open));
+
+          md.high1h = data.candles.map((c) => Number(c.high));
+
+          md.low1h = data.candles.map((c) => Number(c.low));
+
+          md.openTime1h =
+            Number(data.candles[data.candles.length - 1]?.open_time) || 0;
+
+          md.history1hLoaded = true;
+
+          updateOneHourIndicators(md);
+
+          console.log(`📊 ${symbol}: 1H history loaded (${md.close1h.length})`);
+        }
+
+        if (timeframe === ONE_MINUTE) {
+          md.close = data.candles.map((c) => Number(c.close));
+
+          md.open = data.candles.map((c) => Number(c.open));
+
+          md.high = data.candles.map((c) => Number(c.high));
+
+          md.low = data.candles.map((c) => Number(c.low));
+
+          md.openTime =
+            Number(data.candles[data.candles.length - 1]?.open_time) || 0;
+
+          md.history1mLoaded = true;
+
+          updateOneMinuteIndicators(md);
+
+          console.log(`📊 ${symbol}: 1M history loaded (${md.close.length})`);
+        }
 
         const current = new Date();
 
@@ -765,172 +1427,97 @@ async function connectWebSocket() {
           sendMessage("Bot is still running");
         }
 
-        try {
-          if (data.echo_req.granularity === 3600) {
-            md.close15 = data.candles.map((c) => c.close);
-
-            md.open15 = data.candles.map((c) => c.open);
-
-            md.high15 = data.candles.map((c) => c.high);
-
-            md.low15 = data.candles.map((c) => c.low);
-          }
-
-          if (data.echo_req.granularity === 60) {
-            md.close = data.candles.map((c) => c.close);
-
-            md.open = data.candles.map((c) => c.open);
-
-            md.high = data.candles.map((c) => c.high);
-
-            md.low = data.candles.map((c) => c.low);
-          }
-        } catch (error) {
-          sendMessage(String(error));
-        }
-
-        count = count + 1;
-
         return;
       }
 
+      /*
+      |--------------------------------------------------------------------------
+      | OHLC
+      |--------------------------------------------------------------------------
+      */
+
       if (data.msg_type === "ohlc" && portfolioSynced) {
-        const symbol = data.echo_req.ticks_history;
+        const symbol = data.echo_req?.ticks_history;
+
+        const timeframe = Number(data.echo_req?.granularity);
 
         const md = marketData[symbol];
 
-        if (!md) return;
+        if (!md) {
+          return;
+        }
 
+        /*
+         * We only need multiplier positions
+         * for this strategy.
+         */
         const matchingPositions = positions.filter((p) => p?.name === symbol);
 
         const multiplierPositions = matchingPositions.filter(
           (p) => p.type !== "ONETOUCH",
         );
 
+        /*
+         * Multiplier range is required before
+         * attempting an entry.
+         */
         if (!md.multiplier_range?.length) {
           console.log(`⛔ ${symbol}: No multiplier range available`);
 
           return;
         }
 
-        if (data.echo_req.granularity === 3600) {
-          if (md.openTime15 === 0) {
-            md.openTime15 = data.ohlc.open_time;
-          }
+        /*
+        |--------------------------------------------------------------------------
+        | 1-HOUR OHLC
+        |--------------------------------------------------------------------------
+        */
 
-          if (md.openTime15 !== data.ohlc.open_time) {
-            md.openTime15 = data.ohlc.open_time;
-
-            md.canAlert15 = true;
-
-            send({
-              ticks_history: data.echo_req.ticks_history,
-              style: "candles",
-              count: 500,
-              granularity: data.echo_req.granularity,
-              end: "latest",
-            });
-
+        if (timeframe === ONE_HOUR) {
+          if (!md.history1hLoaded) {
             return;
           }
 
-          if (md.close15.length === 0) {
-            md.close15.push(Number(data.ohlc.close));
+          appendCandle(md, ONE_HOUR, data.ohlc);
 
-            md.open15.push(Number(data.ohlc.open));
+          updateOneHourIndicators(md);
 
-            md.high15.push(Number(data.ohlc.high));
-
-            md.low15.push(Number(data.ohlc.low));
-          } else {
-            const last = md.close15.length - 1;
-
-            md.close15[last] = Number(data.ohlc.close);
-
-            md.open15[last] = Number(data.ohlc.open);
-
-            md.high15[last] = Number(data.ohlc.high);
-
-            md.low15[last] = Number(data.ohlc.low);
-          }
-
-          const len = md.close15.length;
-
-          const prevIndex = len - 2;
-          const currIndex = len - 1;
-
-          if (len < 200) {
-            return;
-          }
-
-          const ema21 = calculateEMA(md.close15, 21);
-
-          const ema50 = calculateEMA(md.close15, 50);
-
-          md.ema_15_21 = ema21[currIndex];
-          md.ema_15_50 = ema50[currIndex];
-
-          md.trendUp15 = ema21[prevIndex] > ema50[prevIndex];
-
-          md.trendDown15 = ema21[prevIndex] < ema50[prevIndex];
+          return;
         }
 
-        if (data.echo_req.granularity === 60) {
-          if (md.openTime === 0) {
-            md.openTime = data.ohlc.open_time;
-          }
+        /*
+        |--------------------------------------------------------------------------
+        | 1-MINUTE OHLC
+        |--------------------------------------------------------------------------
+        */
 
-          if (md.openTime !== data.ohlc.open_time) {
-            md.openTime = data.ohlc.open_time;
-
-            md.canAlert = true;
-
-            send({
-              ticks_history: data.echo_req.ticks_history,
-              style: "candles",
-              count: 500,
-              granularity: data.echo_req.granularity,
-              end: "latest",
-            });
-
+        if (timeframe === ONE_MINUTE) {
+          if (!md.history1mLoaded) {
             return;
           }
 
-          if (md.close.length === 0) {
-            md.close.push(Number(data.ohlc.close));
+          appendCandle(md, ONE_MINUTE, data.ohlc);
 
-            md.open.push(Number(data.ohlc.open));
-
-            md.high.push(Number(data.ohlc.high));
-
-            md.low.push(Number(data.ohlc.low));
-          } else {
-            const last = md.close.length - 1;
-
-            md.close[last] = Number(data.ohlc.close);
-
-            md.open[last] = Number(data.ohlc.open);
-
-            md.high[last] = Number(data.ohlc.high);
-
-            md.low[last] = Number(data.ohlc.low);
-          }
+          updateOneMinuteIndicators(md);
 
           const len = md.close.length;
+          const len1h = md.close1h.length;
 
-          const prevIndex = len - 2;
-
-          if (len < 200) {
+          /*
+           * PRIORITY 2:
+           * Require BOTH timeframes to have enough
+           * data before evaluating a trade.
+           */
+          if (len < 200 || len1h < 200) {
             return;
           }
 
-          const ema21 = calculateEMA(md.close, 21);
+          const prevIndex = len - 2;
+          const prevIndex1h = len1h - 2;
 
-          const ema50 = calculateEMA(md.close, 50);
-
-          md.trendUp = ema21[prevIndex] > ema50[prevIndex];
-
-          md.trendDown = ema21[prevIndex] < ema50[prevIndex];
+          if (prevIndex < 0 || prevIndex1h < 0) {
+            return;
+          }
 
           const symbolIsPending =
             md.tradeState === "PROPOSAL_PENDING" ||
@@ -938,19 +1525,42 @@ async function connectWebSocket() {
 
           const hasOpenPosition = multiplierPositions.length > 0;
 
+          /*
+           * Make sure balance is valid.
+           */
+          const validBalance =
+            Number.isFinite(Number(balance)) && Number(balance) > 0;
+
+          /*
+           * Make sure amount is valid.
+           */
+          const validAmount =
+            Number.isFinite(Number(amount)) && Number(amount) > 0;
+
+          /*
+          |--------------------------------------------------------------------------
+          | ENTRY
+          |--------------------------------------------------------------------------
+          */
+
           if (
             !hasOpenPosition &&
             !symbolIsPending &&
-            Math.trunc(balance) !== 0 &&
+            validBalance &&
+            validAmount &&
             tradeSymbols.includes(symbol) &&
             md.tradeState === "IDLE"
           ) {
+            /*
+             * BULLISH PULLBACK
+             */
             if (
-              md.trendUp15 &&
-              (crossedPrice(md.high, md.low, prevIndex, md.ema_15_21) ||
-                crossedPrice(md.high, md.low, prevIndex, md.ema_15_50)) &&
+              md.trendUp1h &&
+              (crossedPrice(md.high, md.low, prevIndex, md.ema1h21) ||
+                crossedPrice(md.high, md.low, prevIndex, md.ema1h50)) &&
               bullish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] > md.ema_15_50
+              bearish(md.open1h, md.close1h, prevIndex1h) &&
+              md.close[prevIndex] > md.ema1h50
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
@@ -970,14 +1580,19 @@ async function connectWebSocket() {
               } catch (error) {
                 clearSymbolPending(symbol);
 
-                sendMessage(String(error));
+                sendMessage(`❌ Proposal error on ${symbol}: ${error.message}`);
               }
             } else if (
-              md.trendDown15 &&
-              (crossedPrice(md.high, md.low, prevIndex, md.ema_15_21) ||
-                crossedPrice(md.high, md.low, prevIndex, md.ema_15_50)) &&
+
+            /*
+             * BEARISH PULLBACK
+             */
+              md.trendDown1h &&
+              (crossedPrice(md.high, md.low, prevIndex, md.ema1h21) ||
+                crossedPrice(md.high, md.low, prevIndex, md.ema1h50)) &&
               bearish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] < md.ema_15_50
+              bullish(md.open1h, md.close1h, prevIndex1h) &&
+              md.close[prevIndex] < md.ema1h50
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
@@ -997,10 +1612,16 @@ async function connectWebSocket() {
               } catch (error) {
                 clearSymbolPending(symbol);
 
-                sendMessage(String(error));
+                sendMessage(`❌ Proposal error on ${symbol}: ${error.message}`);
               }
             }
           }
+
+          /*
+          |--------------------------------------------------------------------------
+          | EXIT ON OPPOSITE 1-HOUR TREND
+          |--------------------------------------------------------------------------
+          */
 
           if (multiplierPositions.length > 0) {
             for (const position of multiplierPositions) {
@@ -1012,17 +1633,17 @@ async function connectWebSocket() {
                 continue;
               }
 
-              if (position.type === "MULTUP" && md.trendDown15) {
+              if (position.type === "MULTUP" && md.trendDown1h) {
                 try {
                   closePosition(symbol, contractId, "Opposite Signal");
                 } catch (error) {
-                  sendMessage(String(error));
+                  sendMessage(`❌ Close error: ${error.message}`);
                 }
-              } else if (position.type === "MULTDOWN" && md.trendUp15) {
+              } else if (position.type === "MULTDOWN" && md.trendUp1h) {
                 try {
                   closePosition(symbol, contractId, "Opposite Signal");
                 } catch (error) {
-                  sendMessage(String(error));
+                  sendMessage(`❌ Close error: ${error.message}`);
                 }
               }
             }
@@ -1032,12 +1653,20 @@ async function connectWebSocket() {
         return;
       }
 
+      /*
+      |--------------------------------------------------------------------------
+      | PROPOSAL
+      |--------------------------------------------------------------------------
+      */
+
       if (data.msg_type === "proposal") {
         const symbol = data?.echo_req?.underlying_symbol;
 
         const md = marketData[symbol];
 
-        if (!md) return;
+        if (!md) {
+          return;
+        }
 
         const proposalId = data?.proposal?.id;
 
@@ -1049,29 +1678,129 @@ async function connectWebSocket() {
           return;
         }
 
+        /*
+         * Make sure this proposal belongs to
+         * the proposal currently pending for
+         * this symbol.
+         */
+        if (md.tradeState !== "PROPOSAL_PENDING") {
+          console.log(`⚠️ Unexpected proposal for ${symbol}`);
+
+          return;
+        }
+
+        /*
+         * Save proposal ID.
+         */
         setSymbolPending(symbol, "BUY_PENDING", proposalId);
 
+        const contractType = data?.echo_req?.contract_type;
+
+        const askPrice = Number(data?.proposal?.ask_price);
+
+        if (!contractType || !Number.isFinite(askPrice) || askPrice <= 0) {
+          clearSymbolPending(symbol);
+
+          sendMessage(`❌ Invalid proposal received for ${symbol}`);
+
+          return;
+        }
+
         try {
-          buyContract(
-            data?.echo_req?.contract_type,
-            proposalId,
-            data?.proposal?.ask_price,
-          );
+          buyContract(contractType, proposalId, askPrice);
         } catch (error) {
           clearSymbolPending(symbol);
 
-          sendMessage(String(error));
+          sendMessage(`❌ Buy request failed for ${symbol}: ${error.message}`);
         }
 
         return;
       }
+
+      /*
+      |--------------------------------------------------------------------------
+      | BUY RESPONSE
+      |--------------------------------------------------------------------------
+      */
+
+      if (data.msg_type === "buy") {
+        const contractId = data?.buy?.contract_id;
+
+        const proposalId = data?.echo_req?.buy;
+
+        if (!contractId) {
+          console.log("⚠️ Buy response without contract ID");
+
+          /*
+           * Try to identify symbol using proposal ID.
+           */
+          for (const [symbol, pending] of pendingTrades) {
+            if (String(pending.proposalId) === String(proposalId)) {
+              clearSymbolPending(symbol);
+
+              sendMessage(
+                `❌ Buy response did not contain a contract ID for ${symbol}`,
+              );
+
+              break;
+            }
+          }
+
+          return;
+        }
+
+        /*
+         * Find symbol associated with this proposal.
+         */
+        let symbol = null;
+
+        for (const [pendingSymbol, pending] of pendingTrades) {
+          if (String(pending.proposalId) === String(proposalId)) {
+            symbol = pendingSymbol;
+            break;
+          }
+        }
+
+        console.log(
+          `🟢 Bought contract ${contractId}${symbol ? ` on ${symbol}` : ""}`,
+        );
+
+        /*
+         * The contract has been purchased,
+         * but portfolio synchronization is still
+         * required before considering it fully OPEN.
+         */
+        setContractState(contractId, "BUY_PENDING", {
+          symbol,
+          proposalId,
+          type: data?.buy?.contract_type,
+        });
+
+        /*
+         * Do NOT clear symbol pending here.
+         *
+         * Portfolio confirmation will transition
+         * the contract to OPEN and clear the
+         * symbol's pending state.
+         */
+
+        return;
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | PROPOSAL OPEN CONTRACT
+      |--------------------------------------------------------------------------
+      */
 
       if (data.msg_type === "proposal_open_contract") {
         const id = data?.echo_req?.contract_id;
 
         const contract = data?.proposal_open_contract;
 
-        if (!contract) return;
+        if (!id || !contract) {
+          return;
+        }
 
         const position = positions.find((p) => p.contract_id === id);
 
@@ -1079,9 +1808,13 @@ async function connectWebSocket() {
 
         const md = marketData[symbol];
 
-        const commission = contract?.commission;
+        if (!md) {
+          return;
+        }
 
-        const multiplier = contract?.multiplier;
+        const commission = Number(contract?.commission);
+
+        const multiplier = Number(contract?.multiplier);
 
         const type = contract?.contract_type;
 
@@ -1089,17 +1822,33 @@ async function connectWebSocket() {
 
         const currentSpot = Number(contract?.current_spot);
 
-        const orderAmount = contract?.buy_price;
+        const orderAmount = Number(contract?.buy_price);
 
-        const lossAmount = contract?.limit_order?.stop_loss?.order_amount;
+        const lossAmount = Number(
+          contract?.limit_order?.stop_loss?.order_amount,
+        );
 
-        const profitAmount = contract?.limit_order?.take_profit?.order_amount;
+        const profitAmount = Number(
+          contract?.limit_order?.take_profit?.order_amount,
+        );
 
         const stopOut = Number(contract?.limit_order?.stop_out?.value);
 
         const stop = Number(contract?.limit_order?.stop_loss?.value);
 
         const takeProfit = Number(contract?.limit_order?.take_profit?.value);
+
+        const profit = Number(contract?.profit);
+
+        const duration =
+          Number(contract?.current_spot_time) - Number(contract?.date_start);
+
+        /*
+         * Validate required prices.
+         */
+        if (!Number.isFinite(entrySpot) || !Number.isFinite(currentSpot)) {
+          return;
+        }
 
         const pip =
           type === "MULTUP" ? currentSpot - entrySpot : entrySpot - currentSpot;
@@ -1112,35 +1861,73 @@ async function connectWebSocket() {
         const gain =
           type === "MULTUP" ? takeProfit - entrySpot : entrySpot - takeProfit;
 
-        const profit = Number(contract?.profit);
-
-        const duration = contract?.current_spot_time - contract?.date_start;
-
-        const state = getContractState(id);
-
-        const atr = calculateATR(md.high, md.low, md.close, 14);
-
-        const len = atr.length;
-        const currIndex = len - 1;
+        /*
+         * Initialize contract state if needed.
+         */
+        let state = getContractState(id);
 
         if (!state) {
           setContractState(id, "OPEN", {
             symbol,
             type,
           });
+
+          state = getContractState(id);
         }
 
+        /*
+         * Update in-memory position.
+         */
         if (position) {
           position.subscribed = true;
           position.profit = profit;
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | ATR SAFETY
+        |--------------------------------------------------------------------------
+        */
+
+        if (md.high.length < 15 || md.low.length < 15 || md.close.length < 15) {
+          return;
+        }
+
+        const atr = calculateATR(md.high, md.low, md.close, 14);
+
+        if (!atr?.length) {
+          return;
+        }
+
+        const currentATR = Number(atr[atr.length - 1]);
+
+        /*
+         * PRIORITY 6:
+         * Never trade/close based on invalid ATR.
+         */
+        if (!Number.isFinite(currentATR) || currentATR <= 0) {
+          console.log(`⚠️ Invalid ATR for ${symbol}`);
+
+          return;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | ACTIVE MULTIPLIER POSITION MANAGEMENT
+        |--------------------------------------------------------------------------
+        */
 
         if (connection && type !== "ONETOUCH") {
           if (!position) {
             return;
           }
 
-          if (lossAmount == null) {
+          /*
+           * If Deriv has not supplied the stop-loss
+           * order amount yet, don't run the staged
+           * stop-loss logic.
+           */
+          if (!Number.isFinite(lossAmount)) {
             return;
           }
 
@@ -1150,36 +1937,108 @@ async function connectWebSocket() {
             return;
           }
 
-          if (pip >= risk && position.stoploss === 0) {
-            position.stoploss = Math.abs(commission);
+          /*
+          |--------------------------------------------------------------------------
+          | STAGED STOP LOSS
+          |--------------------------------------------------------------------------
+          */
 
-            await update(position.stoploss, id, symbol);
+          /*
+           * Stage 1:
+           * Move stop to commission.
+           */
+          if (
+            pip >= risk &&
+            position.stoploss === 0 &&
+            Number.isFinite(commission)
+          ) {
+            const newStop = Math.abs(commission);
+
+            position.stoploss = newStop;
+
+            await update(newStop, id, symbol);
           }
 
-          if (pip >= risk * 3 && position.stoploss === Math.abs(commission)) {
-            position.stoploss = Math.abs(lossAmount);
+          /*
+           * Stage 2:
+           * Move stop to original loss amount.
+           */
+          if (
+            pip >= risk * 3 &&
+            Number.isFinite(position.stoploss) &&
+            Number.isFinite(commission) &&
+            position.stoploss === Math.abs(commission)
+          ) {
+            const newStop = Math.abs(lossAmount);
 
-            await update(position.stoploss, id, symbol);
+            position.stoploss = newStop;
+
+            await update(newStop, id, symbol);
           }
 
-          if (pip >= risk * 5 && position.stoploss === Math.abs(lossAmount)) {
-            position.stoploss = Math.abs(lossAmount * 4);
+          /*
+           * Stage 3:
+           * Lock additional profit.
+           */
+          if (
+            pip >= risk * 5 &&
+            Number.isFinite(position.stoploss) &&
+            position.stoploss === Math.abs(lossAmount)
+          ) {
+            const newStop = Math.abs(lossAmount * 4);
 
-            await update(position.stoploss, id, symbol);
+            position.stoploss = newStop;
+
+            await update(newStop, id, symbol);
           }
 
-          if (pip <= -(atr[currIndex] * 2)) {
+          /*
+          |--------------------------------------------------------------------------
+          | ATR STOP
+          |--------------------------------------------------------------------------
+          */
+
+          if (pip <= -(currentATR * 2)) {
             closePosition(symbol, id, "Stop Loss Hit");
+
+            return;
           }
 
-          if (pip >= atr[currIndex] * 6) {
+          /*
+          |--------------------------------------------------------------------------
+          | ATR TAKE PROFIT
+          |--------------------------------------------------------------------------
+          */
+
+          if (pip >= currentATR * 6) {
             closePosition(symbol, id, "Take Profit Reached");
+
+            return;
           }
 
-          if (position.stoploss !== 0 && profit <= position.stoploss) {
+          /*
+          |--------------------------------------------------------------------------
+          | PROFIT STOP
+          |--------------------------------------------------------------------------
+          */
+
+          if (
+            Number.isFinite(position.stoploss) &&
+            position.stoploss !== 0 &&
+            Number.isFinite(profit) &&
+            profit <= position.stoploss
+          ) {
             closePosition(symbol, id, "Stop Loss Hit");
+
+            return;
           }
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | RUNNING TRADE DATA
+        |--------------------------------------------------------------------------
+        */
 
         const runningTrade = {
           contractId: id,
@@ -1199,7 +2058,10 @@ async function connectWebSocket() {
           state: getContractState(id)?.state,
         };
 
-        if (duration <= 2) {
+        /*
+         * Only report newly opened trades.
+         */
+        if (Number.isFinite(duration) && duration <= 2) {
           sendMessage(JSON.stringify(runningTrade, null, 2));
         }
 
@@ -1208,17 +2070,11 @@ async function connectWebSocket() {
         return;
       }
 
-      if (data.msg_type === "buy") {
-        const contractId = data?.buy?.contract_id;
-
-        console.log(`🟢 Bought contract ${contractId}`);
-
-        if (contractId) {
-          setContractState(contractId, "BUY_PENDING");
-        }
-
-        return;
-      }
+      /*
+      |--------------------------------------------------------------------------
+      | SELL RESPONSE
+      |--------------------------------------------------------------------------
+      */
 
       if (data.msg_type === "sell") {
         const database = client.db("trading");
@@ -1249,6 +2105,10 @@ async function connectWebSocket() {
           `💸 Position closed at ${data.sell?.sold_for} USD on ${symbol}`,
         );
 
+        /*
+         * Only now is the contract completely
+         * removed from local state.
+         */
         deleteContractState(contractId);
 
         subscribedContracts.delete(contractId);
@@ -1259,10 +2119,20 @@ async function connectWebSocket() {
           contract_id: contractId,
         });
 
+        /*
+         * If there is still a pending entry
+         * on this symbol, don't touch it.
+         */
         console.log(`🗑️ Deleted closed contract ${contractId}`);
 
         return;
       }
+
+      /*
+      |--------------------------------------------------------------------------
+      | CONTRACT UPDATE
+      |--------------------------------------------------------------------------
+      */
 
       if (data.msg_type === "contract_update") {
         const contractId = data.echo_req?.contract_id;
@@ -1276,12 +2146,24 @@ async function connectWebSocket() {
         return;
       }
 
-      if (data.error) {
-        const error = data.error.message;
+      /*
+      |--------------------------------------------------------------------------
+      | ERRORS
+      |--------------------------------------------------------------------------
+      */
 
-        const echoReq = data.echo_req;
+      if (data.error) {
+        const error = data.error.message || "Unknown Deriv error";
+
+        const echoReq = data.echo_req || {};
 
         console.error("❗ Error:", error);
+
+        /*
+        |--------------------------------------------------------------------------
+        | SELL ERROR
+        |--------------------------------------------------------------------------
+        */
 
         if (echoReq?.sell) {
           const contractId = echoReq.sell;
@@ -1304,74 +2186,103 @@ async function connectWebSocket() {
           }
         }
 
-        if (echoReq?.underlying_symbol) {
-          const symbol = echoReq.underlying_symbol;
+        /*
+        |--------------------------------------------------------------------------
+        | PROPOSAL / BUY ERROR
+        |--------------------------------------------------------------------------
+        */
 
-          const md = marketData[symbol];
+        const errorSymbol = echoReq?.underlying_symbol;
+
+        if (errorSymbol) {
+          const md = marketData[errorSymbol];
 
           if (
             md &&
             (md.tradeState === "PROPOSAL_PENDING" ||
               md.tradeState === "BUY_PENDING")
           ) {
-            clearSymbolPending(symbol);
+            clearSymbolPending(errorSymbol);
 
             console.log(
-              `⚠️ Entry failed for ${symbol}; state restored to IDLE`,
+              `⚠️ Entry failed for ${errorSymbol}; state restored to IDLE`,
             );
           }
         }
 
-        sendMessage(`❗ Error: ${error}`);
+        /*
+         * If the error references a proposal ID,
+         * locate the corresponding symbol.
+         */
+        const proposalId = echoReq?.proposal_id || echoReq?.buy;
 
-        if (error === "You have reached the rate limit for ticks_history.") {
-          await run(60000);
+        if (proposalId) {
+          for (const [pendingSymbol, pending] of pendingTrades) {
+            if (String(pending.proposalId) === String(proposalId)) {
+              clearSymbolPending(pendingSymbol);
 
-          if (!ws || ws.readyState !== WebSocket.OPEN || !authorized) {
-            return;
-          }
+              console.log(`⚠️ Pending trade cleared for ${pendingSymbol}`);
 
-          console.log("🔄 Resubscribing candles after rate limit...");
-
-          for (const symbol of symbols) {
-            if (!ws || ws.readyState !== WebSocket.OPEN || !authorized) {
               break;
             }
-
-            send({
-              contracts_for: symbol,
-            });
-
-            for (const timeframe of timeframes) {
-              send({
-                ticks_history: symbol,
-                style: "candles",
-                count: 500,
-                granularity: timeframe,
-                end: "latest",
-                subscribe: 1,
-              });
-
-              await run(500);
-            }
-
-            await run(500);
           }
-
-          sendMessage("Candles Resubscribed");
         }
 
-        if (error === "Please log in.") {
+        /*
+        |--------------------------------------------------------------------------
+        | AUTHORIZATION ERROR
+        |--------------------------------------------------------------------------
+        */
+
+        if (error.toLowerCase().includes("please log in")) {
           console.log("⚠️ Deriv requested login again");
 
           authorized = false;
 
-          if (ws && ws.readyState === WebSocket.OPEN) {
+          if (isSocketOpen()) {
             send({
               authorize: API_TOKEN,
             });
           }
+
+          return;
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | RATE LIMIT
+        |--------------------------------------------------------------------------
+        */
+
+        if (error === "You have reached the rate limit for ticks_history.") {
+          /*
+           * IMPORTANT:
+           *
+           * We no longer resubscribe all candles.
+           *
+           * Existing candle subscriptions should
+           * continue. If the WebSocket itself is alive,
+           * there is no reason to resend 32 history
+           * requests.
+           */
+          console.log("⚠️ ticks_history rate limit reached.");
+
+          sendMessage(
+            "⚠️ Deriv ticks_history rate limit reached. Existing candle subscriptions will be retained.",
+          );
+
+          return;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | GENERIC ERROR
+        |--------------------------------------------------------------------------
+        */
+
+        sendMessage(`❗ Error: ${error}`);
+
+        return;
       }
     } catch (error) {
       console.error("❌ WebSocket message handler error:", error);
@@ -1381,7 +2292,7 @@ async function connectWebSocket() {
 
 /*
 |--------------------------------------------------------------------------
-| START WEBSOCKET
+| START
 |--------------------------------------------------------------------------
 */
 
