@@ -306,5 +306,9 @@ export function trendContinuation(trend, open, close) {
       return true;
     }
   }
-  return null
+  return null;
+}
+
+export function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
