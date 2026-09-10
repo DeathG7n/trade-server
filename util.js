@@ -173,11 +173,11 @@ export function bullish(open, close, candle) {
 }
 
 export function crossedPrice(high, low, candle, price) {
-  return high?.[candle] > price && price > low?.[candle];
+  return high?.[candle] >= price && price >= low?.[candle];
 }
 
 export function crossedEma(high, low, candle, ema) {
-  return high?.[candle] > ema?.[candle] && ema?.[candle] > low?.[candle];
+  return high?.[candle] >= ema?.[candle] && ema?.[candle] >= low?.[candle];
 }
 
 export function candleCrossesEitherEMA(index, ema1, ema2, high, low) {
@@ -189,6 +189,10 @@ export function candleCrossesEitherEMA(index, ema1, ema2, high, low) {
 // Body size
 export function candleBody(open, close, index) {
   return Math.abs(close[index] - open[index]);
+}
+
+export function candleDistance(close, ema, index) {
+  return Math.abs(close[index] - ema[index]);
 }
 
 export function calculateATR(high, low, close, period = 14) {

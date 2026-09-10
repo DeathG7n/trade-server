@@ -6,7 +6,13 @@ import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
-import { bearish, bullish, calculateATR } from "./util.js";
+import {
+  bearish,
+  bullish,
+  calculateATR,
+  candleDistance,
+  crossedEma,
+} from "./util.js";
 
 dotenv.config();
 
@@ -912,18 +918,22 @@ async function connectWebSocket() {
           const len = md.close.length;
 
           const prevIndex = len - 2;
+          const currIndex = len - 2;
 
           if (len < 200) {
             return;
           }
 
+          const ema14 = calculateEMA(md.close, 14);
+
           const ema21 = calculateEMA(md.close, 21);
+          const atr = calculateATR(md.high, md.low, md.close, 14);
 
-          const ema50 = calculateEMA(md.close, 50);
+          const currentAtr = atr[currIndex];
 
-          md.trendUp = ema21[prevIndex] > ema50[prevIndex];
+          md.trendUp = ema14[prevIndex] > ema21[prevIndex];
 
-          md.trendDown = ema21[prevIndex] < ema50[prevIndex];
+          md.trendDown = ema14[prevIndex] < ema21[prevIndex];
 
           const symbolIsPending =
             md.tradeState === "PROPOSAL_PENDING" ||
@@ -940,9 +950,14 @@ async function connectWebSocket() {
           ) {
             if (
               md.trendUp1h &&
-              crossedPrice(md.high, md.low, prevIndex, md.ema_1h_50) &&
-              bullish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] > md.ema_1h_50
+              md.trendUp &&
+              ((crossedEma(md.high, md.low, prevIndex, ema14) &&
+                md.close[prevIndex] >= ema14[prevIndex] &&
+                candleDistance(md.close, ema14, prevIndex) <= currentAtr) ||
+                (crossedEma(md.high, md.low, prevIndex, ema21) &&
+                  md.close[prevIndex] >= ema21[prevIndex] &&
+                  candleDistance(md.close, ema21, prevIndex) <= currentAtr)) &&
+              bullish(md.open, md.close, prevIndex)
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
@@ -966,9 +981,14 @@ async function connectWebSocket() {
               }
             } else if (
               md.trendDown1h &&
-              crossedPrice(md.high, md.low, prevIndex, md.ema_1h_50) &&
-              bearish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] < md.ema_1h_50
+              md.trendDown &&
+              ((crossedEma(md.high, md.low, prevIndex, ema14) &&
+                md.close[prevIndex] <= ema14[prevIndex] &&
+                candleDistance(md.close, ema14, prevIndex) <= currentAtr) ||
+                (crossedEma(md.high, md.low, prevIndex, ema21) &&
+                  md.close[prevIndex] <= ema21[prevIndex] &&
+                  candleDistance(md.close, ema21, prevIndex) <= currentAtr)) &&
+              bearish(md.open, md.close, prevIndex)
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
@@ -1169,13 +1189,13 @@ async function connectWebSocket() {
             await update(position.stoploss, id, symbol);
           }
 
-          if (pip <= -(position.atr * 2)) {
-            closePosition(symbol, id, "Stop Loss Hit");
-          }
+          // if (pip <= -(position.atr * 2)) {
+          //   closePosition(symbol, id, "Stop Loss Hit");
+          // }
 
-          if (pip >= position.atr * 6) {
-            closePosition(symbol, id, "Take Profit Reached");
-          }
+          // if (pip >= position.atr * 6) {
+          //   closePosition(symbol, id, "Take Profit Reached");
+          // }
 
           if (position.stoploss !== 0 && profit <= position.stoploss) {
             closePosition(symbol, id, "Stop Loss Hit");
