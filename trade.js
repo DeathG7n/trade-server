@@ -6,7 +6,7 @@ import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
-import { bearish, bullish, calculateATR, crossedEma } from "./util.js";
+import { bearish, bullish, calculateATR, crossedEma, candleDistance } from "./util.js";
 
 dotenv.config();
 
