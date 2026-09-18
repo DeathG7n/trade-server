@@ -6,7 +6,13 @@ import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
-import { bearish, bullish, calculateATR, crossedEma, candleDistance } from "./util.js";
+import {
+  bearish,
+  bullish,
+  calculateATR,
+  crossedEma,
+  candleDistance,
+} from "./util.js";
 
 dotenv.config();
 
@@ -36,7 +42,7 @@ let portfolioSynced = false;
 let lastBalance = null;
 
 const htf = 3600;
-const ltf = 300;
+const ltf = 900;
 const timeframes = [htf, ltf];
 const subscribedContracts = new Set();
 const contractStates = new Map();
@@ -912,7 +918,7 @@ async function connectWebSocket() {
           const len = md.close.length;
 
           const prevIndex = len - 2;
-          const currIndex = len - 2;
+          const thirdIndex = len - 3;
 
           if (len < 200) {
             return;
@@ -943,15 +949,10 @@ async function connectWebSocket() {
             md.tradeState === "IDLE"
           ) {
             if (
-              md.trendUp1h &&
               md.trendUp &&
-              ((crossedEma(md.high, md.low, prevIndex, ema14) &&
-                md.close[prevIndex] >= ema14[prevIndex] &&
-                candleDistance(md.close, ema14, prevIndex) <= currentAtr) ||
-                (crossedEma(md.high, md.low, prevIndex, ema21) &&
-                  md.close[prevIndex] >= ema21[prevIndex] &&
-                  candleDistance(md.close, ema21, prevIndex) <= currentAtr)) &&
-              bullish(md.open, md.close, prevIndex)
+              md.low[prevIndex] <= ema21[prevIndex] &&
+              md.low[prevIndex] <= md.low[thirdIndex] &&
+              md.close[prevIndex] >= md.low[thirdIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
@@ -974,15 +975,10 @@ async function connectWebSocket() {
                 sendMessage(String(error));
               }
             } else if (
-              md.trendDown1h &&
               md.trendDown &&
-              ((crossedEma(md.high, md.low, prevIndex, ema14) &&
-                md.close[prevIndex] <= ema14[prevIndex] &&
-                candleDistance(md.close, ema14, prevIndex) <= currentAtr) ||
-                (crossedEma(md.high, md.low, prevIndex, ema21) &&
-                  md.close[prevIndex] <= ema21[prevIndex] &&
-                  candleDistance(md.close, ema21, prevIndex) <= currentAtr)) &&
-              bearish(md.open, md.close, prevIndex)
+              md.high[prevIndex] >= ema21[prevIndex] &&
+              md.high[prevIndex] >= md.high[thirdIndex] &&
+              md.close[prevIndex] <= md.high[thirdIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
@@ -1017,13 +1013,13 @@ async function connectWebSocket() {
                 continue;
               }
 
-              if (position.type === "MULTUP" && md.trendDown1h) {
+              if (position.type === "MULTUP" && md.trendDown) {
                 try {
                   closePosition(symbol, contractId, "Opposite Signal");
                 } catch (error) {
                   sendMessage(String(error));
                 }
-              } else if (position.type === "MULTDOWN" && md.trendUp1h) {
+              } else if (position.type === "MULTDOWN" && md.trendUp) {
                 try {
                   closePosition(symbol, contractId, "Opposite Signal");
                 } catch (error) {
