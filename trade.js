@@ -927,9 +927,6 @@ async function connectWebSocket() {
           const ema14 = calculateEMA(md.close, 14);
 
           const ema21 = calculateEMA(md.close, 21);
-          const atr = calculateATR(md.high, md.low, md.close, 14);
-
-          const currentAtr = atr[currIndex];
 
           md.trendUp = ema14[prevIndex] > ema21[prevIndex];
 
