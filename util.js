@@ -279,7 +279,7 @@ export function calculateHeikinAshi(open, high, low, close) {
   };
 }
 
-export function trendContinuation(trend, open, close) {
+export function trendContinuation(trend, open, close, high, low) {
   const len = open.length;
   const prevIndex = len - 2;
   const thirdIndex = len - 3;
@@ -292,12 +292,24 @@ export function trendContinuation(trend, open, close) {
     ) {
       return true;
     }
+    if (
+      low[prevIndex] <= low[thirdIndex] &&
+      close[prevIndex] >= low[thirdIndex]
+    ) {
+      return true;
+    }
   }
   if (trend === "down") {
     if (
       bullish(open, close, fourthIndex) &&
       bullish(open, close, thirdIndex) &&
       bearish(open, close, prevIndex)
+    ) {
+      return true;
+    }
+    if (
+      high[prevIndex] >= high[thirdIndex] &&
+      close[prevIndex] <= high[thirdIndex]
     ) {
       return true;
     }

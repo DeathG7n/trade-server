@@ -863,15 +863,15 @@ async function connectWebSocket() {
             return;
           }
 
+          const ema14 = calculateEMA(md.close1h, 14);
+
           const ema21 = calculateEMA(md.close1h, 21);
 
-          const ema50 = calculateEMA(md.close1h, 50);
+          md.ema_1h_21 = ema21[currIndex];
 
-          md.ema_1h_50 = ema50[currIndex];
+          md.trendUp1h = ema14[prevIndex] > ema21[prevIndex];
 
-          md.trendUp1h = ema21[prevIndex] > ema50[prevIndex];
-
-          md.trendDown1h = ema21[prevIndex] < ema50[prevIndex];
+          md.trendDown1h = ema14[prevIndex] < ema21[prevIndex];
         }
 
         if (data.echo_req.granularity === ltf) {
@@ -949,7 +949,13 @@ async function connectWebSocket() {
           ) {
             if (
               md.trendUp1h &&
-              trendContinuation("up", md.open1h, md.close1h) &&
+              trendContinuation(
+                "up",
+                md.open1h,
+                md.close1h,
+                md.high1h,
+                md.low1h,
+              ) &&
               withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
               (candleRangeTheoryEntry("up", md.high, md.low, md.close) ||
                 engulfingCandleEntry("up", md.open, md.close))
@@ -976,7 +982,13 @@ async function connectWebSocket() {
               }
             } else if (
               md.trendDown1h &&
-              trendContinuation("down", md.open1h, md.close1h) &&
+              trendContinuation(
+                "down",
+                md.open1h,
+                md.close1h,
+                md.high1h,
+                md.low1h,
+              ) &&
               withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
               (candleRangeTheoryEntry("down", md.high, md.low, md.close) ||
                 engulfingCandleEntry("down", md.open, md.close))
