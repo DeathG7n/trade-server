@@ -7,11 +7,11 @@ import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
 import {
-  bearish,
-  bullish,
   calculateATR,
-  crossedEma,
-  candleDistance,
+  withinHtfCandleRange,
+  trendContinuation,
+  candleRangeTheoryEntry,
+  engulfingCandleEntry,
 } from "./util.js";
 
 dotenv.config();
@@ -42,7 +42,7 @@ let portfolioSynced = false;
 let lastBalance = null;
 
 const htf = 3600;
-const ltf = 900;
+const ltf = 300;
 const timeframes = [htf, ltf];
 const subscribedContracts = new Set();
 const contractStates = new Map();
@@ -261,7 +261,7 @@ function clearSymbolPending(symbol) {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 2;
-  const takeProfit = stopLoss * 3;
+  const takeProfit = stopLoss * 2;
 
   const request = {
     proposal: 1,
@@ -918,7 +918,6 @@ async function connectWebSocket() {
           const len = md.close.length;
 
           const prevIndex = len - 2;
-          const thirdIndex = len - 3;
 
           if (len < 200) {
             return;
@@ -927,9 +926,9 @@ async function connectWebSocket() {
           const ema14 = calculateEMA(md.close, 14);
 
           const ema21 = calculateEMA(md.close, 21);
-          const atr = calculateATR(md.high, md.low, md.close, 14);
+          // const atr = calculateATR(md.high, md.low, md.close, 14);
 
-          const currentAtr = atr[currIndex];
+          // const currentAtr = atr[currIndex];
 
           md.trendUp = ema14[prevIndex] > ema21[prevIndex];
 
@@ -949,10 +948,11 @@ async function connectWebSocket() {
             md.tradeState === "IDLE"
           ) {
             if (
-              md.trendUp &&
-              md.low[prevIndex] <= ema21[prevIndex] &&
-              md.low[prevIndex] <= md.low[thirdIndex] &&
-              md.close[prevIndex] >= md.low[thirdIndex]
+              md.trendUp1h &&
+              trendContinuation("up", md.open1h, md.close1h) &&
+              withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
+              (candleRangeTheoryEntry("up", md.high, md.low, md.close) ||
+                engulfingCandleEntry("up", md.open, md.close))
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
@@ -975,10 +975,11 @@ async function connectWebSocket() {
                 sendMessage(String(error));
               }
             } else if (
-              md.trendDown &&
-              md.high[prevIndex] >= ema21[prevIndex] &&
-              md.high[prevIndex] >= md.high[thirdIndex] &&
-              md.close[prevIndex] <= md.high[thirdIndex]
+              md.trendDown1h &&
+              trendContinuation("down", md.open1h, md.close1h) &&
+              withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
+              (candleRangeTheoryEntry("down", md.high, md.low, md.close) ||
+                engulfingCandleEntry("down", md.open, md.close))
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
 
@@ -1013,13 +1014,13 @@ async function connectWebSocket() {
                 continue;
               }
 
-              if (position.type === "MULTUP" && md.trendDown) {
+              if (position.type === "MULTUP" && md.trendDown1h) {
                 try {
                   closePosition(symbol, contractId, "Opposite Signal");
                 } catch (error) {
                   sendMessage(String(error));
                 }
-              } else if (position.type === "MULTDOWN" && md.trendUp) {
+              } else if (position.type === "MULTDOWN" && md.trendUp1h) {
                 try {
                   closePosition(symbol, contractId, "Opposite Signal");
                 } catch (error) {

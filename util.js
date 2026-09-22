@@ -286,31 +286,82 @@ export function trendContinuation(trend, open, close) {
   const fourthIndex = len - 4;
   if (trend === "up") {
     if (
-      (bearish(open, close, thirdIndex) && bullish(open, close, prevIndex)) ||
-      (bearish(open, close, fourthIndex) &&
-        bullish(open, close, thirdIndex) &&
-        bullish(open, close, prevIndex)) ||
-      (bearish(open, close, fourthIndex) &&
-        bullish(open, close, thirdIndex) &&
-        bearish(open, close, prevIndex))
+      bearish(open, close, fourthIndex) &&
+      bearish(open, close, thirdIndex) &&
+      bullish(open, close, prevIndex)
     ) {
       return true;
     }
   }
   if (trend === "down") {
     if (
-      (bullish(open, close, thirdIndex) && bearish(open, close, prevIndex)) ||
-      (bullish(open, close, fourthIndex) &&
-        bearish(open, close, thirdIndex) &&
-        bearish(open, close, prevIndex)) ||
-      (bullish(open, close, fourthIndex) &&
-        bearish(open, close, thirdIndex) &&
-        bullish(open, close, prevIndex))
+      bullish(open, close, fourthIndex) &&
+      bullish(open, close, thirdIndex) &&
+      bearish(open, close, prevIndex)
     ) {
       return true;
     }
   }
   return null;
+}
+
+export function candleRangeTheoryEntry(trend, high, low, close) {
+  const len = close.length;
+  const prevIndex = len - 2;
+  const thirdIndex = len - 3;
+  if (trend === "up") {
+    if (
+      low[prevIndex] <= low[thirdIndex] &&
+      close[prevIndex] >= low[thirdIndex]
+    ) {
+      return true;
+    }
+  }
+  if (trend === "down") {
+    if (
+      high[prevIndex] >= high[thirdIndex] &&
+      close[prevIndex] <= high[thirdIndex]
+    ) {
+      return true;
+    }
+  }
+  return null;
+}
+
+export function engulfingCandleEntry(trend, open, close) {
+  const len = close.length;
+  const prevIndex = len - 2;
+  const thirdIndex = len - 3;
+  if (trend === "up") {
+    if (
+      bearish(open, close, thirdIndex) &&
+      bullish(open, close, prevIndex) &&
+      candleBody(open, close, prevIndex) > candleBody(open, close, thirdIndex)
+    ) {
+      return true;
+    }
+  }
+  if (trend === "down") {
+    if (
+      bullish(open, close, thirdIndex) &&
+      bearish(open, close, prevIndex) &&
+      candleBody(open, close, prevIndex) > candleBody(open, close, thirdIndex)
+    ) {
+      return true;
+    }
+  }
+  return null;
+}
+
+export function withinHtfCandleRange(high, low, close) {
+  const htfLength = high.length;
+  const ltfLength = close.length;
+  const prevHtfCandle = htfLength - 2;
+  const prevLtfCandle = ltfLength - 2;
+  return (
+    high[prevHtfCandle] >= close[prevLtfCandle] &&
+    close[prevLtfCandle] >= low[prevHtfCandle]
+  );
 }
 
 export function sleep(ms) {
