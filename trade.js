@@ -41,8 +41,8 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const htf = 3600;
-const ltf = 300;
+const htf = 900;
+const ltf = 60;
 const timeframes = [htf, ltf];
 const subscribedContracts = new Set();
 const contractStates = new Map();
@@ -260,8 +260,8 @@ function clearSymbolPending(symbol) {
 }
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 2;
-  const takeProfit = stopLoss * 2;
+  const stopLoss = stake / 10;
+  const takeProfit = stopLoss * 3;
 
   const request = {
     proposal: 1,
