@@ -281,12 +281,15 @@ export function calculateHeikinAshi(open, high, low, close) {
 
 export function trendContinuation(trend, open, close, high, low, ema) {
   const len = open.length;
+  const currIndex = len - 2;
   const prevIndex = len - 2;
   const thirdIndex = len - 3;
   const fourthIndex = len - 4;
   if (
     trend === "up" &&
-    (low[prevIndex] <= ema[prevIndex] || low[thirdIndex] <= ema[thirdIndex])
+    (low[currIndex] <= ema[currIndex] ||
+      low[prevIndex] <= ema[prevIndex] ||
+      low[thirdIndex] <= ema[thirdIndex])
   ) {
     if (
       bearish(open, close, fourthIndex) &&
@@ -304,7 +307,9 @@ export function trendContinuation(trend, open, close, high, low, ema) {
   }
   if (
     trend === "down" &&
-    (high[prevIndex] >= ema[prevIndex] || high[thirdIndex] >= ema[thirdIndex])
+    (high[currIndex] >= ema[currIndex] ||
+      high[prevIndex] >= ema[prevIndex] ||
+      high[thirdIndex] >= ema[thirdIndex])
   ) {
     if (
       bullish(open, close, fourthIndex) &&
