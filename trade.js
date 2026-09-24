@@ -135,7 +135,7 @@ symbols.forEach((symbol) => {
     openTime1h: 0,
     trendUp1h: false,
     trendDown1h: false,
-    ema_1h_50: 0,
+    ema_1h_14: [],
     multiplier_range: [],
     canAlert: true,
     tradeState: "IDLE",
@@ -260,7 +260,7 @@ function clearSymbolPending(symbol) {
 }
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 10;
+  const stopLoss = stake / 5;
   const takeProfit = stopLoss * 3;
 
   const request = {
@@ -857,7 +857,6 @@ async function connectWebSocket() {
           const len = md.close1h.length;
 
           const prevIndex = len - 2;
-          const currIndex = len - 1;
 
           if (len < 200) {
             return;
@@ -867,7 +866,7 @@ async function connectWebSocket() {
 
           const ema21 = calculateEMA(md.close1h, 21);
 
-          md.ema_1h_21 = ema21[currIndex];
+          md.ema_1h_14 = ema14;
 
           md.trendUp1h = ema14[prevIndex] > ema21[prevIndex];
 
@@ -955,6 +954,7 @@ async function connectWebSocket() {
                 md.close1h,
                 md.high1h,
                 md.low1h,
+                md.ema_1h_14,
               ) &&
               withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
               (candleRangeTheoryEntry("up", md.high, md.low, md.close) ||
@@ -988,6 +988,7 @@ async function connectWebSocket() {
                 md.close1h,
                 md.high1h,
                 md.low1h,
+                md.ema_1h_14,
               ) &&
               withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
               (candleRangeTheoryEntry("down", md.high, md.low, md.close) ||
