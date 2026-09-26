@@ -299,6 +299,7 @@ export function trendContinuation(trend, open, close, high, low, ema) {
       return true;
     }
     if (
+      (bearish(open, close, thirdIndex) || bearish(open, close, prevIndex)) &&
       low[prevIndex] <= low[thirdIndex] &&
       close[prevIndex] >= low[thirdIndex]
     ) {
@@ -319,6 +320,7 @@ export function trendContinuation(trend, open, close, high, low, ema) {
       return true;
     }
     if (
+      (bullish(open, close, thirdIndex) || bullish(open, close, prevIndex)) &&
       high[prevIndex] >= high[thirdIndex] &&
       close[prevIndex] <= high[thirdIndex]
     ) {
@@ -355,22 +357,37 @@ export function engulfingCandleEntry(trend, open, close) {
   const len = close.length;
   const prevIndex = len - 2;
   const thirdIndex = len - 3;
-  if (trend === "up") {
-    if (
-      bearish(open, close, thirdIndex) &&
-      bullish(open, close, prevIndex) &&
-      candleBody(open, close, prevIndex) > candleBody(open, close, thirdIndex)
-    ) {
-      return true;
+  if (
+    candleBody(open, close, prevIndex) > candleBody(open, close, thirdIndex)
+  ) {
+    if (trend === "up") {
+      if (bearish(open, close, thirdIndex) && bullish(open, close, prevIndex)) {
+        return true;
+      }
+    }
+    if (trend === "down") {
+      if (bullish(open, close, thirdIndex) && bearish(open, close, prevIndex)) {
+        return true;
+      }
     }
   }
-  if (trend === "down") {
-    if (
-      bullish(open, close, thirdIndex) &&
-      bearish(open, close, prevIndex) &&
-      candleBody(open, close, prevIndex) > candleBody(open, close, thirdIndex)
-    ) {
-      return true;
+  return null;
+}
+
+export function haramiEntry(trend, open, close, high, low) {
+  const len = close.length;
+  const prevIndex = len - 2;
+  const thirdIndex = len - 3;
+  if (high[thirdIndex] > high[prevIndex] && low[prevIndex] > low[thirdIndex]) {
+    if (trend === "up") {
+      if (bearish(open, close, thirdIndex) && bullish(open, close, prevIndex)) {
+        return true;
+      }
+    }
+    if (trend === "down") {
+      if (bullish(open, close, thirdIndex) && bearish(open, close, prevIndex)) {
+        return true;
+      }
     }
   }
   return null;

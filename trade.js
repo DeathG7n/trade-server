@@ -12,6 +12,7 @@ import {
   trendContinuation,
   candleRangeTheoryEntry,
   engulfingCandleEntry,
+  haramiEntry,
 } from "./util.js";
 
 dotenv.config();
@@ -922,22 +923,60 @@ async function connectWebSocket() {
             return;
           }
 
-          const ema14 = calculateEMA(md.close, 14);
+          const ema5 = calculateEMA(md.close, 5);
 
-          const ema21 = calculateEMA(md.close, 21);
+          // const ema21 = calculateEMA(md.close, 21);
           // const atr = calculateATR(md.high, md.low, md.close, 14);
 
           // const currentAtr = atr[currIndex];
 
-          md.trendUp = ema14[prevIndex] > ema21[prevIndex];
+          // md.trendUp = ema14[prevIndex] > ema21[prevIndex];
 
-          md.trendDown = ema14[prevIndex] < ema21[prevIndex];
+          // md.trendDown = ema14[prevIndex] < ema21[prevIndex];
 
           const symbolIsPending =
             md.tradeState === "PROPOSAL_PENDING" ||
             md.tradeState === "BUY_PENDING";
 
           const hasOpenPosition = multiplierPositions.length > 0;
+
+          if (md.canAlert && alertSymbols.includes(symbol)) {
+            if (
+              md.trendUp1h &&
+              trendContinuation(
+                "up",
+                md.open1h,
+                md.close1h,
+                md.high1h,
+                md.low1h,
+                md.ema_1h_14,
+              ) &&
+              withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
+              (candleRangeTheoryEntry("up", md.high, md.low, md.close) ||
+                engulfingCandleEntry("up", md.open, md.close) ||
+                haramiEntry("up", md.open, md.close, md.high, md.low))
+            ) {
+              sendMessage(`Bullish Signal on ${symbol}`);
+              md.canAlert = false;
+            } else if (
+              md.trendDown1h &&
+              trendContinuation(
+                "down",
+                md.open1h,
+                md.close1h,
+                md.high1h,
+                md.low1h,
+                md.ema_1h_14,
+              ) &&
+              withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
+              (candleRangeTheoryEntry("down", md.high, md.low, md.close) ||
+                engulfingCandleEntry("down", md.open, md.close) ||
+                haramiEntry("down", md.open, md.close, md.high, md.low))
+            ) {
+              sendMessage(`Bearish Signal on ${symbol}`);
+              md.canAlert = false;
+            }
+          }
 
           if (
             !hasOpenPosition &&
@@ -957,17 +996,12 @@ async function connectWebSocket() {
                 md.ema_1h_14,
               ) &&
               withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
+              md.close[prevIndex] <= ema5[prevIndex] &&
               (candleRangeTheoryEntry("up", md.high, md.low, md.close) ||
-                engulfingCandleEntry("up", md.open, md.close))
+                engulfingCandleEntry("up", md.open, md.close) ||
+                haramiEntry("up", md.open, md.close, md.high, md.low))
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
-
-              if (md.canAlert && alertSymbols.includes(symbol)) {
-                sendMessage(`Bullish Signal on ${symbol}`);
-
-                md.canAlert = false;
-              }
-
               try {
                 await getMultiProposal(
                   "MULTUP",
@@ -991,17 +1025,12 @@ async function connectWebSocket() {
                 md.ema_1h_14,
               ) &&
               withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
+              md.close[prevIndex] >= ema5[prevIndex] &&
               (candleRangeTheoryEntry("down", md.high, md.low, md.close) ||
-                engulfingCandleEntry("down", md.open, md.close))
+                engulfingCandleEntry("down", md.open, md.close) ||
+                haramiEntry("down", md.open, md.close, md.high, md.low))
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
-
-              if (md.canAlert && alertSymbols.includes(symbol)) {
-                sendMessage(`Bearish Signal on ${symbol}`);
-
-                md.canAlert = false;
-              }
-
               try {
                 await getMultiProposal(
                   "MULTDOWN",
