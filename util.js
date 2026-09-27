@@ -279,18 +279,12 @@ export function calculateHeikinAshi(open, high, low, close) {
   };
 }
 
-export function trendContinuation(trend, open, close, high, low, ema) {
+export function trendContinuation(trend, open, close, high, low) {
   const len = open.length;
-  const currIndex = len - 2;
   const prevIndex = len - 2;
   const thirdIndex = len - 3;
   const fourthIndex = len - 4;
-  if (
-    trend === "up" &&
-    (low[currIndex] <= ema[currIndex] ||
-      low[prevIndex] <= ema[prevIndex] ||
-      low[thirdIndex] <= ema[thirdIndex])
-  ) {
+  if (trend === "up") {
     if (
       bearish(open, close, fourthIndex) &&
       bearish(open, close, thirdIndex) &&
@@ -299,19 +293,13 @@ export function trendContinuation(trend, open, close, high, low, ema) {
       return true;
     }
     if (
-      (bearish(open, close, thirdIndex) || bearish(open, close, prevIndex)) &&
       low[prevIndex] <= low[thirdIndex] &&
       close[prevIndex] >= low[thirdIndex]
     ) {
       return true;
     }
   }
-  if (
-    trend === "down" &&
-    (high[currIndex] >= ema[currIndex] ||
-      high[prevIndex] >= ema[prevIndex] ||
-      high[thirdIndex] >= ema[thirdIndex])
-  ) {
+  if (trend === "down") {
     if (
       bullish(open, close, fourthIndex) &&
       bullish(open, close, thirdIndex) &&
@@ -320,7 +308,6 @@ export function trendContinuation(trend, open, close, high, low, ema) {
       return true;
     }
     if (
-      (bullish(open, close, thirdIndex) || bullish(open, close, prevIndex)) &&
       high[prevIndex] >= high[thirdIndex] &&
       close[prevIndex] <= high[thirdIndex]
     ) {

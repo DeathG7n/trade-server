@@ -50,26 +50,26 @@ const contractStates = new Map();
 const pendingTrades = new Map();
 
 const symbols = [
-  "stpRNG",
-  "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
-  "stpRNG5",
-  "1HZ10V",
-  "R_10",
-  "1HZ25V",
-  "R_25",
-  "1HZ50V",
-  "R_50",
+  // "stpRNG",
+  // "stpRNG2",
+  // "stpRNG3",
+  // "stpRNG4",
+  // "stpRNG5",
+  // "1HZ10V",
+  // "R_10",
+  // "1HZ25V",
+  // "R_25",
+  // "1HZ50V",
+  // "R_50",
   "1HZ75V",
-  "R_75",
-  "1HZ100V",
-  "R_100",
-  "JD10",
-  "JD25",
-  "JD50",
-  "JD75",
-  "JD100",
+  // "R_75",
+  // "1HZ100V",
+  // "R_100",
+  // "JD10",
+  // "JD25",
+  // "JD50",
+  // "JD75",
+  // "JD100",
 ];
 
 const tradeSymbols = [
@@ -102,11 +102,11 @@ const alertSymbols = [
   // "stpRNG4",
   // "stpRNG5",
   // "1HZ10V",
-  "R_10",
+  // "R_10",
   // "1HZ25V",
   // "R_25",
   // "1HZ50V",
-  "R_50",
+  // "R_50",
   "1HZ75V",
   // "R_75",
   // "1HZ100V",
@@ -115,7 +115,7 @@ const alertSymbols = [
   // "JD25",
   // "JD50",
   // "JD75",
-  "JD100",
+  // "JD100",
 ];
 
 const marketData = {};
@@ -949,7 +949,6 @@ async function connectWebSocket() {
                 md.close1h,
                 md.high1h,
                 md.low1h,
-                md.ema_1h_14,
               ) &&
               withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
               (candleRangeTheoryEntry("up", md.high, md.low, md.close) ||
@@ -966,7 +965,6 @@ async function connectWebSocket() {
                 md.close1h,
                 md.high1h,
                 md.low1h,
-                md.ema_1h_14,
               ) &&
               withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
               (candleRangeTheoryEntry("down", md.high, md.low, md.close) ||
@@ -993,7 +991,6 @@ async function connectWebSocket() {
                 md.close1h,
                 md.high1h,
                 md.low1h,
-                md.ema_1h_14,
               ) &&
               withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
               md.close[prevIndex] <= ema5[prevIndex] &&
@@ -1022,7 +1019,6 @@ async function connectWebSocket() {
                 md.close1h,
                 md.high1h,
                 md.low1h,
-                md.ema_1h_14,
               ) &&
               withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
               md.close[prevIndex] >= ema5[prevIndex] &&
