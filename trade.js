@@ -6,14 +6,7 @@ import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
-import {
-  calculateATR,
-  withinHtfCandleRange,
-  trendContinuation,
-  candleRangeTheoryEntry,
-  engulfingCandleEntry,
-  haramiEntry,
-} from "./util.js";
+import { calculateATR, bullish, bearish, crossedEma } from "./util.js";
 
 dotenv.config();
 
@@ -129,14 +122,14 @@ symbols.forEach((symbol) => {
     openTime: 0,
     trendUp: false,
     trendDown: false,
-    close1h: [],
-    open1h: [],
-    high1h: [],
-    low1h: [],
-    openTime1h: 0,
-    trendUp1h: false,
-    trendDown1h: false,
-    ema_1h_14: [],
+    closeHtf: [],
+    openHtf: [],
+    highHtf: [],
+    lowHtf: [],
+    openTimeHtf: 0,
+    trendUpHtf: false,
+    trendDownHtf: false,
+    ema_Htf_14: [],
     multiplier_range: [],
     canAlert: true,
     tradeState: "IDLE",
@@ -262,7 +255,7 @@ function clearSymbolPending(symbol) {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 5;
-  const takeProfit = stopLoss * 3;
+  const takeProfit = stopLoss * 4;
 
   const request = {
     proposal: 1,
@@ -340,31 +333,31 @@ async function connect() {
   }
 }
 
-async function update(stop, id, symbol) {
-  try {
-    if (!symbol || !id) return;
+// async function update(stop, id, symbol) {
+//   try {
+//     if (!symbol || !id) return;
 
-    const database = client.db("trading");
-    const collection = database.collection("trade");
+//     const database = client.db("trading");
+//     const collection = database.collection("trade");
 
-    await collection.findOneAndUpdate(
-      {
-        contract_id: id,
-      },
-      {
-        $set: {
-          stoploss: stop,
-        },
-      },
-    );
+//     await collection.findOneAndUpdate(
+//       {
+//         contract_id: id,
+//       },
+//       {
+//         $set: {
+//           stoploss: stop,
+//         },
+//       },
+//     );
 
-    send({
-      portfolio: 1,
-    });
-  } catch (error) {
-    console.error(error);
-  }
-}
+//     send({
+//       portfolio: 1,
+//     });
+//   } catch (error) {
+//     console.error(error);
+//   }
+// }
 
 await connect();
 
@@ -770,13 +763,13 @@ async function connectWebSocket() {
 
         try {
           if (data.echo_req.granularity === htf) {
-            md.close1h = data.candles.map((c) => c.close);
+            md.closeHtf = data.candles.map((c) => c.close);
 
-            md.open1h = data.candles.map((c) => c.open);
+            md.openHtf = data.candles.map((c) => c.open);
 
-            md.high1h = data.candles.map((c) => c.high);
+            md.highHtf = data.candles.map((c) => c.high);
 
-            md.low1h = data.candles.map((c) => c.low);
+            md.lowHtf = data.candles.map((c) => c.low);
           }
 
           if (data.echo_req.granularity === ltf) {
@@ -815,14 +808,14 @@ async function connectWebSocket() {
         }
 
         if (data.echo_req.granularity === htf) {
-          if (md.openTime1h === 0) {
-            md.openTime1h = data.ohlc.open_time;
+          if (md.openTimeHtf === 0) {
+            md.openTimeHtf = data.ohlc.open_time;
           }
 
-          if (md.openTime1h !== data.ohlc.open_time) {
-            md.openTime1h = data.ohlc.open_time;
+          if (md.openTimeHtf !== data.ohlc.open_time) {
+            md.openTimeHtf = data.ohlc.open_time;
 
-            md.canAlert1h = true;
+            md.canAlertHtf = true;
 
             send({
               ticks_history: data.echo_req.ticks_history,
@@ -835,27 +828,27 @@ async function connectWebSocket() {
             return;
           }
 
-          if (md.close1h.length === 0) {
-            md.close1h.push(Number(data.ohlc.close));
+          if (md.closeHtf.length === 0) {
+            md.closeHtf.push(Number(data.ohlc.close));
 
-            md.open1h.push(Number(data.ohlc.open));
+            md.openHtf.push(Number(data.ohlc.open));
 
-            md.high1h.push(Number(data.ohlc.high));
+            md.highHtf.push(Number(data.ohlc.high));
 
-            md.low1h.push(Number(data.ohlc.low));
+            md.lowHtf.push(Number(data.ohlc.low));
           } else {
-            const last = md.close1h.length - 1;
+            const last = md.closeHtf.length - 1;
 
-            md.close1h[last] = Number(data.ohlc.close);
+            md.closeHtf[last] = Number(data.ohlc.close);
 
-            md.open1h[last] = Number(data.ohlc.open);
+            md.openHtf[last] = Number(data.ohlc.open);
 
-            md.high1h[last] = Number(data.ohlc.high);
+            md.highHtf[last] = Number(data.ohlc.high);
 
-            md.low1h[last] = Number(data.ohlc.low);
+            md.lowHtf[last] = Number(data.ohlc.low);
           }
 
-          const len = md.close1h.length;
+          const len = md.closeHtf.length;
 
           const prevIndex = len - 2;
 
@@ -863,15 +856,15 @@ async function connectWebSocket() {
             return;
           }
 
-          const ema14 = calculateEMA(md.close1h, 14);
+          const ema14 = calculateEMA(md.closeHtf, 14);
 
-          const ema21 = calculateEMA(md.close1h, 21);
+          const ema21 = calculateEMA(md.closeHtf, 21);
 
-          md.ema_1h_14 = ema14;
+          md.ema_Htf_14 = ema14;
 
-          md.trendUp1h = ema14[prevIndex] > ema21[prevIndex];
+          md.trendUpHtf = ema14[prevIndex] > ema21[prevIndex];
 
-          md.trendDown1h = ema14[prevIndex] < ema21[prevIndex];
+          md.trendDownHtf = ema14[prevIndex] < ema21[prevIndex];
         }
 
         if (data.echo_req.granularity === ltf) {
@@ -923,7 +916,7 @@ async function connectWebSocket() {
             return;
           }
 
-          const ema5 = calculateEMA(md.close, 5);
+          const ema9 = calculateEMA(md.close, 9);
 
           // const ema21 = calculateEMA(md.close, 21);
           // const atr = calculateATR(md.high, md.low, md.close, 14);
@@ -942,34 +935,18 @@ async function connectWebSocket() {
 
           if (md.canAlert && alertSymbols.includes(symbol)) {
             if (
-              md.trendUp1h &&
-              trendContinuation(
-                "up",
-                md.open1h,
-                md.close1h,
-                md.high1h,
-                md.low1h,
-              ) &&
-              withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
-              (candleRangeTheoryEntry("up", md.high, md.low, md.close) ||
-                engulfingCandleEntry("up", md.open, md.close) ||
-                haramiEntry("up", md.open, md.close, md.high, md.low))
+              md.trendUpHtf &&
+              crossedEma(md.high, md.low, prevIndex, ema9) &&
+              bullish(md.open, md.close, prevIndex) &&
+              md.close[prevIndex] >= ema9[prevIndex]
             ) {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
             } else if (
-              md.trendDown1h &&
-              trendContinuation(
-                "down",
-                md.open1h,
-                md.close1h,
-                md.high1h,
-                md.low1h,
-              ) &&
-              withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
-              (candleRangeTheoryEntry("down", md.high, md.low, md.close) ||
-                engulfingCandleEntry("down", md.open, md.close) ||
-                haramiEntry("down", md.open, md.close, md.high, md.low))
+              md.trendDownHtf &&
+              crossedEma(md.high, md.low, prevIndex, ema9) &&
+              bearish(md.open, md.close, prevIndex) &&
+              md.close[prevIndex] <= ema9[prevIndex]
             ) {
               sendMessage(`Bearish Signal on ${symbol}`);
               md.canAlert = false;
@@ -984,19 +961,10 @@ async function connectWebSocket() {
             md.tradeState === "IDLE"
           ) {
             if (
-              md.trendUp1h &&
-              trendContinuation(
-                "up",
-                md.open1h,
-                md.close1h,
-                md.high1h,
-                md.low1h,
-              ) &&
-              withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
-              md.close[prevIndex] <= ema5[prevIndex] &&
-              (candleRangeTheoryEntry("up", md.high, md.low, md.close) ||
-                engulfingCandleEntry("up", md.open, md.close) ||
-                haramiEntry("up", md.open, md.close, md.high, md.low))
+              md.trendUpHtf &&
+              crossedEma(md.high, md.low, prevIndex, ema9) &&
+              bullish(md.open, md.close, prevIndex) &&
+              md.close[prevIndex] >= ema9[prevIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               try {
@@ -1012,19 +980,10 @@ async function connectWebSocket() {
                 sendMessage(String(error));
               }
             } else if (
-              md.trendDown1h &&
-              trendContinuation(
-                "down",
-                md.open1h,
-                md.close1h,
-                md.high1h,
-                md.low1h,
-              ) &&
-              withinHtfCandleRange(md.high1h, md.low1h, md.close) &&
-              md.close[prevIndex] >= ema5[prevIndex] &&
-              (candleRangeTheoryEntry("down", md.high, md.low, md.close) ||
-                engulfingCandleEntry("down", md.open, md.close) ||
-                haramiEntry("down", md.open, md.close, md.high, md.low))
+              md.trendDownHtf &&
+              crossedEma(md.high, md.low, prevIndex, ema9) &&
+              bearish(md.open, md.close, prevIndex) &&
+              md.close[prevIndex] <= ema9[prevIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               try {
@@ -1052,13 +1011,13 @@ async function connectWebSocket() {
                 continue;
               }
 
-              if (position.type === "MULTUP" && md.trendDown1h) {
+              if (position.type === "MULTUP" && md.trendDownHtf) {
                 try {
                   closePosition(symbol, contractId, "Opposite Signal");
                 } catch (error) {
                   sendMessage(String(error));
                 }
-              } else if (position.type === "MULTDOWN" && md.trendUp1h) {
+              } else if (position.type === "MULTDOWN" && md.trendUpHtf) {
                 try {
                   closePosition(symbol, contractId, "Opposite Signal");
                 } catch (error) {
@@ -1119,7 +1078,7 @@ async function connectWebSocket() {
 
         const md = marketData[symbol];
 
-        const commission = contract?.commission;
+        // const commission = contract?.commission;
 
         const multiplier = contract?.multiplier;
 
@@ -1200,23 +1159,23 @@ async function connectWebSocket() {
             return;
           }
 
-          if (pip >= risk && position.stoploss === 0) {
-            position.stoploss = Math.abs(commission);
+          // if (pip >= risk && position.stoploss === 0) {
+          //   position.stoploss = Math.abs(commission);
 
-            await update(position.stoploss, id, symbol);
-          }
+          //   await update(position.stoploss, id, symbol);
+          // }
 
-          if (pip >= risk * 3 && position.stoploss === Math.abs(commission)) {
-            position.stoploss = Math.abs(lossAmount);
+          // if (pip >= risk * 3 && position.stoploss === Math.abs(commission)) {
+          //   position.stoploss = Math.abs(lossAmount);
 
-            await update(position.stoploss, id, symbol);
-          }
+          //   await update(position.stoploss, id, symbol);
+          // }
 
-          if (pip >= risk * 5 && position.stoploss === Math.abs(lossAmount)) {
-            position.stoploss = Math.abs(lossAmount * 4);
+          // if (pip >= risk * 5 && position.stoploss === Math.abs(lossAmount)) {
+          //   position.stoploss = Math.abs(lossAmount * 4);
 
-            await update(position.stoploss, id, symbol);
-          }
+          //   await update(position.stoploss, id, symbol);
+          // }
 
           // if (pip <= -(position.atr * 2)) {
           //   closePosition(symbol, id, "Stop Loss Hit");
