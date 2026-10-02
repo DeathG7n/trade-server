@@ -6,7 +6,13 @@ import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
-import { calculateATR, bullish, bearish, crossedEma } from "./util.js";
+import {
+  calculateATR,
+  bullish,
+  bearish,
+  crossedEma,
+  detectCrossover,
+} from "./util.js";
 
 dotenv.config();
 
@@ -255,7 +261,7 @@ function clearSymbolPending(symbol) {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 5;
-  const takeProfit = stopLoss * 4;
+  //const takeProfit = stopLoss * 4;
 
   const request = {
     proposal: 1,
@@ -268,7 +274,7 @@ async function getMultiProposal(direction, symbol, stake, multiplier) {
 
     limit_order: {
       stop_loss: stopLoss,
-      take_profit: takeProfit,
+      //take_profit: takeProfit,
     },
   };
 
@@ -856,15 +862,15 @@ async function connectWebSocket() {
             return;
           }
 
-          const ema14 = calculateEMA(md.closeHtf, 14);
+          const ema5 = calculateEMA(md.closeHtf, 5);
 
-          const ema21 = calculateEMA(md.closeHtf, 21);
+          const ema9 = calculateEMA(md.closeHtf, 9);
 
-          md.ema_Htf_14 = ema14;
+          md.ema_Htf_5 = ema5;
 
-          md.trendUpHtf = ema14[prevIndex] > ema21[prevIndex];
+          md.trendUpHtf = ema5[prevIndex] > ema9[prevIndex];
 
-          md.trendDownHtf = ema14[prevIndex] < ema21[prevIndex];
+          md.trendDownHtf = ema5[prevIndex] < ema9[prevIndex];
         }
 
         if (data.echo_req.granularity === ltf) {
@@ -916,16 +922,12 @@ async function connectWebSocket() {
             return;
           }
 
+          const ema5 = calculateEMA(md.close, 5);
           const ema9 = calculateEMA(md.close, 9);
 
-          // const ema21 = calculateEMA(md.close, 21);
-          // const atr = calculateATR(md.high, md.low, md.close, 14);
+          md.trendUp = ema5[prevIndex] > ema9[prevIndex];
 
-          // const currentAtr = atr[currIndex];
-
-          // md.trendUp = ema14[prevIndex] > ema21[prevIndex];
-
-          // md.trendDown = ema14[prevIndex] < ema21[prevIndex];
+          md.trendDown = ema5[prevIndex] < ema9[prevIndex];
 
           const symbolIsPending =
             md.tradeState === "PROPOSAL_PENDING" ||
@@ -936,17 +938,21 @@ async function connectWebSocket() {
           if (md.canAlert && alertSymbols.includes(symbol)) {
             if (
               md.trendUpHtf &&
-              crossedEma(md.high, md.low, prevIndex, ema9) &&
-              bullish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] >= ema9[prevIndex]
+              (detectCrossover(ema5, ema9) === "bullish" ||
+                (md.trendUp &&
+                  crossedEma(md.high, md.low, prevIndex, ema9) &&
+                  bullish(md.open, md.close, prevIndex) &&
+                  md.close[prevIndex] >= ema9[prevIndex]))
             ) {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
             } else if (
               md.trendDownHtf &&
-              crossedEma(md.high, md.low, prevIndex, ema9) &&
-              bearish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] <= ema9[prevIndex]
+              (detectCrossover(ema5, ema9) === "bearish" ||
+                (md.trendDown &&
+                  crossedEma(md.high, md.low, prevIndex, ema9) &&
+                  bearish(md.open, md.close, prevIndex) &&
+                  md.close[prevIndex] <= ema9[prevIndex]))
             ) {
               sendMessage(`Bearish Signal on ${symbol}`);
               md.canAlert = false;
@@ -962,9 +968,11 @@ async function connectWebSocket() {
           ) {
             if (
               md.trendUpHtf &&
-              crossedEma(md.high, md.low, prevIndex, ema9) &&
-              bullish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] >= ema9[prevIndex]
+              (detectCrossover(ema5, ema9) === "bullish" ||
+                (md.trendUp &&
+                  crossedEma(md.high, md.low, prevIndex, ema9) &&
+                  bullish(md.open, md.close, prevIndex) &&
+                  md.close[prevIndex] >= ema9[prevIndex]))
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               try {
@@ -981,9 +989,11 @@ async function connectWebSocket() {
               }
             } else if (
               md.trendDownHtf &&
-              crossedEma(md.high, md.low, prevIndex, ema9) &&
-              bearish(md.open, md.close, prevIndex) &&
-              md.close[prevIndex] <= ema9[prevIndex]
+              (detectCrossover(ema5, ema9) === "bearish" ||
+                (md.trendDown &&
+                  crossedEma(md.high, md.low, prevIndex, ema9) &&
+                  bearish(md.open, md.close, prevIndex) &&
+                  md.close[prevIndex] <= ema9[prevIndex]))
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               try {
