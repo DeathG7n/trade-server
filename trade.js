@@ -260,7 +260,7 @@ function clearSymbolPending(symbol) {
 }
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake;
+  //const stopLoss = stake;
   //const takeProfit = stopLoss * 4;
 
   const request = {
@@ -273,7 +273,7 @@ async function getMultiProposal(direction, symbol, stake, multiplier) {
     basis: "stake",
 
     limit_order: {
-      stop_loss: stopLoss,
+      // stop_loss: stopLoss,
       //take_profit: takeProfit,
     },
   };
