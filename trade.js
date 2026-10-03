@@ -49,7 +49,7 @@ const contractStates = new Map();
 const pendingTrades = new Map();
 
 const symbols = [
-  // "stpRNG",
+  "stpRNG",
   // "stpRNG2",
   // "stpRNG3",
   // "stpRNG4",
@@ -260,7 +260,7 @@ function clearSymbolPending(symbol) {
 }
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 5;
+  const stopLoss = stake;
   //const takeProfit = stopLoss * 4;
 
   const request = {
