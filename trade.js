@@ -49,7 +49,7 @@ const contractStates = new Map();
 const pendingTrades = new Map();
 
 const symbols = [
-  "stpRNG",
+  // "stpRNG",
   // "stpRNG2",
   // "stpRNG3",
   // "stpRNG4",
@@ -862,15 +862,15 @@ async function connectWebSocket() {
             return;
           }
 
-          const ema5 = calculateEMA(md.closeHtf, 5);
-
           const ema9 = calculateEMA(md.closeHtf, 9);
 
-          md.ema_Htf_5 = ema5;
+          const ema14 = calculateEMA(md.closeHtf, 14);
 
-          md.trendUpHtf = ema5[prevIndex] > ema9[prevIndex];
+          md.ema_Htf_9 = ema9;
 
-          md.trendDownHtf = ema5[prevIndex] < ema9[prevIndex];
+          md.trendUpHtf = ema9[prevIndex] > ema14[prevIndex];
+
+          md.trendDownHtf = ema9[prevIndex] < ema14[prevIndex];
         }
 
         if (data.echo_req.granularity === ltf) {
@@ -922,12 +922,12 @@ async function connectWebSocket() {
             return;
           }
 
-          const ema5 = calculateEMA(md.close, 5);
-          const ema9 = calculateEMA(md.close, 9);
+          const ema14 = calculateEMA(md.close, 14);
+          const ema21 = calculateEMA(md.close, 21);
 
-          md.trendUp = ema5[prevIndex] > ema9[prevIndex];
+          md.trendUp = ema14[prevIndex] > ema21[prevIndex];
 
-          md.trendDown = ema5[prevIndex] < ema9[prevIndex];
+          md.trendDown = ema14[prevIndex] < ema21[prevIndex];
 
           const symbolIsPending =
             md.tradeState === "PROPOSAL_PENDING" ||
@@ -938,21 +938,21 @@ async function connectWebSocket() {
           if (md.canAlert && alertSymbols.includes(symbol)) {
             if (
               md.trendUpHtf &&
-              (detectCrossover(ema5, ema9) === "bullish" ||
+              (detectCrossover(ema14, ema21) === "bullish" ||
                 (md.trendUp &&
-                  crossedEma(md.high, md.low, prevIndex, ema9) &&
+                  crossedEma(md.high, md.low, prevIndex, ema21) &&
                   bullish(md.open, md.close, prevIndex) &&
-                  md.close[prevIndex] >= ema9[prevIndex]))
+                  md.close[prevIndex] >= ema21[prevIndex]))
             ) {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
             } else if (
               md.trendDownHtf &&
-              (detectCrossover(ema5, ema9) === "bearish" ||
+              (detectCrossover(ema14, ema21) === "bearish" ||
                 (md.trendDown &&
-                  crossedEma(md.high, md.low, prevIndex, ema9) &&
+                  crossedEma(md.high, md.low, prevIndex, ema21) &&
                   bearish(md.open, md.close, prevIndex) &&
-                  md.close[prevIndex] <= ema9[prevIndex]))
+                  md.close[prevIndex] <= ema21[prevIndex]))
             ) {
               sendMessage(`Bearish Signal on ${symbol}`);
               md.canAlert = false;
@@ -968,11 +968,11 @@ async function connectWebSocket() {
           ) {
             if (
               md.trendUpHtf &&
-              (detectCrossover(ema5, ema9) === "bullish" ||
+              (detectCrossover(ema14, ema21) === "bullish" ||
                 (md.trendUp &&
-                  crossedEma(md.high, md.low, prevIndex, ema9) &&
+                  crossedEma(md.high, md.low, prevIndex, ema21) &&
                   bullish(md.open, md.close, prevIndex) &&
-                  md.close[prevIndex] >= ema9[prevIndex]))
+                  md.close[prevIndex] >= ema21[prevIndex]))
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               try {
@@ -989,11 +989,11 @@ async function connectWebSocket() {
               }
             } else if (
               md.trendDownHtf &&
-              (detectCrossover(ema5, ema9) === "bearish" ||
+              (detectCrossover(ema14, ema21) === "bearish" ||
                 (md.trendDown &&
-                  crossedEma(md.high, md.low, prevIndex, ema9) &&
+                  crossedEma(md.high, md.low, prevIndex, ema21) &&
                   bearish(md.open, md.close, prevIndex) &&
-                  md.close[prevIndex] <= ema9[prevIndex]))
+                  md.close[prevIndex] <= ema21[prevIndex]))
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               try {
