@@ -940,7 +940,8 @@ async function connectWebSocket() {
               md.trendUpHtf &&
               (detectCrossover(ema14, ema21) === "bullish" ||
                 (md.trendUp &&
-                  crossedEma(md.high, md.low, prevIndex, ema21) &&
+                  (crossedEma(md.high, md.low, prevIndex, ema14) ||
+                    crossedEma(md.high, md.low, prevIndex, ema21)) &&
                   bullish(md.open, md.close, prevIndex) &&
                   md.close[prevIndex] >= ema21[prevIndex]))
             ) {
@@ -950,7 +951,8 @@ async function connectWebSocket() {
               md.trendDownHtf &&
               (detectCrossover(ema14, ema21) === "bearish" ||
                 (md.trendDown &&
-                  crossedEma(md.high, md.low, prevIndex, ema21) &&
+                  (crossedEma(md.high, md.low, prevIndex, ema14) ||
+                    crossedEma(md.high, md.low, prevIndex, ema21)) &&
                   bearish(md.open, md.close, prevIndex) &&
                   md.close[prevIndex] <= ema21[prevIndex]))
             ) {
@@ -970,7 +972,8 @@ async function connectWebSocket() {
               md.trendUpHtf &&
               (detectCrossover(ema14, ema21) === "bullish" ||
                 (md.trendUp &&
-                  crossedEma(md.high, md.low, prevIndex, ema21) &&
+                  (crossedEma(md.high, md.low, prevIndex, ema14) ||
+                    crossedEma(md.high, md.low, prevIndex, ema21)) &&
                   bullish(md.open, md.close, prevIndex) &&
                   md.close[prevIndex] >= ema21[prevIndex]))
             ) {
@@ -991,7 +994,8 @@ async function connectWebSocket() {
               md.trendDownHtf &&
               (detectCrossover(ema14, ema21) === "bearish" ||
                 (md.trendDown &&
-                  crossedEma(md.high, md.low, prevIndex, ema21) &&
+                  (crossedEma(md.high, md.low, prevIndex, ema14) ||
+                    crossedEma(md.high, md.low, prevIndex, ema21)) &&
                   bearish(md.open, md.close, prevIndex) &&
                   md.close[prevIndex] <= ema21[prevIndex]))
             ) {
