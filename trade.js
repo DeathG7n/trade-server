@@ -41,7 +41,7 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const htf = 900;
+const htf = 1800;
 const ltf = 60;
 const timeframes = [htf, ltf];
 const subscribedContracts = new Set();
