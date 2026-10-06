@@ -1163,7 +1163,7 @@ async function connectWebSocket() {
             return;
           }
 
-          if (lossAmount == null) {
+          if (loss == null) {
             return;
           }
 
