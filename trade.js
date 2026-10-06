@@ -41,7 +41,7 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const htf = 900;
+const htf = 1800;
 const ltf = 60;
 const timeframes = [htf, ltf];
 const subscribedContracts = new Set();
@@ -339,31 +339,31 @@ async function connect() {
   }
 }
 
-// async function update(stop, id, symbol) {
-//   try {
-//     if (!symbol || !id) return;
+async function update(stop, id, symbol) {
+  try {
+    if (!symbol || !id) return;
 
-//     const database = client.db("trading");
-//     const collection = database.collection("trade");
+    const database = client.db("trading");
+    const collection = database.collection("trade");
 
-//     await collection.findOneAndUpdate(
-//       {
-//         contract_id: id,
-//       },
-//       {
-//         $set: {
-//           stoploss: stop,
-//         },
-//       },
-//     );
+    await collection.findOneAndUpdate(
+      {
+        contract_id: id,
+      },
+      {
+        $set: {
+          stoploss: stop,
+        },
+      },
+    );
 
-//     send({
-//       portfolio: 1,
-//     });
-//   } catch (error) {
-//     console.error(error);
-//   }
-// }
+    send({
+      portfolio: 1,
+    });
+  } catch (error) {
+    console.error(error);
+  }
+}
 
 await connect();
 
@@ -1173,11 +1173,11 @@ async function connectWebSocket() {
             return;
           }
 
-          // if (pip >= risk && position.stoploss === 0) {
-          //   position.stoploss = Math.abs(commission);
+          if (pip >= loss / 2 && position.stoploss === 0) {
+            position.stoploss = Math.abs(commission);
 
-          //   await update(position.stoploss, id, symbol);
-          // }
+            await update(position.stoploss, id, symbol);
+          }
 
           // if (pip >= risk * 3 && position.stoploss === Math.abs(commission)) {
           //   position.stoploss = Math.abs(lossAmount);
