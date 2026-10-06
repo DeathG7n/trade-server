@@ -1092,7 +1092,7 @@ async function connectWebSocket() {
 
         const md = marketData[symbol];
 
-        // const commission = contract?.commission;
+        const commission = contract?.commission;
 
         const multiplier = contract?.multiplier;
 
