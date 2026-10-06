@@ -263,7 +263,7 @@ function clearSymbolPending(symbol) {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   //const stopLoss = stake;
-  //const takeProfit = stopLoss * 4;
+  const takeProfit = stake * 2;
 
   const request = {
     proposal: 1,
@@ -276,7 +276,7 @@ async function getMultiProposal(direction, symbol, stake, multiplier) {
 
     limit_order: {
       // stop_loss: stopLoss,
-      //take_profit: takeProfit,
+      take_profit: takeProfit,
     },
   };
 
@@ -977,7 +977,7 @@ async function connectWebSocket() {
           ) {
             if (md.trendUpHtf) {
               if (
-                recentEmaCross(md.ema_Htf_9, ema_Htf_14, 5) === "bullish" &&
+                recentEmaCross(md.ema_Htf_9, md.ema_Htf_14, 5) === "bullish" &&
                 (detectCrossover(ema14, ema21) === "bullish" ||
                   (md.trendUp &&
                     (crossedEma(md.high, md.low, prevIndex, ema14) ||
@@ -999,9 +999,9 @@ async function connectWebSocket() {
                   sendMessage(String(error));
                 }
               } else if (
-                recentEmaCross(md.ema_Htf_9, ema_Htf_14, 5) !== "bullish" &&
-                (md.lowHtf[prevHtfIndex] <= ema_Htf_9[prevHtfIndex] ||
-                  md.lowHtf[currHtfIndex] <= ema_Htf_9[currHtfIndex]) &&
+                recentEmaCross(md.ema_Htf_9, md.ema_Htf_14, 5) !== "bullish" &&
+                (md.lowHtf[prevHtfIndex] <= md.ema_Htf_9[prevHtfIndex] ||
+                  md.lowHtf[currHtfIndex] <= md.ema_Htf_9[currHtfIndex]) &&
                 (detectCrossover(ema14, ema21) === "bullish" ||
                   (md.trendUp &&
                     (crossedEma(md.high, md.low, prevIndex, ema14) ||
@@ -1025,7 +1025,7 @@ async function connectWebSocket() {
               }
             } else if (md.trendDownHtf) {
               if (
-                recentEmaCross(md.ema_Htf_9, ema_Htf_14, 5) === "bearish" &&
+                recentEmaCross(md.ema_Htf_9, md.ema_Htf_14, 5) === "bearish" &&
                 (detectCrossover(ema14, ema21) === "bearish" ||
                   (md.trendDown &&
                     (crossedEma(md.high, md.low, prevIndex, ema14) ||
@@ -1047,9 +1047,9 @@ async function connectWebSocket() {
                   sendMessage(String(error));
                 }
               } else if (
-                recentEmaCross(md.ema_Htf_9, ema_Htf_14, 5) !== "bearish" &&
-                (md.highHtf[prevHtfIndex] >= ema_Htf_9[prevHtfIndex] ||
-                  md.highHtf[currHtfIndex] >= ema_Htf_9[currHtfIndex]) &&
+                recentEmaCross(md.ema_Htf_9, md.ema_Htf_14, 5) !== "bearish" &&
+                (md.highHtf[prevHtfIndex] >= md.ema_Htf_9[prevHtfIndex] ||
+                  md.highHtf[currHtfIndex] >= md.ema_Htf_9[currHtfIndex]) &&
                 (detectCrossover(ema14, ema21) === "bearish" ||
                   (md.trendDown &&
                     (crossedEma(md.high, md.low, prevIndex, ema14) ||
