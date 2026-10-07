@@ -12,7 +12,6 @@ import {
   bearish,
   crossedEma,
   detectCrossover,
-  recentEmaCross,
 } from "./util.js";
 
 dotenv.config();
@@ -50,21 +49,21 @@ const contractStates = new Map();
 const pendingTrades = new Map();
 
 const symbols = [
-  // "stpRNG",
-  // "stpRNG2",
-  // "stpRNG3",
-  // "stpRNG4",
-  // "stpRNG5",
-  // "1HZ10V",
-  // "R_10",
-  // "1HZ25V",
-  // "R_25",
-  // "1HZ50V",
-  // "R_50",
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
+  "stpRNG5",
+  "1HZ10V",
+  "R_10",
+  "1HZ25V",
+  "R_25",
+  "1HZ50V",
+  "R_50",
   "1HZ75V",
-  // "R_75",
-  // "1HZ100V",
-  // "R_100",
+  "R_75",
+  "1HZ100V",
+  "R_100",
   // "JD10",
   // "JD25",
   // "JD50",
@@ -977,31 +976,8 @@ async function connectWebSocket() {
           ) {
             if (md.trendUpHtf) {
               if (
-                recentEmaCross(md.ema_Htf_9, md.ema_Htf_14, 5) === "bullish" &&
-                (detectCrossover(ema14, ema21) === "bullish" ||
-                  (md.trendUp &&
-                    (crossedEma(md.high, md.low, prevIndex, ema14) ||
-                      crossedEma(md.high, md.low, prevIndex, ema21)) &&
-                    bullish(md.open, md.close, prevIndex) &&
-                    md.close[prevIndex] >= ema21[prevIndex]))
-              ) {
-                setSymbolPending(symbol, "PROPOSAL_PENDING");
-                try {
-                  await getMultiProposal(
-                    "MULTUP",
-                    symbol,
-                    amount,
-                    md.multiplier_range[0],
-                  );
-                } catch (error) {
-                  clearSymbolPending(symbol);
-
-                  sendMessage(String(error));
-                }
-              } else if (
-                recentEmaCross(md.ema_Htf_9, md.ema_Htf_14, 5) !== "bullish" &&
-                (md.lowHtf[prevHtfIndex] <= md.ema_Htf_9[prevHtfIndex] ||
-                  md.lowHtf[currHtfIndex] <= md.ema_Htf_9[currHtfIndex]) &&
+                (md.lowHtf[prevHtfIndex] <= md.ema_Htf_14[prevHtfIndex] ||
+                  md.lowHtf[currHtfIndex] <= md.ema_Htf_14[currHtfIndex]) &&
                 (detectCrossover(ema14, ema21) === "bullish" ||
                   (md.trendUp &&
                     (crossedEma(md.high, md.low, prevIndex, ema14) ||
@@ -1025,31 +1001,8 @@ async function connectWebSocket() {
               }
             } else if (md.trendDownHtf) {
               if (
-                recentEmaCross(md.ema_Htf_9, md.ema_Htf_14, 5) === "bearish" &&
-                (detectCrossover(ema14, ema21) === "bearish" ||
-                  (md.trendDown &&
-                    (crossedEma(md.high, md.low, prevIndex, ema14) ||
-                      crossedEma(md.high, md.low, prevIndex, ema21)) &&
-                    bearish(md.open, md.close, prevIndex) &&
-                    md.close[prevIndex] <= ema21[prevIndex]))
-              ) {
-                setSymbolPending(symbol, "PROPOSAL_PENDING");
-                try {
-                  await getMultiProposal(
-                    "MULTDOWN",
-                    symbol,
-                    amount,
-                    md.multiplier_range[0],
-                  );
-                } catch (error) {
-                  clearSymbolPending(symbol);
-
-                  sendMessage(String(error));
-                }
-              } else if (
-                recentEmaCross(md.ema_Htf_9, md.ema_Htf_14, 5) !== "bearish" &&
-                (md.highHtf[prevHtfIndex] >= md.ema_Htf_9[prevHtfIndex] ||
-                  md.highHtf[currHtfIndex] >= md.ema_Htf_9[currHtfIndex]) &&
+                (md.highHtf[prevHtfIndex] >= md.ema_Htf_14[prevHtfIndex] ||
+                  md.highHtf[currHtfIndex] >= md.ema_Htf_14[currHtfIndex]) &&
                 (detectCrossover(ema14, ema21) === "bearish" ||
                   (md.trendDown &&
                     (crossedEma(md.high, md.low, prevIndex, ema14) ||
