@@ -1191,9 +1191,9 @@ async function connectWebSocket() {
           //   closePosition(symbol, id, "Take Profit Reached");
           // }
 
-          if (position.stoploss !== 0 && profit <= position.stoploss) {
-            closePosition(symbol, id, "Stop Loss Hit");
-          }
+          // if (position.stoploss !== 0 && profit <= position.stoploss) {
+          //   closePosition(symbol, id, "Stop Loss Hit");
+          // }
         }
 
         const runningTrade = {
