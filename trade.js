@@ -41,7 +41,7 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const htf = 1800;
+const htf = 900;
 const ltf = 60;
 const timeframes = [htf, ltf];
 const subscribedContracts = new Set();
@@ -262,7 +262,7 @@ function clearSymbolPending(symbol) {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   //const stopLoss = stake;
-  const takeProfit = stake * 3;
+  const takeProfit = stake * 2;
 
   const request = {
     proposal: 1,
@@ -1037,17 +1037,35 @@ async function connectWebSocket() {
                 continue;
               }
 
-              if (position.type === "MULTUP" && md.trendDownHtf) {
-                try {
-                  closePosition(symbol, contractId, "Opposite Signal");
-                } catch (error) {
-                  sendMessage(String(error));
+              if (position.type === "MULTUP") {
+                if (md.trendDownHtf) {
+                  try {
+                    closePosition(symbol, contractId, "Opposite Signal");
+                  } catch (error) {
+                    sendMessage(String(error));
+                  }
                 }
-              } else if (position.type === "MULTDOWN" && md.trendUpHtf) {
-                try {
-                  closePosition(symbol, contractId, "Opposite Signal");
-                } catch (error) {
-                  sendMessage(String(error));
+                if (position.stoploss === 0 && md.trendDown) {
+                  try {
+                    closePosition(symbol, contractId, "Opposite Signal");
+                  } catch (error) {
+                    sendMessage(String(error));
+                  }
+                }
+              } else if (position.type === "MULTDOWN") {
+                if (md.trendUpHtf) {
+                  try {
+                    closePosition(symbol, contractId, "Opposite Signal");
+                  } catch (error) {
+                    sendMessage(String(error));
+                  }
+                }
+                if (position.stoploss === 0 && md.trendUp) {
+                  try {
+                    closePosition(symbol, contractId, "Opposite Signal");
+                  } catch (error) {
+                    sendMessage(String(error));
+                  }
                 }
               }
             }
@@ -1191,11 +1209,11 @@ async function connectWebSocket() {
             await update(position.stoploss, id, symbol);
           }
 
-          // if (pip >= risk * 3 && position.stoploss === Math.abs(commission)) {
-          //   position.stoploss = Math.abs(lossAmount);
+          if (pip >= loss * 2 && position.stoploss === Math.abs(commission)) {
+            position.stoploss = Math.abs(orderAmount);
 
-          //   await update(position.stoploss, id, symbol);
-          // }
+            await update(position.stoploss, id, symbol);
+          }
 
           // if (pip >= risk * 5 && position.stoploss === Math.abs(lossAmount)) {
           //   position.stoploss = Math.abs(lossAmount * 4);
