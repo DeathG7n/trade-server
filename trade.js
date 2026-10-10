@@ -44,7 +44,7 @@ let lastBalance = null;
 
 const htf = 900;
 const ltf = 60;
-const timeframes = [ltf];
+const timeframes = [htf, ltf];
 const subscribedContracts = new Set();
 const contractStates = new Map();
 const pendingTrades = new Map();
@@ -52,19 +52,19 @@ const pendingTrades = new Map();
 const symbols = [
   "stpRNG",
   "stpRNG2",
-  // "stpRNG3",
-  // "stpRNG4",
-  // "stpRNG5",
-  // "1HZ10V",
-  // "R_10",
-  // "1HZ25V",
-  // "R_25",
-  // "1HZ50V",
-  // "R_50",
-  // "1HZ75V",
-  // "R_75",
-  // "1HZ100V",
-  // "R_100",
+  "stpRNG3",
+  "stpRNG4",
+  "stpRNG5",
+  "1HZ10V",
+  "R_10",
+  "1HZ25V",
+  "R_25",
+  "1HZ50V",
+  "R_50",
+  "1HZ75V",
+  "R_75",
+  "1HZ100V",
+  "R_100",
   // "JD10",
   // "JD25",
   // "JD50",
@@ -136,8 +136,8 @@ symbols.forEach((symbol) => {
     openTimeHtf: 0,
     trendUpHtf: false,
     trendDownHtf: false,
-    ema_Htf_14: [],
-    ema_Htf_21: [],
+    canBuy: false,
+    canSell: false,
     multiplier_range: [],
     canAlert: true,
     tradeState: "IDLE",
@@ -263,7 +263,7 @@ function clearSymbolPending(symbol) {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 4;
-  const takeProfit = stopLoss;
+  const takeProfit = stake;
 
   const request = {
     proposal: 1,
@@ -853,20 +853,42 @@ async function connectWebSocket() {
           const len = md.closeHtf.length;
 
           // Use the just-closed candle when a new one starts, otherwise the previous confirmed one
+          const htfCurrIndex = len - 1;
           const htfSignalIndex = isNewHtfCandle ? len - 1 : len - 2;
+          const htfThirdIndex = isNewHtfCandle ? len - 2 : len - 3;
+          const htfFourthIndex = isNewHtfCandle ? len - 3 : len - 4;
 
           if (len < 200 || htfSignalIndex < 0) {
             return;
           }
 
+          const ema9 = calculateEMA(md.closeHtf, 9);
           const ema14 = calculateEMA(md.closeHtf, 14);
-          const ema21 = calculateEMA(md.closeHtf, 21);
 
-          md.ema_Htf_14 = ema14;
-          md.ema_Htf_21 = ema21;
+          md.trendUpHtf = ema9[htfSignalIndex] > ema14[htfSignalIndex];
+          md.trendDownHtf = ema9[htfSignalIndex] < ema14[htfSignalIndex];
 
-          md.trendUpHtf = ema14[htfSignalIndex] > ema21[htfSignalIndex];
-          md.trendDownHtf = ema14[htfSignalIndex] < ema21[htfSignalIndex];
+          if (
+            md.trendUpHtf &&
+            recentEmaCross(ema9, ema14, 15) === "bullish" &&
+            (md.lowHtf[htfCurrIndex] <= ema14[htfCurrIndex] ||
+              md.lowHtf[htfSignalIndex] <= ema14[htfSignalIndex] ||
+              md.lowHtf[htfThirdIndex] <= ema14[htfThirdIndex] ||
+              md.lowHtf[htfFourthIndex] <= ema14[htfFourthIndex])
+          ) {
+            md.canBuy = true;
+            md.canSell = false;
+          } else if (
+            md.trendDownHtf &&
+            recentEmaCross(ema9, ema14, 15) === "bearish" &&
+            (md.highHtf[htfCurrIndex] <= ema14[htfCurrIndex] ||
+              md.highHtf[htfSignalIndex] <= ema14[htfSignalIndex] ||
+              md.highHtf[htfThirdIndex] <= ema14[htfThirdIndex] ||
+              md.highHtf[htfFourthIndex] <= ema14[htfFourthIndex])
+          ) {
+            md.canBuy = false;
+            md.canSell = true;
+          }
         }
 
         if (data.echo_req.granularity === ltf) {
@@ -935,8 +957,9 @@ async function connectWebSocket() {
 
           if (md.canAlert && alertSymbols.includes(symbol)) {
             if (
+              md.canBuy &&
               md.trendUp &&
-              recentEmaCross(ema14, ema21, 15) === "bullish" &&
+              recentEmaCross(ema14, ema21, 30) === "bullish" &&
               crossedEma(md.high, md.low, signalIndex, ema21) &&
               bullish(md.open, md.close, signalIndex) &&
               md.close[signalIndex] >= ema21[signalIndex]
@@ -944,8 +967,9 @@ async function connectWebSocket() {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
             } else if (
+              md.canSell &&
               md.trendDown &&
-              recentEmaCross(ema14, ema21, 15) === "bearish" &&
+              recentEmaCross(ema14, ema21, 30) === "bearish" &&
               crossedEma(md.high, md.low, signalIndex, ema21) &&
               bearish(md.open, md.close, signalIndex) &&
               md.close[signalIndex] <= ema21[signalIndex]
@@ -963,11 +987,12 @@ async function connectWebSocket() {
             md.tradeState === "IDLE"
           ) {
             if (
+              md.canBuy &&
               md.trendUp &&
-              recentEmaCross(ema14, ema21, 15) === "bullish" &&
+              recentEmaCross(ema14, ema21, 30) === "bullish" &&
               crossedEma(md.high, md.low, signalIndex, ema21) &&
               bullish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] >= ema21[signalIndex] && 
+              md.close[signalIndex] >= ema21[signalIndex] &&
               candleDistance(md.close, ema21, signalIndex) < atr[signalIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
@@ -985,8 +1010,9 @@ async function connectWebSocket() {
               }
             }
             if (
+              md.canSell &&
               md.trendDown &&
-              recentEmaCross(ema14, ema21, 15) === "bearish" &&
+              recentEmaCross(ema14, ema21, 30) === "bearish" &&
               crossedEma(md.high, md.low, signalIndex, ema21) &&
               bearish(md.open, md.close, signalIndex) &&
               md.close[signalIndex] <= ema21[signalIndex] &&
@@ -1019,7 +1045,7 @@ async function connectWebSocket() {
               }
 
               if (position.type === "MULTUP") {
-                if (md.trendDown) {
+                if (md.trendDownHtf) {
                   try {
                     closePosition(symbol, contractId, "Opposite Signal");
                   } catch (error) {
@@ -1027,7 +1053,7 @@ async function connectWebSocket() {
                   }
                 }
               } else if (position.type === "MULTDOWN") {
-                if (md.trendUp) {
+                if (md.trendUpHtf) {
                   try {
                     closePosition(symbol, contractId, "Opposite Signal");
                   } catch (error) {
