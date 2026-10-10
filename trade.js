@@ -881,13 +881,16 @@ async function connectWebSocket() {
           } else if (
             md.trendDownHtf &&
             recentEmaCross(ema9, ema14, 15) === "bearish" &&
-            (md.highHtf[htfCurrIndex] <= ema14[htfCurrIndex] ||
-              md.highHtf[htfSignalIndex] <= ema14[htfSignalIndex] ||
-              md.highHtf[htfThirdIndex] <= ema14[htfThirdIndex] ||
-              md.highHtf[htfFourthIndex] <= ema14[htfFourthIndex])
+            (md.highHtf[htfCurrIndex] >= ema14[htfCurrIndex] ||
+              md.highHtf[htfSignalIndex] >= ema14[htfSignalIndex] ||
+              md.highHtf[htfThirdIndex] >= ema14[htfThirdIndex] ||
+              md.highHtf[htfFourthIndex] >= ema14[htfFourthIndex])
           ) {
             md.canBuy = false;
             md.canSell = true;
+          } else {
+            md.canBuy = false;
+            md.canSell = false;
           }
         }
 
