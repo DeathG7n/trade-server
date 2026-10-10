@@ -130,6 +130,7 @@ symbols.forEach((symbol) => {
     openTime: 0,
     trendUp: false,
     trendDown: false,
+    ltfHistoryPending: false,
     closeHtf: [],
     openHtf: [],
     highHtf: [],
@@ -780,32 +781,24 @@ async function connectWebSocket() {
         try {
           if (data.echo_req.granularity === hiHtf) {
             md.closeHiHtf = data.candles.map((c) => c.close);
-
             md.openHiHtf = data.candles.map((c) => c.open);
-
             md.highHiHtf = data.candles.map((c) => c.high);
-
             md.lowHiHtf = data.candles.map((c) => c.low);
           }
 
           if (data.echo_req.granularity === htf) {
             md.closeHtf = data.candles.map((c) => c.close);
-
             md.openHtf = data.candles.map((c) => c.open);
-
             md.highHtf = data.candles.map((c) => c.high);
-
             md.lowHtf = data.candles.map((c) => c.low);
           }
 
           if (data.echo_req.granularity === ltf) {
             md.close = data.candles.map((c) => c.close);
-
             md.open = data.candles.map((c) => c.open);
-
             md.high = data.candles.map((c) => c.high);
-
             md.low = data.candles.map((c) => c.low);
+            md.ltfHistoryPending = false;
           }
         } catch (error) {
           sendMessage(String(error));
@@ -974,6 +967,7 @@ async function connectWebSocket() {
           if (isNewLtfCandle) {
             md.openTime = data.ohlc.open_time;
             md.canAlert = true;
+            md.ltfHistoryPending = true;
 
             // Request fresh history for accuracy, but do NOT return early.
             // This allows immediate evaluation on the candle that just closed.
@@ -997,7 +991,7 @@ async function connectWebSocket() {
           // const prevHtfIndex = lenHtf - 2;
           // const currHtfIndex = lenHtf - 1;
 
-          if (len < 200 || signalIndex < 0) {
+          if (len < 200 || md.ltfHistoryPending) {
             return;
           }
 
@@ -1256,14 +1250,14 @@ async function connectWebSocket() {
             return;
           }
 
-          if (pip >= risk / 2 && position.stoploss === 0) {
+          if (pip >= risk * 2 && position.stoploss === 0) {
             position.stoploss = Math.abs(commission);
 
             await update(position.stoploss, id, symbol);
           }
 
-          if (pip >= loss * 2 && position.stoploss === Math.abs(commission)) {
-            position.stoploss = Math.abs(orderAmount);
+          if (pip >= risk * 4 && position.stoploss === Math.abs(commission)) {
+            position.stoploss = Math.abs(lossAmount);
 
             await update(position.stoploss, id, symbol);
           }
