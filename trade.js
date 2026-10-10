@@ -12,6 +12,7 @@ import {
   bearish,
   crossedEma,
   recentEmaCross,
+  candleDistance,
 } from "./util.js";
 
 dotenv.config();
@@ -41,29 +42,29 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const htf = 900;
-const ltf = 300;
+const htf = 1400;
+const ltf = 60;
 const timeframes = [ltf];
 const subscribedContracts = new Set();
 const contractStates = new Map();
 const pendingTrades = new Map();
 
 const symbols = [
-  // "stpRNG",
-  // "stpRNG2",
+  "stpRNG",
+  "stpRNG2",
   // "stpRNG3",
   // "stpRNG4",
   // "stpRNG5",
-  "1HZ10V",
-  "R_10",
-  "1HZ25V",
-  "R_25",
-  "1HZ50V",
-  "R_50",
-  "1HZ75V",
-  "R_75",
-  "1HZ100V",
-  "R_100",
+  // "1HZ10V",
+  // "R_10",
+  // "1HZ25V",
+  // "R_25",
+  // "1HZ50V",
+  // "R_50",
+  // "1HZ75V",
+  // "R_75",
+  // "1HZ100V",
+  // "R_100",
   // "JD10",
   // "JD25",
   // "JD50",
@@ -135,8 +136,8 @@ symbols.forEach((symbol) => {
     openTimeHtf: 0,
     trendUpHtf: false,
     trendDownHtf: false,
-    ema_Htf_9: [],
     ema_Htf_14: [],
+    ema_Htf_21: [],
     multiplier_range: [],
     canAlert: true,
     tradeState: "IDLE",
@@ -262,7 +263,7 @@ function clearSymbolPending(symbol) {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 4;
-  const takeProfit = stopLoss * 3;
+  const takeProfit = stopLoss;
 
   const request = {
     proposal: 1,
@@ -858,14 +859,14 @@ async function connectWebSocket() {
             return;
           }
 
-          const ema9 = calculateEMA(md.closeHtf, 9);
           const ema14 = calculateEMA(md.closeHtf, 14);
+          const ema21 = calculateEMA(md.closeHtf, 21);
 
-          md.ema_Htf_9 = ema9;
           md.ema_Htf_14 = ema14;
+          md.ema_Htf_21 = ema21;
 
-          md.trendUpHtf = ema9[htfSignalIndex] > ema14[htfSignalIndex];
-          md.trendDownHtf = ema9[htfSignalIndex] < ema14[htfSignalIndex];
+          md.trendUpHtf = ema14[htfSignalIndex] > ema21[htfSignalIndex];
+          md.trendDownHtf = ema14[htfSignalIndex] < ema21[htfSignalIndex];
         }
 
         if (data.echo_req.granularity === ltf) {
@@ -918,11 +919,13 @@ async function connectWebSocket() {
             return;
           }
 
-          const ema9 = calculateEMA(md.close, 9);
           const ema14 = calculateEMA(md.close, 14);
+          const ema21 = calculateEMA(md.close, 21);
 
-          md.trendUp = ema9[signalIndex] > ema14[signalIndex];
-          md.trendDown = ema9[signalIndex] < ema14[signalIndex];
+          const atr = calculateATR(md.high, md.low, md.close, 21);
+
+          md.trendUp = ema14[signalIndex] > ema21[signalIndex];
+          md.trendDown = ema14[signalIndex] < ema21[signalIndex];
 
           const symbolIsPending =
             md.tradeState === "PROPOSAL_PENDING" ||
@@ -933,19 +936,19 @@ async function connectWebSocket() {
           if (md.canAlert && alertSymbols.includes(symbol)) {
             if (
               md.trendUp &&
-              recentEmaCross(ema9, ema14, 15) === "bullish" &&
-              crossedEma(md.high, md.low, signalIndex, ema14) &&
+              recentEmaCross(ema14, ema21, 15) === "bullish" &&
+              crossedEma(md.high, md.low, signalIndex, ema21) &&
               bullish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] >= ema14[signalIndex]
+              md.close[signalIndex] >= ema21[signalIndex]
             ) {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
             } else if (
               md.trendDown &&
-              recentEmaCross(ema9, ema14, 15) === "bearish" &&
-              crossedEma(md.high, md.low, signalIndex, ema14) &&
+              recentEmaCross(ema14, ema21, 15) === "bearish" &&
+              crossedEma(md.high, md.low, signalIndex, ema21) &&
               bearish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] <= ema14[signalIndex]
+              md.close[signalIndex] <= ema21[signalIndex]
             ) {
               sendMessage(`Bearish Signal on ${symbol}`);
               md.canAlert = false;
@@ -961,10 +964,11 @@ async function connectWebSocket() {
           ) {
             if (
               md.trendUp &&
-              recentEmaCross(ema9, ema14, 15) === "bullish" &&
-              crossedEma(md.high, md.low, signalIndex, ema14) &&
+              recentEmaCross(ema14, ema21, 15) === "bullish" &&
+              crossedEma(md.high, md.low, signalIndex, ema21) &&
               bullish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] >= ema14[signalIndex]
+              md.close[signalIndex] >= ema21[signalIndex] && 
+              candleDistance(md.close, ema21, signalIndex) < atr[signalIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               try {
@@ -982,10 +986,10 @@ async function connectWebSocket() {
             }
             if (
               md.trendDown &&
-              recentEmaCross(ema9, ema14, 15) === "bearish" &&
-              crossedEma(md.high, md.low, signalIndex, ema14) &&
+              recentEmaCross(ema14, ema21, 15) === "bearish" &&
+              crossedEma(md.high, md.low, signalIndex, ema21) &&
               bearish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] <= ema14[signalIndex]
+              md.close[signalIndex] <= ema21[signalIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               try {
@@ -1136,7 +1140,7 @@ async function connectWebSocket() {
         }
 
         if (!position.atr) {
-          const atr = calculateATR(md.high, md.low, md.close, 14);
+          const atr = calculateATR(md.high, md.low, md.close, 21);
 
           const len = atr.length;
           const currIndex = len - 1;
@@ -1165,7 +1169,7 @@ async function connectWebSocket() {
             return;
           }
 
-          if (pip >= loss / 2 && position.stoploss === 0) {
+          if (pip >= risk / 2 && position.stoploss === 0) {
             position.stoploss = Math.abs(commission);
 
             await update(position.stoploss, id, symbol);
