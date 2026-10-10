@@ -42,6 +42,7 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
+const hiHtf = 14400;
 const htf = 900;
 const ltf = 60;
 const timeframes = [htf, ltf];
@@ -136,6 +137,13 @@ symbols.forEach((symbol) => {
     openTimeHtf: 0,
     trendUpHtf: false,
     trendDownHtf: false,
+    closeHiHtf: [],
+    openHiHtf: [],
+    highHiHtf: [],
+    lowHiHtf: [],
+    openTimeHiHtf: 0,
+    trendUpHiHtf: false,
+    trendDownHiHtf: false,
     canBuy: false,
     canSell: false,
     multiplier_range: [],
@@ -770,6 +778,16 @@ async function connectWebSocket() {
         }
 
         try {
+          if (data.echo_req.granularity === hiHtf) {
+            md.closeHiHtf = data.candles.map((c) => c.close);
+
+            md.openHiHtf = data.candles.map((c) => c.open);
+
+            md.highHiHtf = data.candles.map((c) => c.high);
+
+            md.lowHiHtf = data.candles.map((c) => c.low);
+          }
+
           if (data.echo_req.granularity === htf) {
             md.closeHtf = data.candles.map((c) => c.close);
 
@@ -815,6 +833,56 @@ async function connectWebSocket() {
           return;
         }
 
+        if (data.echo_req.granularity === hiHtf) {
+          if (md.openTimeHiHtf === 0) {
+            md.openTimeHiHtf = data.ohlc.open_time;
+          }
+
+          const isNewHiHtfCandle = md.openTimeHiHtf !== data.ohlc.open_time;
+
+          if (isNewHiHtfCandle) {
+            md.openTimeHiHtf = data.ohlc.open_time;
+            md.canAlertHiHtf = true;
+
+            // Request fresh history for accuracy, but do NOT return early.
+            // This allows evaluation on the candle that just closed.
+            send({
+              ticks_history: data.echo_req.ticks_history,
+              style: "candles",
+              count: 500,
+              granularity: data.echo_req.granularity,
+              end: "latest",
+            });
+          }
+
+          if (md.closeHiHtf.length === 0) {
+            md.closeHiHtf.push(Number(data.ohlc.close));
+            md.openHiHtf.push(Number(data.ohlc.open));
+            md.highHiHtf.push(Number(data.ohlc.high));
+            md.lowHiHtf.push(Number(data.ohlc.low));
+          } else {
+            const last = md.closeHiHtf.length - 1;
+            md.closeHiHtf[last] = Number(data.ohlc.close);
+            md.openHiHtf[last] = Number(data.ohlc.open);
+            md.highHiHtf[last] = Number(data.ohlc.high);
+            md.lowHiHtf[last] = Number(data.ohlc.low);
+          }
+
+          const len = md.closeHiHtf.length;
+
+          const hiHtfSignalIndex = len - 2;
+
+          if (len < 200 || hiHtfSignalIndex < 0) {
+            return;
+          }
+
+          const ema9 = calculateEMA(md.closeHiHtf, 9);
+          const ema14 = calculateEMA(md.closeHiHtf, 14);
+
+          md.trendUpHiHtf = ema9[hiHtfSignalIndex] > ema14[hiHtfSignalIndex];
+          md.trendDownHiHtf = ema9[hiHtfSignalIndex] < ema14[hiHtfSignalIndex];
+        }
+
         if (data.echo_req.granularity === htf) {
           if (md.openTimeHtf === 0) {
             md.openTimeHtf = data.ohlc.open_time;
@@ -854,9 +922,9 @@ async function connectWebSocket() {
 
           // Use the just-closed candle when a new one starts, otherwise the previous confirmed one
           const htfCurrIndex = len - 1;
-          const htfSignalIndex = isNewHtfCandle ? len - 1 : len - 2;
-          const htfThirdIndex = isNewHtfCandle ? len - 2 : len - 3;
-          const htfFourthIndex = isNewHtfCandle ? len - 3 : len - 4;
+          const htfSignalIndex = len - 2;
+          const htfThirdIndex = len - 3;
+          const htfFourthIndex = len - 4;
 
           if (len < 200 || htfSignalIndex < 0) {
             return;
@@ -869,6 +937,7 @@ async function connectWebSocket() {
           md.trendDownHtf = ema9[htfSignalIndex] < ema14[htfSignalIndex];
 
           if (
+            md.trendUpHiHtf &&
             md.trendUpHtf &&
             recentEmaCross(ema9, ema14, 15) === "bullish" &&
             (md.lowHtf[htfCurrIndex] <= ema14[htfCurrIndex] ||
@@ -879,6 +948,7 @@ async function connectWebSocket() {
             md.canBuy = true;
             md.canSell = false;
           } else if (
+            md.trendDownHiHtf &&
             md.trendDownHtf &&
             recentEmaCross(ema9, ema14, 15) === "bearish" &&
             (md.highHtf[htfCurrIndex] >= ema14[htfCurrIndex] ||
@@ -916,26 +986,13 @@ async function connectWebSocket() {
             });
           }
 
-          if (md.close.length === 0) {
-            md.close.push(Number(data.ohlc.close));
-            md.open.push(Number(data.ohlc.open));
-            md.high.push(Number(data.ohlc.high));
-            md.low.push(Number(data.ohlc.low));
-          } else {
-            const last = md.close.length - 1;
-            md.close[last] = Number(data.ohlc.close);
-            md.open[last] = Number(data.ohlc.open);
-            md.high[last] = Number(data.ohlc.high);
-            md.low[last] = Number(data.ohlc.low);
-          }
-
           const len = md.close.length;
           // const lenHtf = md.closeHtf.length;
 
           // Key change for responsiveness:
           // When a new candle just started, the last candle in the array is the one that just closed → use it.
           // During the candle, fall back to the previous confirmed candle for stability.
-          const signalIndex = isNewLtfCandle ? len - 1 : len - 2;
+          const signalIndex = len - 2;
 
           // const prevHtfIndex = lenHtf - 2;
           // const currHtfIndex = lenHtf - 1;
