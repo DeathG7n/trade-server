@@ -42,7 +42,7 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const htf = 1400;
+const htf = 900;
 const ltf = 60;
 const timeframes = [ltf];
 const subscribedContracts = new Set();
@@ -989,7 +989,8 @@ async function connectWebSocket() {
               recentEmaCross(ema14, ema21, 15) === "bearish" &&
               crossedEma(md.high, md.low, signalIndex, ema21) &&
               bearish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] <= ema21[signalIndex]
+              md.close[signalIndex] <= ema21[signalIndex] &&
+              candleDistance(md.close, ema21, signalIndex) < atr[signalIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               try {
