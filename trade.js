@@ -41,7 +41,7 @@ let portfolioSynced = false;
 let lastBalance = null;
 
 const hiHtf = 14400;
-const htf = 900;
+const htf = 300;
 const ltf = 60;
 const timeframes = [htf, ltf];
 const subscribedContracts = new Set();
@@ -49,26 +49,26 @@ const contractStates = new Map();
 const pendingTrades = new Map();
 
 const symbols = [
-  // "stpRNG",
+  "stpRNG",
   // "stpRNG2",
   // "stpRNG3",
   // "stpRNG4",
   // "stpRNG5",
-  "1HZ10V",
-  "R_10",
-  "1HZ25V",
-  "R_25",
-  "1HZ50V",
-  "R_50",
-  "1HZ75V",
-  "R_75",
-  "1HZ100V",
-  "R_100",
+  // "1HZ10V",
+  // "R_10",
+  // "1HZ25V",
+  // "R_25",
+  // "1HZ50V",
+  // "R_50",
+  // "1HZ75V",
+  // "R_75",
+  // "1HZ100V",
+  // "R_100",
   // "JD10",
   // "JD25",
   // "JD50",
   // "JD75",
-  "JD100",
+  // "JD100",
 ];
 
 const tradeSymbols = [
@@ -268,7 +268,7 @@ function clearSymbolPending(symbol) {
 }
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake * 0.3;
+  const stopLoss = stake / 4;
   const takeProfit = stake;
 
   const request = {
@@ -919,27 +919,27 @@ async function connectWebSocket() {
             return;
           }
 
-          const ema9 = calculateEMA(md.closeHtf, 9);
           const ema14 = calculateEMA(md.closeHtf, 14);
+          const ema21 = calculateEMA(md.closeHtf, 21);
 
-          md.trendUpHtf = ema9[htfSignalIndex] > ema14[htfSignalIndex];
-          md.trendDownHtf = ema9[htfSignalIndex] < ema14[htfSignalIndex];
+          md.trendUpHtf = ema14[htfSignalIndex] > ema21[htfSignalIndex];
+          md.trendDownHtf = ema14[htfSignalIndex] < ema21[htfSignalIndex];
 
           if (
             md.trendUpHtf &&
-            (md.lowHtf[htfCurrIndex] <= ema14[htfCurrIndex] ||
-              md.lowHtf[htfSignalIndex] <= ema14[htfSignalIndex] ||
-              md.lowHtf[htfThirdIndex] <= ema14[htfThirdIndex] ||
-              md.lowHtf[htfFourthIndex] <= ema14[htfFourthIndex])
+            (md.lowHtf[htfCurrIndex] <= ema21[htfCurrIndex] ||
+              md.lowHtf[htfSignalIndex] <= ema21[htfSignalIndex] ||
+              md.lowHtf[htfThirdIndex] <= ema21[htfThirdIndex] ||
+              md.lowHtf[htfFourthIndex] <= ema21[htfFourthIndex])
           ) {
             md.canBuy = true;
             md.canSell = false;
           } else if (
             md.trendDownHtf &&
-            (md.highHtf[htfCurrIndex] >= ema14[htfCurrIndex] ||
-              md.highHtf[htfSignalIndex] >= ema14[htfSignalIndex] ||
-              md.highHtf[htfThirdIndex] >= ema14[htfThirdIndex] ||
-              md.highHtf[htfFourthIndex] >= ema14[htfFourthIndex])
+            (md.highHtf[htfCurrIndex] >= ema21[htfCurrIndex] ||
+              md.highHtf[htfSignalIndex] >= ema21[htfSignalIndex] ||
+              md.highHtf[htfThirdIndex] >= ema21[htfThirdIndex] ||
+              md.highHtf[htfFourthIndex] >= ema21[htfFourthIndex])
           ) {
             md.canBuy = false;
             md.canSell = true;
@@ -1001,7 +1001,7 @@ async function connectWebSocket() {
 
           // const ema14 = calculateEMA(md.close, 14);
           // const ema21 = calculateEMA(md.close, 21);
-          const ema200 = calculateEMA(md.close, 200);
+          const ema100 = calculateEMA(md.close, 100);
 
           const haCandles = calculateHeikinAshi(
             md.open,
@@ -1022,17 +1022,17 @@ async function connectWebSocket() {
           if (md.canAlert && alertSymbols.includes(symbol)) {
             if (
               md.canBuy &&
-              crossedEma(haCandles.high, haCandles.low, signalIndex, ema200) &&
+              crossedEma(haCandles.high, haCandles.low, signalIndex, ema100) &&
               bullish(haCandles.open, haCandles.close, signalIndex) &&
-              haCandles.close[signalIndex] >= ema200[signalIndex]
+              haCandles.close[signalIndex] >= ema100[signalIndex]
             ) {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
             } else if (
               md.canSell &&
-              crossedEma(haCandles.high, haCandles.low, signalIndex, ema200) &&
+              crossedEma(haCandles.high, haCandles.low, signalIndex, ema100) &&
               bearish(haCandles.open, haCandles.close, signalIndex) &&
-              haCandles.close[signalIndex] <= ema200[signalIndex]
+              haCandles.close[signalIndex] <= ema100[signalIndex]
             ) {
               sendMessage(`Bearish Signal on ${symbol}`);
               md.canAlert = false;
@@ -1048,9 +1048,9 @@ async function connectWebSocket() {
           ) {
             if (
               md.canBuy &&
-              crossedEma(haCandles.high, haCandles.low, signalIndex, ema200) &&
+              crossedEma(haCandles.high, haCandles.low, signalIndex, ema100) &&
               bullish(haCandles.open, haCandles.close, signalIndex) &&
-              haCandles.close[signalIndex] >= ema200[signalIndex]
+              haCandles.close[signalIndex] >= ema100[signalIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               try {
@@ -1068,9 +1068,9 @@ async function connectWebSocket() {
             }
             if (
               md.canSell &&
-              crossedEma(haCandles.high, haCandles.low, signalIndex, ema200) &&
+              crossedEma(haCandles.high, haCandles.low, signalIndex, ema100) &&
               bearish(haCandles.open, haCandles.close, signalIndex) &&
-              haCandles.close[signalIndex] <= ema200[signalIndex]
+              haCandles.close[signalIndex] <= ema100[signalIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               try {
@@ -1233,13 +1233,13 @@ async function connectWebSocket() {
             return;
           }
 
-          if (pip >= risk && position.stoploss === 0) {
+          if (pip >= risk * 2 && position.stoploss === 0) {
             position.stoploss = Math.abs(commission);
 
             await update(position.stoploss, id, symbol);
           }
 
-          if (pip >= risk * 3 && position.stoploss === Math.abs(commission)) {
+          if (pip >= risk * 4 && position.stoploss === Math.abs(commission)) {
             position.stoploss = Math.abs(lossAmount);
 
             await update(position.stoploss, id, symbol);
