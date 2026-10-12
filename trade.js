@@ -49,11 +49,11 @@ const contractStates = new Map();
 const pendingTrades = new Map();
 
 const symbols = [
-  "stpRNG",
-  "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
-  "stpRNG5",
+  // "stpRNG",
+  // "stpRNG2",
+  // "stpRNG3",
+  // "stpRNG4",
+  // "stpRNG5",
   "1HZ10V",
   "R_10",
   "1HZ25V",
@@ -68,7 +68,7 @@ const symbols = [
   // "JD25",
   // "JD50",
   // "JD75",
-  // "JD100",
+  "JD100",
 ];
 
 const tradeSymbols = [
@@ -91,7 +91,7 @@ const tradeSymbols = [
   "JD25",
   "JD50",
   "JD75",
-  "JD100",
+  // "JD100",
 ];
 
 const alertSymbols = [
@@ -114,7 +114,7 @@ const alertSymbols = [
   // "JD25",
   // "JD50",
   // "JD75",
-  // "JD100",
+  "JD100",
 ];
 
 const marketData = {};
@@ -1001,7 +1001,7 @@ async function connectWebSocket() {
 
           // const ema14 = calculateEMA(md.close, 14);
           // const ema21 = calculateEMA(md.close, 21);
-          const ema50 = calculateEMA(md.close, 50);
+          const ema200 = calculateEMA(md.close, 200);
 
           const haCandles = calculateHeikinAshi(
             md.open,
@@ -1022,17 +1022,17 @@ async function connectWebSocket() {
           if (md.canAlert && alertSymbols.includes(symbol)) {
             if (
               md.canBuy &&
-              crossedEma(haCandles.high, haCandles.low, signalIndex, ema50) &&
+              crossedEma(haCandles.high, haCandles.low, signalIndex, ema200) &&
               bullish(haCandles.open, haCandles.close, signalIndex) &&
-              haCandles.close[signalIndex] >= ema50[signalIndex]
+              haCandles.close[signalIndex] >= ema200[signalIndex]
             ) {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
             } else if (
               md.canSell &&
-              crossedEma(haCandles.high, haCandles.low, signalIndex, ema50) &&
+              crossedEma(haCandles.high, haCandles.low, signalIndex, ema200) &&
               bearish(haCandles.open, haCandles.close, signalIndex) &&
-              haCandles.close[signalIndex] <= ema50[signalIndex]
+              haCandles.close[signalIndex] <= ema200[signalIndex]
             ) {
               sendMessage(`Bearish Signal on ${symbol}`);
               md.canAlert = false;
@@ -1048,9 +1048,9 @@ async function connectWebSocket() {
           ) {
             if (
               md.canBuy &&
-              crossedEma(haCandles.high, haCandles.low, signalIndex, ema50) &&
+              crossedEma(haCandles.high, haCandles.low, signalIndex, ema200) &&
               bullish(haCandles.open, haCandles.close, signalIndex) &&
-              haCandles.close[signalIndex] >= ema50[signalIndex]
+              haCandles.close[signalIndex] >= ema200[signalIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               try {
@@ -1068,9 +1068,9 @@ async function connectWebSocket() {
             }
             if (
               md.canSell &&
-              crossedEma(haCandles.high, haCandles.low, signalIndex, ema50) &&
+              crossedEma(haCandles.high, haCandles.low, signalIndex, ema200) &&
               bearish(haCandles.open, haCandles.close, signalIndex) &&
-              haCandles.close[signalIndex] <= ema50[signalIndex]
+              haCandles.close[signalIndex] <= ema200[signalIndex]
             ) {
               setSymbolPending(symbol, "PROPOSAL_PENDING");
               try {
