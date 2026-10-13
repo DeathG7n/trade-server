@@ -36,8 +36,8 @@ let portfolioSynced = false;
 let lastBalance = null;
 
 const hiHtf = 14400;
-const htf = 900;
-const ltf = 60;
+const htf = 3600;
+const ltf = 300;
 const timeframes = [htf, ltf];
 const subscribedContracts = new Set();
 const contractStates = new Map();
