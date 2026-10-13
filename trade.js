@@ -46,9 +46,9 @@ const pendingTrades = new Map();
 const symbols = [
   "stpRNG",
   "stpRNG2",
-  // "stpRNG3",
-  // "stpRNG4",
-  // "stpRNG5",
+  "stpRNG3",
+  "stpRNG4",
+  "stpRNG5",
   // "1HZ10V",
   // "R_10",
   // "1HZ25V",
