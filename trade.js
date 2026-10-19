@@ -6,7 +6,7 @@ import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
-import { bullish, bearish, crossedEma } from "./util.js";
+import { bullish, bearish, crossedEma, recentEmaCross } from "./util.js";
 
 dotenv.config();
 
@@ -35,10 +35,10 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const hiHtf = 14400;
-const htf = 3600;
+const hiHtf = 900;
+const htf = 300;
 const ltf = 300;
-const timeframes = [htf, ltf];
+const timeframes = [ltf];
 const subscribedContracts = new Set();
 const contractStates = new Map();
 const pendingTrades = new Map();
@@ -49,21 +49,21 @@ const symbols = [
   "stpRNG3",
   "stpRNG4",
   "stpRNG5",
-  // "1HZ10V",
-  // "R_10",
-  // "1HZ25V",
-  // "R_25",
-  // "1HZ50V",
-  // "R_50",
-  // "1HZ75V",
-  // "R_75",
-  // "1HZ100V",
-  // "R_100",
-  // "JD10",
-  // "JD25",
-  // "JD50",
-  // "JD75",
-  // "JD100",
+  "1HZ10V",
+  "R_10",
+  "1HZ25V",
+  "R_25",
+  "1HZ50V",
+  "R_50",
+  "1HZ75V",
+  "R_75",
+  "1HZ100V",
+  "R_100",
+  "JD10",
+  "JD25",
+  "JD50",
+  "JD75",
+  "JD100",
 ];
 
 const tradeSymbols = [
@@ -86,7 +86,7 @@ const tradeSymbols = [
   "JD25",
   "JD50",
   "JD75",
-  // "JD100",
+  "JD100",
 ];
 
 const alertSymbols = [
@@ -264,7 +264,7 @@ function clearSymbolPending(symbol) {
 }
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 2;
+  const stopLoss = stake / 2.5;
   const takeProfit = stopLoss * 3;
 
   const request = {
@@ -955,9 +955,6 @@ async function connectWebSocket() {
           if (isNewLtfCandle) {
             md.openTime = data.ohlc.open_time;
             md.canAlert = true;
-
-            // Request fresh history for accuracy, but do NOT return early.
-            // This allows immediate evaluation on the candle that just closed.
             send({
               ticks_history: data.echo_req.ticks_history,
               style: "candles",
@@ -967,41 +964,20 @@ async function connectWebSocket() {
             });
           }
 
-          // if (md.close.length === 0) {
-          //   md.close.push(Number(data.ohlc.close));
-          //   md.open.push(Number(data.ohlc.open));
-          //   md.high.push(Number(data.ohlc.high));
-          //   md.low.push(Number(data.ohlc.low));
-          // } else {
-          //   const last = md.close.length - 1;
-          //   md.close[last] = Number(data.ohlc.close);
-          //   md.open[last] = Number(data.ohlc.open);
-          //   md.high[last] = Number(data.ohlc.high);
-          //   md.low[last] = Number(data.ohlc.low);
-          // }
-
           const len = md.close.length;
-          // const lenHtf = md.closeHtf.length;
-
-          // Key change for responsiveness:
-          // When a new candle just started, the last candle in the array is the one that just closed → use it.
-          // During the candle, fall back to the previous confirmed candle for stability.
           const signalIndex = len - 2;
-          const thirdIndex = len - 3;
-
-          // const prevHtfIndex = lenHtf - 2;
-          // const currHtfIndex = lenHtf - 1;
 
           if (len < 200) {
             return;
           }
 
-          // const ema14 = calculateEMA(md.close, 14);
-          // const ema21 = calculateEMA(md.close, 21);
-          const ema200 = calculateEMA(md.close, 200);
+          const ema14 = calculateEMA(md.close, 14);
+          const ema21 = calculateEMA(md.close, 21);
 
-          // md.trendUp = ema14[signalIndex] > ema21[signalIndex];
-          // md.trendDown = ema14[signalIndex] < ema21[signalIndex];
+          md.trendUp = ema14[signalIndex] > ema21[signalIndex];
+          md.trendDown = ema14[signalIndex] < ema21[signalIndex];
+
+          const cross = crossedEma(md.high, md.low, signalIndex, ema21);
 
           const symbolIsPending =
             md.tradeState === "PROPOSAL_PENDING" ||
@@ -1011,20 +987,20 @@ async function connectWebSocket() {
 
           if (md.canAlert && alertSymbols.includes(symbol)) {
             if (
-              md.canBuy &&
-              (crossedEma(md.high, md.low, signalIndex, ema200) ||
-                crossedEma(md.high, md.low, thirdIndex, ema200)) &&
+              md.trendUp &&
+              cross &&
               bullish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] >= ema200[signalIndex]
+              md.close[signalIndex] >= ema21[signalIndex] &&
+              recentEmaCross(ema14, ema21, 15)
             ) {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
             } else if (
-              md.canSell &&
-              (crossedEma(md.high, md.low, signalIndex, ema200) ||
-                crossedEma(md.high, md.low, thirdIndex, ema200)) &&
+              md.trendDown &&
+              cross &&
               bearish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] <= ema200[signalIndex]
+              md.close[signalIndex] <= ema21[signalIndex] &&
+              recentEmaCross(ema14, ema21, 15)
             ) {
               sendMessage(`Bearish Signal on ${symbol}`);
               md.canAlert = false;
@@ -1036,14 +1012,14 @@ async function connectWebSocket() {
             !symbolIsPending &&
             Math.trunc(balance) !== 0 &&
             tradeSymbols.includes(symbol) &&
-            md.tradeState === "IDLE" 
+            md.tradeState === "IDLE"
           ) {
             if (
-              md.canBuy &&
-              (crossedEma(md.high, md.low, signalIndex, ema200) ||
-                crossedEma(md.high, md.low, thirdIndex, ema200)) &&
+              md.trendUp &&
+              cross &&
               bullish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] >= ema200[signalIndex]
+              md.close[signalIndex] >= ema21[signalIndex] &&
+              recentEmaCross(ema14, ema21, 15)
             ) {
               md.entryCandle = data.ohlc.open_time;
               setSymbolPending(symbol, "PROPOSAL_PENDING");
@@ -1061,11 +1037,11 @@ async function connectWebSocket() {
               }
             }
             if (
-              md.canSell &&
-              (crossedEma(md.high, md.low, signalIndex, ema200) ||
-                crossedEma(md.high, md.low, thirdIndex, ema200)) &&
+              md.trendDown &&
+              cross &&
               bearish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] <= ema200[signalIndex]
+              md.close[signalIndex] <= ema21[signalIndex] &&
+              recentEmaCross(ema14, ema21, 15)
             ) {
               md.entryCandle = data.ohlc.open_time;
               setSymbolPending(symbol, "PROPOSAL_PENDING");
@@ -1095,7 +1071,7 @@ async function connectWebSocket() {
               }
 
               if (position.type === "MULTUP") {
-                if (md.trendDownHtf) {
+                if (md.trendDown) {
                   try {
                     closePosition(symbol, contractId, "Opposite Signal");
                   } catch (error) {
@@ -1103,7 +1079,7 @@ async function connectWebSocket() {
                   }
                 }
               } else if (position.type === "MULTDOWN") {
-                if (md.trendUpHtf) {
+                if (md.trendUp) {
                   try {
                     closePosition(symbol, contractId, "Opposite Signal");
                   } catch (error) {
@@ -1241,23 +1217,15 @@ async function connectWebSocket() {
             await update(position.stoploss, id, symbol);
           }
 
-          if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
-            position.stoploss = Math.abs(lossAmount * 2);
+          if (pip >= risk * 2.5 && position.stoploss === Math.abs(lossAmount)) {
+            position.stoploss = Math.abs(lossAmount * 1.25);
 
             await update(position.stoploss, id, symbol);
           }
 
-          // if (pip <= -(position.atr * 2)) {
-          //   closePosition(symbol, id, "Stop Loss Hit");
-          // }
-
-          // if (pip >= position.atr * 6) {
-          //   closePosition(symbol, id, "Take Profit Reached");
-          // }
-
-          // if (position.stoploss !== 0 && profit <= position.stoploss) {
-          //   closePosition(symbol, id, "Stop Loss Hit");
-          // }
+          if (position.stoploss !== 0 && profit <= position.stoploss) {
+            closePosition(symbol, id, "Stop Loss Hit");
+          }
         }
 
         const runningTrade = {
