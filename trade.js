@@ -991,7 +991,7 @@ async function connectWebSocket() {
               cross &&
               bullish(md.open, md.close, signalIndex) &&
               md.close[signalIndex] >= ema21[signalIndex] &&
-              recentEmaCross(ema14, ema21, 15)
+              recentEmaCross(ema14, ema21, 15) === "bullish"
             ) {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
@@ -1000,7 +1000,7 @@ async function connectWebSocket() {
               cross &&
               bearish(md.open, md.close, signalIndex) &&
               md.close[signalIndex] <= ema21[signalIndex] &&
-              recentEmaCross(ema14, ema21, 15)
+              recentEmaCross(ema14, ema21, 15) === "bearish"
             ) {
               sendMessage(`Bearish Signal on ${symbol}`);
               md.canAlert = false;
@@ -1019,7 +1019,7 @@ async function connectWebSocket() {
               cross &&
               bullish(md.open, md.close, signalIndex) &&
               md.close[signalIndex] >= ema21[signalIndex] &&
-              recentEmaCross(ema14, ema21, 15)
+              recentEmaCross(ema14, ema21, 15) === "bullish"
             ) {
               md.entryCandle = data.ohlc.open_time;
               setSymbolPending(symbol, "PROPOSAL_PENDING");
@@ -1041,7 +1041,7 @@ async function connectWebSocket() {
               cross &&
               bearish(md.open, md.close, signalIndex) &&
               md.close[signalIndex] <= ema21[signalIndex] &&
-              recentEmaCross(ema14, ema21, 15)
+              recentEmaCross(ema14, ema21, 15) === "bearish"
             ) {
               md.entryCandle = data.ohlc.open_time;
               setSymbolPending(symbol, "PROPOSAL_PENDING");
