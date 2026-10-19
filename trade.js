@@ -373,7 +373,9 @@ await connect();
 
 /*
 |--------------------------------------------------------------------------
-| FRESH DERIV OTP
+| FRESH DERIV OTP (new trading API)
+| Demo or real: POST /trading/v1/options/accounts/{accountId}/otp
+| Connect to returned URL. Do NOT send authorize after connect.
 |--------------------------------------------------------------------------
 */
 
@@ -523,28 +525,41 @@ async function connectWebSocket() {
   ws = new WebSocket(freshWsUrl);
 
   ws.on("open", () => {
-    console.log("🔌 Connected to Deriv WebSocket");
+    // New Deriv API: OTP WebSocket is already authenticated.
+    // Do NOT send { authorize: API_TOKEN }.
+    console.log(
+      "🔌 Connected to Deriv WebSocket (OTP — already authenticated)",
+    );
 
     reconnectAttempts = 0;
     connection = true;
-    authorized = false;
+    authorized = true;
 
-    const authorizationInterval = setInterval(() => {
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        clearInterval(authorizationInterval);
-        return;
-      }
+    send({
+      balance: 1,
+      subscribe: 1,
+    });
 
-      if (!authorized) {
-        console.log("🔐 Authorizing Deriv account...");
+    send({
+      portfolio: 1,
+    });
 
+    symbols.forEach((symbol) => {
+      send({
+        contracts_for: symbol,
+      });
+
+      timeframes.forEach((timeframe) => {
         send({
-          authorize: API_TOKEN,
+          ticks_history: symbol,
+          style: "candles",
+          count: 500,
+          granularity: timeframe,
+          end: "latest",
+          subscribe: 1,
         });
-      } else {
-        clearInterval(authorizationInterval);
-      }
-    }, 1000);
+      });
+    });
   });
 
   ws.on("error", (error) => {
@@ -571,34 +586,20 @@ async function connectWebSocket() {
     try {
       const data = JSON.parse(msg);
 
+      // Legacy authorize response — not used with OTP sockets.
+      // Kept only so unexpected authorize messages do not break the handler.
       if (data.msg_type === "authorize") {
-        console.log("✅ Authorized");
+        if (data.error) {
+          console.error(
+            "❌ Unexpected authorize error on OTP socket:",
+            data.error,
+          );
+          return;
+        }
 
+        console.log("✅ Authorize message received (optional on OTP socket)");
         authorized = true;
         connection = true;
-
-        send({
-          balance: 1,
-          subscribe: 1,
-        });
-
-        symbols.forEach((symbol) => {
-          send({
-            contracts_for: symbol,
-          });
-
-          timeframes.forEach((timeframe) => {
-            send({
-              ticks_history: symbol,
-              style: "candles",
-              count: 500,
-              granularity: timeframe,
-              end: "latest",
-              subscribe: 1,
-            });
-          });
-        });
-
         return;
       }
 
@@ -1403,15 +1404,26 @@ async function connectWebSocket() {
         }
 
         if (error === "Please log in.") {
-          console.log("⚠️ Deriv requested login again");
+          // New API: session expired — get a fresh OTP socket; do not send authorize.
+          console.log(
+            "⚠️ Session expired — reconnecting with a new OTP WebSocket...",
+          );
 
           authorized = false;
 
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            send({
-              authorize: API_TOKEN,
-            });
+          if (
+            ws &&
+            (ws.readyState === WebSocket.OPEN ||
+              ws.readyState === WebSocket.CONNECTING)
+          ) {
+            try {
+              ws.close();
+            } catch (error) {
+              console.error("❌ Error closing WebSocket:", error);
+            }
           }
+
+          scheduleReconnect();
         }
       }
     } catch (error) {
