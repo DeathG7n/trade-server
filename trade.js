@@ -6,7 +6,7 @@ import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
-import { bullish, bearish, crossedEma, recentEmaCross } from "./util.js";
+import { bullish, bearish, crossedEma } from "./util.js";
 
 dotenv.config();
 
@@ -37,7 +37,7 @@ let lastBalance = null;
 
 const hiHtf = 900;
 const htf = 300;
-const ltf = 300;
+const ltf = 900;
 const timeframes = [ltf];
 const subscribedContracts = new Set();
 const contractStates = new Map();
@@ -264,8 +264,8 @@ function clearSymbolPending(symbol) {
 }
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 2.5;
-  const takeProfit = stopLoss * 3;
+  const stopLoss = stake / 2;
+  const takeProfit = stopLoss * 10;
 
   const request = {
     proposal: 1,
@@ -991,8 +991,7 @@ async function connectWebSocket() {
               md.trendUp &&
               cross &&
               bullish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] >= ema21[signalIndex] &&
-              recentEmaCross(ema14, ema21, 15) === "bullish"
+              md.close[signalIndex] >= ema21[signalIndex]
             ) {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
@@ -1000,8 +999,7 @@ async function connectWebSocket() {
               md.trendDown &&
               cross &&
               bearish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] <= ema21[signalIndex] &&
-              recentEmaCross(ema14, ema21, 15) === "bearish"
+              md.close[signalIndex] <= ema21[signalIndex]
             ) {
               sendMessage(`Bearish Signal on ${symbol}`);
               md.canAlert = false;
@@ -1019,8 +1017,7 @@ async function connectWebSocket() {
               md.trendUp &&
               cross &&
               bullish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] >= ema21[signalIndex] &&
-              recentEmaCross(ema14, ema21, 15) === "bullish"
+              md.close[signalIndex] >= ema21[signalIndex]
             ) {
               md.entryCandle = data.ohlc.open_time;
               setSymbolPending(symbol, "PROPOSAL_PENDING");
@@ -1041,8 +1038,7 @@ async function connectWebSocket() {
               md.trendDown &&
               cross &&
               bearish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] <= ema21[signalIndex] &&
-              recentEmaCross(ema14, ema21, 15) === "bearish"
+              md.close[signalIndex] <= ema21[signalIndex]
             ) {
               md.entryCandle = data.ohlc.open_time;
               setSymbolPending(symbol, "PROPOSAL_PENDING");
@@ -1224,9 +1220,9 @@ async function connectWebSocket() {
             await update(position.stoploss, id, symbol);
           }
 
-          if (position.stoploss !== 0 && profit <= position.stoploss) {
-            closePosition(symbol, id, "Stop Loss Hit");
-          }
+          // if (position.stoploss !== 0 && profit <= position.stoploss) {
+          //   closePosition(symbol, id, "Stop Loss Hit");
+          // }
         }
 
         const runningTrade = {
