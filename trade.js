@@ -37,7 +37,7 @@ let lastBalance = null;
 
 const hiHtf = 900;
 const htf = 300;
-const ltf = 900;
+const ltf = 300;
 const timeframes = [ltf];
 const subscribedContracts = new Set();
 const contractStates = new Map();
@@ -265,7 +265,7 @@ function clearSymbolPending(symbol) {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 2;
-  const takeProfit = stopLoss * 10;
+  const takeProfit = stopLoss * 3;
 
   const request = {
     proposal: 1,
@@ -863,10 +863,10 @@ async function connectWebSocket() {
           }
 
           const ema9 = calculateEMA(md.closeHiHtf, 9);
-          const ema14 = calculateEMA(md.closeHiHtf, 14);
+          const ema50 = calculateEMA(md.closeHiHtf, 50);
 
-          md.trendUpHiHtf = ema9[hiHtfSignalIndex] > ema14[hiHtfSignalIndex];
-          md.trendDownHiHtf = ema9[hiHtfSignalIndex] < ema14[hiHtfSignalIndex];
+          md.trendUpHiHtf = ema9[hiHtfSignalIndex] > ema50[hiHtfSignalIndex];
+          md.trendDownHiHtf = ema9[hiHtfSignalIndex] < ema50[hiHtfSignalIndex];
         }
 
         if (data.echo_req.granularity === htf) {
@@ -917,26 +917,26 @@ async function connectWebSocket() {
           }
 
           const ema9 = calculateEMA(md.closeHtf, 9);
-          const ema14 = calculateEMA(md.closeHtf, 14);
+          const ema50 = calculateEMA(md.closeHtf, 50);
 
-          md.trendUpHtf = ema9[htfSignalIndex] > ema14[htfSignalIndex];
-          md.trendDownHtf = ema9[htfSignalIndex] < ema14[htfSignalIndex];
+          md.trendUpHtf = ema9[htfSignalIndex] > ema50[htfSignalIndex];
+          md.trendDownHtf = ema9[htfSignalIndex] < ema50[htfSignalIndex];
 
           if (
             md.trendUpHtf &&
-            (md.lowHtf[htfCurrIndex] <= ema14[htfCurrIndex] ||
-              md.lowHtf[htfSignalIndex] <= ema14[htfSignalIndex] ||
-              md.lowHtf[htfThirdIndex] <= ema14[htfThirdIndex] ||
-              md.lowHtf[htfFourthIndex] <= ema14[htfFourthIndex])
+            (md.lowHtf[htfCurrIndex] <= ema50[htfCurrIndex] ||
+              md.lowHtf[htfSignalIndex] <= ema50[htfSignalIndex] ||
+              md.lowHtf[htfThirdIndex] <= ema50[htfThirdIndex] ||
+              md.lowHtf[htfFourthIndex] <= ema50[htfFourthIndex])
           ) {
             md.canBuy = true;
             md.canSell = false;
           } else if (
             md.trendDownHtf &&
-            (md.highHtf[htfCurrIndex] >= ema14[htfCurrIndex] ||
-              md.highHtf[htfSignalIndex] >= ema14[htfSignalIndex] ||
-              md.highHtf[htfThirdIndex] >= ema14[htfThirdIndex] ||
-              md.highHtf[htfFourthIndex] >= ema14[htfFourthIndex])
+            (md.highHtf[htfCurrIndex] >= ema50[htfCurrIndex] ||
+              md.highHtf[htfSignalIndex] >= ema50[htfSignalIndex] ||
+              md.highHtf[htfThirdIndex] >= ema50[htfThirdIndex] ||
+              md.highHtf[htfFourthIndex] >= ema50[htfFourthIndex])
           ) {
             md.canBuy = false;
             md.canSell = true;
@@ -972,13 +972,15 @@ async function connectWebSocket() {
             return;
           }
 
-          const ema14 = calculateEMA(md.close, 14);
-          const ema21 = calculateEMA(md.close, 21);
+          const ema50 = calculateEMA(md.close, 50);
+          const ema100 = calculateEMA(md.close, 100);
 
-          md.trendUp = ema14[signalIndex] > ema21[signalIndex];
-          md.trendDown = ema14[signalIndex] < ema21[signalIndex];
+          md.trendUp = ema50[signalIndex] > ema100[signalIndex];
+          md.trendDown = ema50[signalIndex] < ema100[signalIndex];
 
-          const cross = crossedEma(md.high, md.low, signalIndex, ema21);
+          const cross =
+            crossedEma(md.high, md.low, signalIndex, ema100) ||
+            crossedEma(md.high, md.low, signalIndex, ema100);
 
           const symbolIsPending =
             md.tradeState === "PROPOSAL_PENDING" ||
@@ -991,7 +993,7 @@ async function connectWebSocket() {
               md.trendUp &&
               cross &&
               bullish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] >= ema21[signalIndex]
+              md.close[signalIndex] >= ema100[signalIndex]
             ) {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
@@ -999,7 +1001,7 @@ async function connectWebSocket() {
               md.trendDown &&
               cross &&
               bearish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] <= ema21[signalIndex]
+              md.close[signalIndex] <= ema100[signalIndex]
             ) {
               sendMessage(`Bearish Signal on ${symbol}`);
               md.canAlert = false;
@@ -1017,7 +1019,7 @@ async function connectWebSocket() {
               md.trendUp &&
               cross &&
               bullish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] >= ema21[signalIndex]
+              md.close[signalIndex] >= ema100[signalIndex]
             ) {
               md.entryCandle = data.ohlc.open_time;
               setSymbolPending(symbol, "PROPOSAL_PENDING");
@@ -1038,7 +1040,7 @@ async function connectWebSocket() {
               md.trendDown &&
               cross &&
               bearish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] <= ema21[signalIndex]
+              md.close[signalIndex] <= ema100[signalIndex]
             ) {
               md.entryCandle = data.ohlc.open_time;
               setSymbolPending(symbol, "PROPOSAL_PENDING");
@@ -1220,9 +1222,9 @@ async function connectWebSocket() {
             await update(position.stoploss, id, symbol);
           }
 
-          // if (position.stoploss !== 0 && profit <= position.stoploss) {
-          //   closePosition(symbol, id, "Stop Loss Hit");
-          // }
+          if (position.stoploss !== 0 && profit <= position.stoploss) {
+            closePosition(symbol, id, "Stop Loss Hit");
+          }
         }
 
         const runningTrade = {
