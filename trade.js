@@ -1069,10 +1069,11 @@ async function connectWebSocket() {
 
               if (position.type === "MULTUP") {
                 if (
-                  md.trendUp &&
-                  cross &&
-                  bearish(md.open, md.close, signalIndex) &&
-                  md.close[signalIndex] <= ema100[signalIndex]
+                  (md.trendUp &&
+                    cross &&
+                    bearish(md.open, md.close, signalIndex) &&
+                    md.close[signalIndex] <= ema100[signalIndex]) ||
+                  md.trendDown
                 ) {
                   try {
                     closePosition(symbol, contractId, "Opposite Signal");
@@ -1082,10 +1083,11 @@ async function connectWebSocket() {
                 }
               } else if (position.type === "MULTDOWN") {
                 if (
-                  md.trendDown &&
-                  cross &&
-                  bullish(md.open, md.close, signalIndex) &&
-                  md.close[signalIndex] >= ema100[signalIndex]
+                  (md.trendDown &&
+                    cross &&
+                    bullish(md.open, md.close, signalIndex) &&
+                    md.close[signalIndex] >= ema100[signalIndex]) ||
+                  md.trendUp
                 ) {
                   try {
                     closePosition(symbol, contractId, "Opposite Signal");
