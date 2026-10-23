@@ -37,7 +37,7 @@ let lastBalance = null;
 
 const hiHtf = 900;
 const htf = 300;
-const ltf = 300;
+const ltf = 60;
 const timeframes = [ltf];
 const subscribedContracts = new Set();
 const contractStates = new Map();
@@ -264,7 +264,7 @@ function clearSymbolPending(symbol) {
 }
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 2;
+  const stopLoss = stake / 10;
   const takeProfit = stopLoss * 3;
 
   const request = {
@@ -978,9 +978,7 @@ async function connectWebSocket() {
           md.trendUp = ema50[signalIndex] > ema100[signalIndex];
           md.trendDown = ema50[signalIndex] < ema100[signalIndex];
 
-          const cross =
-            crossedEma(md.high, md.low, signalIndex, ema100) ||
-            crossedEma(md.high, md.low, signalIndex, ema100);
+          const cross = crossedEma(md.high, md.low, signalIndex, ema100);
 
           const symbolIsPending =
             md.tradeState === "PROPOSAL_PENDING" ||
@@ -1070,7 +1068,12 @@ async function connectWebSocket() {
               }
 
               if (position.type === "MULTUP") {
-                if (md.trendDown) {
+                if (
+                  md.trendUp &&
+                  cross &&
+                  bearish(md.open, md.close, signalIndex) &&
+                  md.close[signalIndex] <= ema100[signalIndex]
+                ) {
                   try {
                     closePosition(symbol, contractId, "Opposite Signal");
                   } catch (error) {
@@ -1078,7 +1081,12 @@ async function connectWebSocket() {
                   }
                 }
               } else if (position.type === "MULTDOWN") {
-                if (md.trendUp) {
+                if (
+                  md.trendDown &&
+                  cross &&
+                  bullish(md.open, md.close, signalIndex) &&
+                  md.close[signalIndex] >= ema100[signalIndex]
+                ) {
                   try {
                     closePosition(symbol, contractId, "Opposite Signal");
                   } catch (error) {
