@@ -6,7 +6,7 @@ import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
-import { bullish, bearish, crossedEma } from "./util.js";
+import { bullish, bearish, crossedEma, recentEmaCross } from "./util.js";
 
 dotenv.config();
 
@@ -36,7 +36,7 @@ let portfolioSynced = false;
 let lastBalance = null;
 
 const hiHtf = 900;
-const htf = 300;
+const htf = 900;
 const ltf = 60;
 const timeframes = [ltf];
 const subscribedContracts = new Set();
@@ -44,49 +44,55 @@ const contractStates = new Map();
 const pendingTrades = new Map();
 
 const symbols = [
-  "stpRNG",
-  "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
-  "stpRNG5",
+  // "stpRNG",
+  // "stpRNG2",
+  // "stpRNG3",
+  // "stpRNG4",
+  // "stpRNG5",
   "1HZ10V",
   "R_10",
+  "1HZ15V",
   "1HZ25V",
   "R_25",
+  "1HZ30V",
   "1HZ50V",
   "R_50",
   "1HZ75V",
   "R_75",
+  "1HZ90V",
   "1HZ100V",
   "R_100",
-  "JD10",
-  "JD25",
-  "JD50",
-  "JD75",
-  "JD100",
+  // "JD10",
+  // "JD25",
+  // "JD50",
+  // "JD75",
+  // "JD100",
 ];
 
 const tradeSymbols = [
-  "stpRNG",
-  "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
-  "stpRNG5",
+  // "stpRNG",
+  // "stpRNG2",
+  // "stpRNG3",
+  // "stpRNG4",
+  // "stpRNG5",
   "1HZ10V",
   "R_10",
+  "1HZ15V",
   "1HZ25V",
   "R_25",
+  "1HZ30V",
   "1HZ50V",
   "R_50",
   "1HZ75V",
   "R_75",
+  "1HZ90V",
   "1HZ100V",
   "R_100",
-  "JD10",
-  "JD25",
-  "JD50",
-  "JD75",
-  "JD100",
+  // "JD10",
+  // "JD25",
+  // "JD50",
+  // "JD75",
+  // "JD100",
 ];
 
 const alertSymbols = [
@@ -264,7 +270,7 @@ function clearSymbolPending(symbol) {
 }
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 10;
+  const stopLoss = stake / 4;
   const takeProfit = stopLoss * 3;
 
   const request = {
@@ -916,11 +922,11 @@ async function connectWebSocket() {
             return;
           }
 
-          const ema9 = calculateEMA(md.closeHtf, 9);
+          const ema21 = calculateEMA(md.closeHtf, 21);
           const ema50 = calculateEMA(md.closeHtf, 50);
 
-          md.trendUpHtf = ema9[htfSignalIndex] > ema50[htfSignalIndex];
-          md.trendDownHtf = ema9[htfSignalIndex] < ema50[htfSignalIndex];
+          md.trendUpHtf = ema21[htfSignalIndex] > ema50[htfSignalIndex];
+          md.trendDownHtf = ema21[htfSignalIndex] < ema50[htfSignalIndex];
 
           if (
             md.trendUpHtf &&
@@ -972,11 +978,12 @@ async function connectWebSocket() {
             return;
           }
 
+          const ema21 = calculateEMA(md.close, 21);
           const ema50 = calculateEMA(md.close, 50);
           const ema100 = calculateEMA(md.close, 100);
 
-          md.trendUp = ema50[signalIndex] > ema100[signalIndex];
-          md.trendDown = ema50[signalIndex] < ema100[signalIndex];
+          md.trendUp = ema21[signalIndex] > ema50[signalIndex];
+          md.trendDown = ema21[signalIndex] < ema50[signalIndex];
 
           const cross = crossedEma(md.high, md.low, signalIndex, ema100);
 
@@ -988,7 +995,9 @@ async function connectWebSocket() {
 
           if (md.canAlert && alertSymbols.includes(symbol)) {
             if (
-              md.trendUp &&
+              md.canBuy &&
+              (md.trendDown ||
+                recentEmaCross(ema21, ema50, 50) === "bullish") &&
               cross &&
               bullish(md.open, md.close, signalIndex) &&
               md.close[signalIndex] >= ema100[signalIndex]
@@ -996,7 +1005,8 @@ async function connectWebSocket() {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
             } else if (
-              md.trendDown &&
+              md.canSell &&
+              (md.trendUp || recentEmaCross(ema21, ema50, 50) === "bearish") &&
               cross &&
               bearish(md.open, md.close, signalIndex) &&
               md.close[signalIndex] <= ema100[signalIndex]
@@ -1014,7 +1024,9 @@ async function connectWebSocket() {
             md.tradeState === "IDLE"
           ) {
             if (
-              md.trendUp &&
+              md.canBuy &&
+              (md.trendDown ||
+                recentEmaCross(ema21, ema50, 50) === "bullish") &&
               cross &&
               bullish(md.open, md.close, signalIndex) &&
               md.close[signalIndex] >= ema100[signalIndex]
@@ -1035,7 +1047,8 @@ async function connectWebSocket() {
               }
             }
             if (
-              md.trendDown &&
+              md.canSell &&
+              (md.trendUp || recentEmaCross(ema21, ema50, 50) === "bearish") &&
               cross &&
               bearish(md.open, md.close, signalIndex) &&
               md.close[signalIndex] <= ema100[signalIndex]
@@ -1068,13 +1081,7 @@ async function connectWebSocket() {
               }
 
               if (position.type === "MULTUP") {
-                if (
-                  (md.trendUp &&
-                    cross &&
-                    bearish(md.open, md.close, signalIndex) &&
-                    md.close[signalIndex] <= ema100[signalIndex]) ||
-                  md.trendDown
-                ) {
+                if (md.trendDownHtf) {
                   try {
                     closePosition(symbol, contractId, "Opposite Signal");
                   } catch (error) {
@@ -1082,13 +1089,7 @@ async function connectWebSocket() {
                   }
                 }
               } else if (position.type === "MULTDOWN") {
-                if (
-                  (md.trendDown &&
-                    cross &&
-                    bullish(md.open, md.close, signalIndex) &&
-                    md.close[signalIndex] >= ema100[signalIndex]) ||
-                  md.trendUp
-                ) {
+                if (md.trendUpHtf) {
                   try {
                     closePosition(symbol, contractId, "Opposite Signal");
                   } catch (error) {
