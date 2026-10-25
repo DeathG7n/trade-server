@@ -49,19 +49,19 @@ const symbols = [
   // "stpRNG3",
   // "stpRNG4",
   // "stpRNG5",
-  "1HZ10V",
-  "R_10",
-  "1HZ15V",
-  "1HZ25V",
+  // "1HZ10V",
+  // "R_10",
+  // "1HZ15V",
+  // "1HZ25V",
   "R_25",
-  "1HZ30V",
-  "1HZ50V",
-  "R_50",
-  "1HZ75V",
-  "R_75",
-  "1HZ90V",
-  "1HZ100V",
-  "R_100",
+  // "1HZ30V",
+  // "1HZ50V",
+  // "R_50",
+  // "1HZ75V",
+  // "R_75",
+  // "1HZ90V",
+  // "1HZ100V",
+  // "R_100",
   // "JD10",
   // "JD25",
   // "JD50",
@@ -619,11 +619,12 @@ async function connectWebSocket() {
         }
 
         balance = Math.trunc(balance);
+        const remaining = balance - 1;
 
-        if (balance < 7) {
+        if (remaining < 3) {
           amount = 1;
         } else {
-          const forefeit = 2 ** Math.floor(Math.log2(balance / 7) + 1);
+          const forefeit = 2 ** Math.floor(Math.log2(remaining / 3) + 1);
 
           amount = Math.min(1000, forefeit);
         }
@@ -1215,23 +1216,23 @@ async function connectWebSocket() {
             return;
           }
 
-          if (pip >= risk && position.stoploss === 0) {
+          if (pip >= risk * 2 && position.stoploss === 0) {
             position.stoploss = Math.abs(commission);
 
             await update(position.stoploss, id, symbol);
           }
 
-          if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
-            position.stoploss = Math.abs(lossAmount);
+          // if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
+          //   position.stoploss = Math.abs(lossAmount);
 
-            await update(position.stoploss, id, symbol);
-          }
+          //   await update(position.stoploss, id, symbol);
+          // }
 
-          if (pip >= risk * 2.5 && position.stoploss === Math.abs(lossAmount)) {
-            position.stoploss = Math.abs(lossAmount * 1.25);
+          // if (pip >= risk * 2.5 && position.stoploss === Math.abs(lossAmount)) {
+          //   position.stoploss = Math.abs(lossAmount * 1.25);
 
-            await update(position.stoploss, id, symbol);
-          }
+          //   await update(position.stoploss, id, symbol);
+          // }
 
           if (position.stoploss !== 0 && profit <= position.stoploss) {
             closePosition(symbol, id, "Stop Loss Hit");
