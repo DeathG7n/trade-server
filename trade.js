@@ -6,7 +6,7 @@ import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
-import { bullish, bearish, crossedEma, recentEmaCross } from "./util.js";
+import { crossedPrice } from "./util.js";
 
 dotenv.config();
 
@@ -135,6 +135,7 @@ symbols.forEach((symbol) => {
     openHtf: [],
     highHtf: [],
     lowHtf: [],
+    emaHtf: [],
     openTimeHtf: 0,
     trendUpHtf: false,
     trendDownHtf: false,
@@ -277,7 +278,7 @@ function clearSymbolPending(symbol) {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 4;
-  const takeProfit = stopLoss * 3;
+  const takeProfit = stopLoss * 5;
 
   const request = {
     proposal: 1,
@@ -945,6 +946,8 @@ async function connectWebSocket() {
 
           const ema21 = calculateEMA(md.closeHtf, 21);
           const ema50 = calculateEMA(md.closeHtf, 50);
+          const ema100 = calculateEMA(md.closeHtf, 100);
+          md.emaHtf = [ema50[htfCurrIndex], ema100[htfCurrIndex]];
 
           md.trendUpHtf = ema21[htfSignalIndex] > ema50[htfSignalIndex];
           md.trendDownHtf = ema21[htfSignalIndex] < ema50[htfSignalIndex];
@@ -1045,8 +1048,6 @@ async function connectWebSocket() {
           md.trendUp = ema21[signalIndex] > ema50[signalIndex];
           md.trendDown = ema21[signalIndex] < ema50[signalIndex];
 
-          const cross = crossedEma(md.high, md.low, signalIndex, ema100);
-
           const symbolIsPending =
             md.tradeState === "PROPOSAL_PENDING" ||
             md.tradeState === "BUY_PENDING";
@@ -1056,19 +1057,18 @@ async function connectWebSocket() {
           if (md.canAlert && alertSymbols.includes(symbol)) {
             if (
               md.canBuy &&
-              (md.trendDown ||
-                recentEmaCross(ema21, ema50, 50) === "bullish") &&
-              cross &&
-              bullish(md.open, md.close, signalIndex) &&
+              (crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) ||
+                (md.emaHtf[0] > md.emaHtf[1] &&
+                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]))) &&
               md.close[signalIndex] >= ema100[signalIndex]
             ) {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
             } else if (
               md.canSell &&
-              (md.trendUp || recentEmaCross(ema21, ema50, 50) === "bearish") &&
-              cross &&
-              bearish(md.open, md.close, signalIndex) &&
+              (crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) ||
+                (md.emaHtf[0] < md.emaHtf[1] &&
+                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]))) &&
               md.close[signalIndex] <= ema100[signalIndex]
             ) {
               sendMessage(`Bearish Signal on ${symbol}`);
@@ -1085,10 +1085,9 @@ async function connectWebSocket() {
           ) {
             if (
               md.canBuy &&
-              (md.trendDown ||
-                recentEmaCross(ema21, ema50, 50) === "bullish") &&
-              cross &&
-              bullish(md.open, md.close, signalIndex) &&
+              (crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) ||
+                (md.emaHtf[0] > md.emaHtf[1] &&
+                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]))) &&
               md.close[signalIndex] >= ema100[signalIndex]
             ) {
               md.entryCandle = data.ohlc.open_time;
@@ -1108,9 +1107,9 @@ async function connectWebSocket() {
             }
             if (
               md.canSell &&
-              (md.trendUp || recentEmaCross(ema21, ema50, 50) === "bearish") &&
-              cross &&
-              bearish(md.open, md.close, signalIndex) &&
+              (crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) ||
+                (md.emaHtf[0] < md.emaHtf[1] &&
+                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]))) &&
               md.close[signalIndex] <= ema100[signalIndex]
             ) {
               md.entryCandle = data.ohlc.open_time;
@@ -1275,23 +1274,32 @@ async function connectWebSocket() {
             return;
           }
 
-          if (pip >= risk * 2 && position.stoploss === 0) {
+          if (pip >= risk && position.stoploss === 0) {
             position.stoploss = Math.abs(commission);
 
             await update(position.stoploss, id, symbol);
           }
 
-          // if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
-          //   position.stoploss = Math.abs(lossAmount);
+          if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
+            position.stoploss = Math.abs(lossAmount);
 
-          //   await update(position.stoploss, id, symbol);
-          // }
+            await update(position.stoploss, id, symbol);
+          }
 
-          // if (pip >= risk * 2.5 && position.stoploss === Math.abs(lossAmount)) {
-          //   position.stoploss = Math.abs(lossAmount * 1.25);
+          if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount)) {
+            position.stoploss = Math.abs(lossAmount * 2);
 
-          //   await update(position.stoploss, id, symbol);
-          // }
+            await update(position.stoploss, id, symbol);
+          }
+
+          if (
+            pip >= risk * 5 &&
+            position.stoploss === Math.abs(lossAmount * 2)
+          ) {
+            position.stoploss = Math.abs(lossAmount * 3);
+
+            await update(position.stoploss, id, symbol);
+          }
 
           if (position.stoploss !== 0 && profit <= position.stoploss) {
             closePosition(symbol, id, "Stop Loss Hit");
