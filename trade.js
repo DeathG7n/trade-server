@@ -1043,7 +1043,6 @@ async function connectWebSocket() {
 
           const ema21 = calculateEMA(md.close, 21);
           const ema50 = calculateEMA(md.close, 50);
-          const ema100 = calculateEMA(md.close, 100);
 
           md.trendUp = ema21[signalIndex] > ema50[signalIndex];
           md.trendDown = ema21[signalIndex] < ema50[signalIndex];
@@ -1057,19 +1056,21 @@ async function connectWebSocket() {
           if (md.canAlert && alertSymbols.includes(symbol)) {
             if (
               md.canBuy &&
-              (crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) ||
+              ((crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) &&
+                md.close[signalIndex] >= md.emaHtf[0]) ||
                 (md.emaHtf[0] > md.emaHtf[1] &&
-                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]))) &&
-              md.close[signalIndex] >= ema100[signalIndex]
+                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]) &&
+                  md.close[signalIndex] >= md.emaHtf[1]))
             ) {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
             } else if (
               md.canSell &&
-              (crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) ||
+              ((crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) &&
+                md.close[signalIndex] <= md.emaHtf[0]) ||
                 (md.emaHtf[0] < md.emaHtf[1] &&
-                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]))) &&
-              md.close[signalIndex] <= ema100[signalIndex]
+                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]) &&
+                  md.close[signalIndex] <= md.emaHtf[1]))
             ) {
               sendMessage(`Bearish Signal on ${symbol}`);
               md.canAlert = false;
@@ -1085,10 +1086,11 @@ async function connectWebSocket() {
           ) {
             if (
               md.canBuy &&
-              (crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) ||
+              ((crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) &&
+                md.close[signalIndex] >= md.emaHtf[0]) ||
                 (md.emaHtf[0] > md.emaHtf[1] &&
-                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]))) &&
-              md.close[signalIndex] >= ema100[signalIndex]
+                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]) &&
+                  md.close[signalIndex] >= md.emaHtf[1]))
             ) {
               md.entryCandle = data.ohlc.open_time;
               setSymbolPending(symbol, "PROPOSAL_PENDING");
@@ -1107,10 +1109,11 @@ async function connectWebSocket() {
             }
             if (
               md.canSell &&
-              (crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) ||
+              ((crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) &&
+                md.close[signalIndex] <= md.emaHtf[0]) ||
                 (md.emaHtf[0] < md.emaHtf[1] &&
-                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]))) &&
-              md.close[signalIndex] <= ema100[signalIndex]
+                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]) &&
+                  md.close[signalIndex] <= md.emaHtf[1]))
             ) {
               md.entryCandle = data.ohlc.open_time;
               setSymbolPending(symbol, "PROPOSAL_PENDING");
