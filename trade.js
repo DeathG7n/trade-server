@@ -626,12 +626,11 @@ async function connectWebSocket() {
         }
 
         balance = Math.trunc(balance);
-        const remaining = balance - 1;
 
-        if (remaining < 3) {
+        if (balance < 3) {
           amount = 1;
         } else {
-          const forefeit = 2 ** Math.floor(Math.log2(remaining / 3) + 1);
+          const forefeit = 2 ** Math.floor(Math.log2(balance / 3) + 1);
 
           amount = Math.min(1000, forefeit);
         }
