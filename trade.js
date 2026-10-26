@@ -39,6 +39,8 @@ const hiHtf = 900;
 const htf = 900;
 const ltf = 60;
 const timeframes = [ltf, htf];
+// Only backfill from API when arrays are short or this interval has elapsed (ms)
+const HISTORY_RESYNC_MS = 15 * 60 * 1000;
 const subscribedContracts = new Set();
 const contractStates = new Map();
 const pendingTrades = new Map();
@@ -150,6 +152,10 @@ symbols.forEach((symbol) => {
     tradeState: "IDLE",
     pendingProposalId: null,
     entryCandle: 0,
+    ltfHistoryPending: false,
+    htfHistoryPending: false,
+    lastLtfHistoryAt: 0,
+    lastHtfHistoryAt: 0,
   };
 });
 
@@ -792,6 +798,8 @@ async function connectWebSocket() {
             md.openHtf = data.candles.map((c) => c.open);
             md.highHtf = data.candles.map((c) => c.high);
             md.lowHtf = data.candles.map((c) => c.low);
+            md.htfHistoryPending = false;
+            md.lastHtfHistoryAt = Date.now();
           }
 
           if (data.echo_req.granularity === ltf) {
@@ -799,6 +807,8 @@ async function connectWebSocket() {
             md.open = data.candles.map((c) => c.open);
             md.high = data.candles.map((c) => c.high);
             md.low = data.candles.map((c) => c.low);
+            md.ltfHistoryPending = false;
+            md.lastLtfHistoryAt = Date.now();
           }
         } catch (error) {
           sendMessage(String(error));
@@ -887,18 +897,28 @@ async function connectWebSocket() {
             md.openTimeHtf = data.ohlc.open_time;
             md.canAlertHtf = true;
 
-            // Request fresh history for accuracy, but do NOT return early.
-            // This allows evaluation on the candle that just closed.
-            send({
-              ticks_history: data.echo_req.ticks_history,
-              style: "candles",
-              count: 500,
-              granularity: data.echo_req.granularity,
-              end: "latest",
-            });
-          }
+            // In-place: append the new forming HTF candle (no mandatory full history)
+            md.closeHtf.push(Number(data.ohlc.close));
+            md.openHtf.push(Number(data.ohlc.open));
+            md.highHtf.push(Number(data.ohlc.high));
+            md.lowHtf.push(Number(data.ohlc.low));
 
-          if (md.closeHtf.length === 0) {
+            // Optional backfill only if short history or resync interval elapsed
+            const needHtfHistory =
+              md.closeHtf.length < 200 ||
+              Date.now() - md.lastHtfHistoryAt > HISTORY_RESYNC_MS;
+
+            if (needHtfHistory && !md.htfHistoryPending) {
+              md.htfHistoryPending = true;
+              send({
+                ticks_history: data.echo_req.ticks_history,
+                style: "candles",
+                count: 500,
+                granularity: data.echo_req.granularity,
+                end: "latest",
+              });
+            }
+          } else if (md.closeHtf.length === 0) {
             md.closeHtf.push(Number(data.ohlc.close));
             md.openHtf.push(Number(data.ohlc.open));
             md.highHtf.push(Number(data.ohlc.high));
@@ -919,7 +939,7 @@ async function connectWebSocket() {
           const htfThirdIndex = len - 3;
           const htfFourthIndex = len - 4;
 
-          if (len < 200 || htfSignalIndex < 0) {
+          if (len < 200 || htfSignalIndex < 0 || md.htfHistoryPending) {
             return;
           }
 
@@ -963,19 +983,58 @@ async function connectWebSocket() {
           if (isNewLtfCandle) {
             md.openTime = data.ohlc.open_time;
             md.canAlert = true;
-            send({
-              ticks_history: data.echo_req.ticks_history,
-              style: "candles",
-              count: 500,
-              granularity: data.echo_req.granularity,
-              end: "latest",
-            });
+
+            // (2) In-place: append the new forming LTF candle instead of
+            // refetching 500 bars every minute.
+            md.close.push(Number(data.ohlc.close));
+            md.open.push(Number(data.ohlc.open));
+            md.high.push(Number(data.ohlc.high));
+            md.low.push(Number(data.ohlc.low));
+
+            // Keep arrays from growing without bound
+            const MAX_BARS = 600;
+            if (md.close.length > MAX_BARS) {
+              const drop = md.close.length - MAX_BARS;
+              md.close.splice(0, drop);
+              md.open.splice(0, drop);
+              md.high.splice(0, drop);
+              md.low.splice(0, drop);
+            }
+
+            // Backfill only when history is short or periodic resync is due
+            const needLtfHistory =
+              md.close.length < 200 ||
+              Date.now() - md.lastLtfHistoryAt > HISTORY_RESYNC_MS;
+
+            if (needLtfHistory && !md.ltfHistoryPending) {
+              // (1) Gate evaluation until this history response arrives
+              md.ltfHistoryPending = true;
+              send({
+                ticks_history: data.echo_req.ticks_history,
+                style: "candles",
+                count: 500,
+                granularity: data.echo_req.granularity,
+                end: "latest",
+              });
+            }
+          } else if (md.close.length === 0) {
+            md.close.push(Number(data.ohlc.close));
+            md.open.push(Number(data.ohlc.open));
+            md.high.push(Number(data.ohlc.high));
+            md.low.push(Number(data.ohlc.low));
+          } else {
+            const last = md.close.length - 1;
+            md.close[last] = Number(data.ohlc.close);
+            md.open[last] = Number(data.ohlc.open);
+            md.high[last] = Number(data.ohlc.high);
+            md.low[last] = Number(data.ohlc.low);
           }
 
           const len = md.close.length;
           const signalIndex = len - 2;
 
-          if (len < 200) {
+          // (1) Do not evaluate while a history refresh is in flight
+          if (len < 200 || signalIndex < 0 || md.ltfHistoryPending) {
             return;
           }
 
