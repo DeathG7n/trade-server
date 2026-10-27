@@ -6,7 +6,7 @@ import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
-import { crossedPrice } from "./util.js";
+import { bullish, bearish, crossedEma, recentEmaCross } from "./util.js";
 
 dotenv.config();
 
@@ -16,6 +16,11 @@ let ws = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
 let intentionalClose = false;
+let pingTimer = null;
+let lastPongAt = 0;
+const PING_INTERVAL_MS = 30000; // Deriv keep-alive: send { ping: 1 }
+const RECONNECT_MIN_GAP_MS = 15000; // avoid tight reconnect loops
+let lastReconnectScheduledAt = 0;
 
 const API_TOKEN = process.env.API_TOKEN;
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -277,8 +282,8 @@ function clearSymbolPending(symbol) {
 }
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 4;
-  const takeProfit = stopLoss * 5;
+  const stopLoss = stake / 2;
+  const takeProfit = stopLoss * 2;
 
   const request = {
     proposal: 1,
@@ -461,11 +466,48 @@ async function getFreshWsUrl() {
 const reconnectBaseDelay = 5000;
 const reconnectMaxDelay = 300000;
 
+function stopPing() {
+  if (pingTimer) {
+    clearInterval(pingTimer);
+    pingTimer = null;
+  }
+}
+
+function startPing() {
+  stopPing();
+  lastPongAt = Date.now();
+
+  pingTimer = setInterval(() => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    // No pong for ~75s → connection likely dead (common path to 1006)
+    if (lastPongAt && Date.now() - lastPongAt > PING_INTERVAL_MS * 2.5) {
+      console.warn("⚠️ No pong received — closing socket for reconnect");
+      stopPing();
+      try {
+        ws.close();
+      } catch (error) {
+        /* ignore */
+        sendMessage(`❌ Error closing WebSocket: ${error.message}`);
+      }
+      return;
+    }
+
+    try {
+      send({ ping: 1 });
+    } catch (error) {
+      console.error("❌ Ping failed:", error.message);
+    }
+  }, PING_INTERVAL_MS);
+}
+
 function resetConnectionState() {
   authorized = false;
   portfolioSynced = false;
   connection = false;
-
+  stopPing();
   subscribedContracts.clear();
 }
 
@@ -480,10 +522,18 @@ function scheduleReconnect() {
 
   reconnectAttempts++;
 
-  const delay = Math.min(
+  // Exponential backoff: 5s → 10s → 20s … max 5 min (not a tight loop)
+  let delay = Math.min(
     reconnectBaseDelay * 2 ** (reconnectAttempts - 1),
     reconnectMaxDelay,
   );
+
+  const sinceLast = Date.now() - lastReconnectScheduledAt;
+  if (lastReconnectScheduledAt && sinceLast < RECONNECT_MIN_GAP_MS) {
+    delay = Math.max(delay, RECONNECT_MIN_GAP_MS - sinceLast);
+  }
+
+  lastReconnectScheduledAt = Date.now();
 
   console.log(
     `🔄 WebSocket reconnect scheduled in ${Math.round(
@@ -548,6 +598,9 @@ async function connectWebSocket() {
     connection = true;
     authorized = true;
 
+    // Periodic ping keeps idle proxies/firewalls from dropping the socket (1006)
+    startPing();
+
     send({
       balance: 1,
       subscribe: 1,
@@ -599,6 +652,12 @@ async function connectWebSocket() {
     try {
       const data = JSON.parse(msg);
 
+      // Keep-alive: Deriv answers { ping: 1 } with msg_type "pong"
+      if (data.msg_type === "pong" || data.pong === 1) {
+        lastPongAt = Date.now();
+        return;
+      }
+
       // Legacy authorize response — not used with OTP sockets.
       // Kept only so unexpected authorize messages do not break the handler.
       if (data.msg_type === "authorize") {
@@ -627,10 +686,10 @@ async function connectWebSocket() {
 
         balance = Math.trunc(balance);
 
-        if (balance < 3) {
+        if (balance < 7) {
           amount = 1;
         } else {
-          const forefeit = 2 ** Math.floor(Math.log2(balance / 3) + 1);
+          const forefeit = 2 ** Math.floor(Math.log2(balance / 7) + 1);
 
           amount = Math.min(1000, forefeit);
         }
@@ -1042,6 +1101,9 @@ async function connectWebSocket() {
 
           const ema21 = calculateEMA(md.close, 21);
           const ema50 = calculateEMA(md.close, 50);
+          const ema100 = calculateEMA(md.close, 100);
+
+          const cross = crossedEma(md.high, md.low, signalIndex, ema100);
 
           md.trendUp = ema21[signalIndex] > ema50[signalIndex];
           md.trendDown = ema21[signalIndex] < ema50[signalIndex];
@@ -1055,21 +1117,20 @@ async function connectWebSocket() {
           if (md.canAlert && alertSymbols.includes(symbol)) {
             if (
               md.canBuy &&
-              ((crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) &&
-                md.close[signalIndex] >= md.emaHtf[0]) ||
-                (md.emaHtf[0] > md.emaHtf[1] &&
-                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]) &&
-                  md.close[signalIndex] >= md.emaHtf[1]))
+              (md.trendDown ||
+                recentEmaCross(ema21, ema50, 50) === "bullish") &&
+              cross &&
+              bullish(md.open, md.close, signalIndex) &&
+              md.close[signalIndex] >= ema100[signalIndex]
             ) {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
             } else if (
               md.canSell &&
-              ((crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) &&
-                md.close[signalIndex] <= md.emaHtf[0]) ||
-                (md.emaHtf[0] < md.emaHtf[1] &&
-                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]) &&
-                  md.close[signalIndex] <= md.emaHtf[1]))
+              (md.trendUp || recentEmaCross(ema21, ema50, 50) === "bearish") &&
+              cross &&
+              bearish(md.open, md.close, signalIndex) &&
+              md.close[signalIndex] <= ema100[signalIndex]
             ) {
               sendMessage(`Bearish Signal on ${symbol}`);
               md.canAlert = false;
@@ -1085,11 +1146,11 @@ async function connectWebSocket() {
           ) {
             if (
               md.canBuy &&
-              ((crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) &&
-                md.close[signalIndex] >= md.emaHtf[0]) ||
-                (md.emaHtf[0] > md.emaHtf[1] &&
-                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]) &&
-                  md.close[signalIndex] >= md.emaHtf[1]))
+              (md.trendDown ||
+                recentEmaCross(ema21, ema50, 50) === "bullish") &&
+              cross &&
+              bullish(md.open, md.close, signalIndex) &&
+              md.close[signalIndex] >= ema100[signalIndex]
             ) {
               md.entryCandle = data.ohlc.open_time;
               setSymbolPending(symbol, "PROPOSAL_PENDING");
@@ -1108,11 +1169,10 @@ async function connectWebSocket() {
             }
             if (
               md.canSell &&
-              ((crossedPrice(md.high, md.low, signalIndex, md.emaHtf[0]) &&
-                md.close[signalIndex] <= md.emaHtf[0]) ||
-                (md.emaHtf[0] < md.emaHtf[1] &&
-                  crossedPrice(md.high, md.low, signalIndex, md.emaHtf[1]) &&
-                  md.close[signalIndex] <= md.emaHtf[1]))
+              (md.trendUp || recentEmaCross(ema21, ema50, 50) === "bearish") &&
+              cross &&
+              bearish(md.open, md.close, signalIndex) &&
+              md.close[signalIndex] <= ema100[signalIndex]
             ) {
               md.entryCandle = data.ohlc.open_time;
               setSymbolPending(symbol, "PROPOSAL_PENDING");
@@ -1456,30 +1516,44 @@ async function connectWebSocket() {
             return;
           }
 
-          console.log("🔄 Resubscribing candles after rate limit...");
+          // Wait before resubscribing — immediate flood causes more limits / 1006
+          console.log(
+            "⏳ Rate limited on ticks_history — waiting 60s before resubscribe...",
+          );
 
-          for (const symbol of symbols) {
+          setTimeout(() => {
             if (!ws || ws.readyState !== WebSocket.OPEN || !authorized) {
-              break;
+              return;
             }
 
-            send({
-              contracts_for: symbol,
-            });
+            console.log(
+              "🔄 Resubscribing candles after rate-limit cooldown...",
+            );
 
-            for (const timeframe of timeframes) {
-              send({
-                ticks_history: symbol,
-                style: "candles",
-                count: 500,
-                granularity: timeframe,
-                end: "latest",
-                subscribe: 1,
-              });
-            }
-          }
+            (async () => {
+              for (const symbol of symbols) {
+                if (!ws || ws.readyState !== WebSocket.OPEN || !authorized) {
+                  break;
+                }
 
-          sendMessage("Candles Resubscribed");
+                send({ contracts_for: symbol });
+
+                for (const timeframe of timeframes) {
+                  send({
+                    ticks_history: symbol,
+                    style: "candles",
+                    count: 500,
+                    granularity: timeframe,
+                    end: "latest",
+                    subscribe: 1,
+                  });
+                  await new Promise((r) => setTimeout(r, 300));
+                }
+              }
+
+              sendMessage("Candles Resubscribed");
+            })();
+          }, 60000);
         }
 
         if (error === "Please log in.") {
