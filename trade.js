@@ -17,10 +17,12 @@ let reconnectTimer = null;
 let reconnectAttempts = 0;
 let intentionalClose = false;
 let pingTimer = null;
-let lastPongAt = 0;
+let lastActivityAt = 0; // any server message counts as alive
 const PING_INTERVAL_MS = 30000; // Deriv keep-alive: send { ping: 1 }
+const STALE_CONNECTION_MS = 90000; // only force-close if fully silent
 const RECONNECT_MIN_GAP_MS = 15000; // avoid tight reconnect loops
 let lastReconnectScheduledAt = 0;
+let connecting = false; // prevent concurrent connectWebSocket
 
 const API_TOKEN = process.env.API_TOKEN;
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -475,21 +477,27 @@ function stopPing() {
 
 function startPing() {
   stopPing();
-  lastPongAt = Date.now();
+  lastActivityAt = Date.now();
 
   pingTimer = setInterval(() => {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       return;
     }
 
-    // No pong for ~75s → connection likely dead (common path to 1006)
-    if (lastPongAt && Date.now() - lastPongAt > PING_INTERVAL_MS * 2.5) {
-      console.warn("⚠️ No pong received — closing socket for reconnect");
+    // Only force-close if the socket is fully silent.
+    // Deriv replies to { ping: 1 } with msg_type "ping" and ping: "pong"
+    // (NOT msg_type "pong"). Any inbound message updates lastActivityAt.
+    if (
+      lastActivityAt &&
+      Date.now() - lastActivityAt > STALE_CONNECTION_MS
+    ) {
+      console.warn(
+        "⚠️ Socket silent (no messages) — closing for reconnect",
+      );
       stopPing();
       try {
         ws.close();
       } catch (error) {
-        /* ignore */
         sendMessage(`❌ Error closing WebSocket: ${error.message}`);
       }
       return;
@@ -497,6 +505,9 @@ function startPing() {
 
     try {
       send({ ping: 1 });
+      if (typeof ws.ping === "function") {
+        ws.ping();
+      }
     } catch (error) {
       console.error("❌ Ping failed:", error.message);
     }
@@ -522,11 +533,12 @@ function scheduleReconnect() {
 
   reconnectAttempts++;
 
-  // Exponential backoff: 5s → 10s → 20s … max 5 min (not a tight loop)
+  // Exponential backoff + jitter: 5s → 10s → 20s … max 5 min
   let delay = Math.min(
     reconnectBaseDelay * 2 ** (reconnectAttempts - 1),
     reconnectMaxDelay,
   );
+  delay = Math.round(delay * (0.8 + Math.random() * 0.4));
 
   const sinceLast = Date.now() - lastReconnectScheduledAt;
   if (lastReconnectScheduledAt && sinceLast < RECONNECT_MIN_GAP_MS) {
@@ -552,6 +564,11 @@ async function connectWebSocket() {
     return;
   }
 
+  if (connecting) {
+    console.log("⚠️ connectWebSocket already in progress");
+    return;
+  }
+
   if (
     ws &&
     (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)
@@ -560,6 +577,7 @@ async function connectWebSocket() {
     return;
   }
 
+  connecting = true;
   console.log("🔌 Connecting to Deriv WebSocket...");
 
   resetConnectionState();
@@ -576,12 +594,13 @@ async function connectWebSocket() {
     freshWsUrl = await getFreshWsUrl();
   } catch (error) {
     console.error("❌ Failed to obtain fresh Deriv OTP:", error.message);
-
+    connecting = false;
     scheduleReconnect();
     return;
   }
 
   if (intentionalClose) {
+    connecting = false;
     return;
   }
 
@@ -594,9 +613,11 @@ async function connectWebSocket() {
       "🔌 Connected to Deriv WebSocket (OTP — already authenticated)",
     );
 
+    connecting = false;
     reconnectAttempts = 0;
     connection = true;
     authorized = true;
+    lastActivityAt = Date.now();
 
     // Periodic ping keeps idle proxies/firewalls from dropping the socket (1006)
     startPing();
@@ -639,11 +660,13 @@ async function connectWebSocket() {
       }`,
     );
 
+    connecting = false;
     resetConnectionState();
 
     if (!intentionalClose) {
-      sendMessage("WebSocket disconnected. Reconnecting...");
-
+      sendMessage(
+        `WebSocket disconnected (${code}). Reconnecting with backoff...`,
+      );
       scheduleReconnect();
     }
   });
@@ -652,9 +675,16 @@ async function connectWebSocket() {
     try {
       const data = JSON.parse(msg);
 
-      // Keep-alive: Deriv answers { ping: 1 } with msg_type "pong"
-      if (data.msg_type === "pong" || data.pong === 1) {
-        lastPongAt = Date.now();
+      // Any message proves the socket is alive
+      lastActivityAt = Date.now();
+
+      // Deriv answers { ping: 1 } with msg_type "ping" and ping: "pong"
+      if (
+        data.msg_type === "ping" ||
+        data.msg_type === "pong" ||
+        data.ping === "pong" ||
+        data.pong === 1
+      ) {
         return;
       }
 
