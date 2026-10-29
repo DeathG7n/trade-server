@@ -285,7 +285,7 @@ function clearSymbolPending(symbol) {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 2;
-  const takeProfit = stopLoss * 2;
+  const takeProfit = stopLoss * 3;
 
   const request = {
     proposal: 1,
@@ -1042,19 +1042,19 @@ async function connectWebSocket() {
 
           if (
             md.trendUpHtf &&
-            (md.lowHtf[htfCurrIndex] <= ema50[htfCurrIndex] ||
-              md.lowHtf[htfSignalIndex] <= ema50[htfSignalIndex] ||
-              md.lowHtf[htfThirdIndex] <= ema50[htfThirdIndex] ||
-              md.lowHtf[htfFourthIndex] <= ema50[htfFourthIndex])
+            (md.lowHtf[htfCurrIndex] <= ema21[htfCurrIndex] ||
+              md.lowHtf[htfSignalIndex] <= ema21[htfSignalIndex] ||
+              md.lowHtf[htfThirdIndex] <= ema21[htfThirdIndex] ||
+              md.lowHtf[htfFourthIndex] <= ema21[htfFourthIndex])
           ) {
             md.canBuy = true;
             md.canSell = false;
           } else if (
             md.trendDownHtf &&
-            (md.highHtf[htfCurrIndex] >= ema50[htfCurrIndex] ||
-              md.highHtf[htfSignalIndex] >= ema50[htfSignalIndex] ||
-              md.highHtf[htfThirdIndex] >= ema50[htfThirdIndex] ||
-              md.highHtf[htfFourthIndex] >= ema50[htfFourthIndex])
+            (md.highHtf[htfCurrIndex] >= ema21[htfCurrIndex] ||
+              md.highHtf[htfSignalIndex] >= ema21[htfSignalIndex] ||
+              md.highHtf[htfThirdIndex] >= ema21[htfThirdIndex] ||
+              md.highHtf[htfFourthIndex] >= ema21[htfFourthIndex])
           ) {
             md.canBuy = false;
             md.canSell = true;
@@ -1378,7 +1378,7 @@ async function connectWebSocket() {
             await update(position.stoploss, id, symbol);
           }
 
-          if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount)) {
+          if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
             position.stoploss = Math.abs(lossAmount * 2);
 
             await update(position.stoploss, id, symbol);
