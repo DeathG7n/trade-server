@@ -67,7 +67,7 @@ const symbols = [
   // "1HZ50V",
   // "R_50",
   // "1HZ75V",
-  // "R_75",
+  "R_75",
   // "1HZ90V",
   // "1HZ100V",
   // "R_100",
@@ -1146,7 +1146,7 @@ async function connectWebSocket() {
 
           if (md.canAlert && alertSymbols.includes(symbol)) {
             if (
-              md.canBuy &&
+              md.trendUpHtf &&
               (md.trendDown ||
                 recentEmaCross(ema21, ema50, 50) === "bullish") &&
               cross &&
@@ -1156,7 +1156,7 @@ async function connectWebSocket() {
               sendMessage(`Bullish Signal on ${symbol}`);
               md.canAlert = false;
             } else if (
-              md.canSell &&
+              md.trendDownHtf &&
               (md.trendUp || recentEmaCross(ema21, ema50, 50) === "bearish") &&
               cross &&
               bearish(md.open, md.close, signalIndex) &&
@@ -1175,7 +1175,7 @@ async function connectWebSocket() {
             md.tradeState === "IDLE"
           ) {
             if (
-              md.canBuy &&
+              md.trendUpHtf &&
               (md.trendDown ||
                 recentEmaCross(ema21, ema50, 50) === "bullish") &&
               cross &&
@@ -1198,7 +1198,7 @@ async function connectWebSocket() {
               }
             }
             if (
-              md.canSell &&
+              md.trendDownHtf &&
               (md.trendUp || recentEmaCross(ema21, ema50, 50) === "bearish") &&
               cross &&
               bearish(md.open, md.close, signalIndex) &&
