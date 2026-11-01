@@ -1034,8 +1034,7 @@ async function connectWebSocket() {
 
           const ema21 = calculateEMA(md.closeHtf, 21);
           const ema50 = calculateEMA(md.closeHtf, 50);
-          const ema100 = calculateEMA(md.closeHtf, 100);
-          md.emaHtf = [ema50[htfCurrIndex], ema100[htfCurrIndex]];
+      
 
           md.trendUpHtf = ema21[htfSignalIndex] > ema50[htfSignalIndex];
           md.trendDownHtf = ema21[htfSignalIndex] < ema50[htfSignalIndex];
