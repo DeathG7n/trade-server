@@ -285,7 +285,7 @@ function clearSymbolPending(symbol) {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 2;
-  const takeProfit = stopLoss * 3;
+  const takeProfit = stopLoss * 10;
 
   const request = {
     proposal: 1,
@@ -487,13 +487,8 @@ function startPing() {
     // Only force-close if the socket is fully silent.
     // Deriv replies to { ping: 1 } with msg_type "ping" and ping: "pong"
     // (NOT msg_type "pong"). Any inbound message updates lastActivityAt.
-    if (
-      lastActivityAt &&
-      Date.now() - lastActivityAt > STALE_CONNECTION_MS
-    ) {
-      console.warn(
-        "⚠️ Socket silent (no messages) — closing for reconnect",
-      );
+    if (lastActivityAt && Date.now() - lastActivityAt > STALE_CONNECTION_MS) {
+      console.warn("⚠️ Socket silent (no messages) — closing for reconnect");
       stopPing();
       try {
         ws.close();
@@ -1376,17 +1371,26 @@ async function connectWebSocket() {
             await update(position.stoploss, id, symbol);
           }
 
-          if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
+          if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount)) {
             position.stoploss = Math.abs(lossAmount * 2);
 
             await update(position.stoploss, id, symbol);
           }
 
           if (
-            pip >= risk * 5 &&
+            pip >= risk * 8 &&
             position.stoploss === Math.abs(lossAmount * 2)
           ) {
-            position.stoploss = Math.abs(lossAmount * 3);
+            position.stoploss = Math.abs(lossAmount * 4);
+
+            await update(position.stoploss, id, symbol);
+          }
+
+          if (
+            pip >= risk * 10 &&
+            position.stoploss === Math.abs(lossAmount * 4)
+          ) {
+            position.stoploss = Math.abs(lossAmount * 8);
 
             await update(position.stoploss, id, symbol);
           }
