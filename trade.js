@@ -1032,13 +1032,13 @@ async function connectWebSocket() {
             return;
           }
 
+          const ema14 = calculateEMA(md.closeHtf, 14);
           const ema21 = calculateEMA(md.closeHtf, 21);
-          const ema50 = calculateEMA(md.closeHtf, 50);
           const ema100 = calculateEMA(md.closeHtf, 100);
-          md.emaHtf = [ema50[htfCurrIndex], ema100[htfCurrIndex]];
+      
 
-          md.trendUpHtf = ema21[htfSignalIndex] > ema50[htfSignalIndex];
-          md.trendDownHtf = ema21[htfSignalIndex] < ema50[htfSignalIndex];
+          md.trendUpHtf = ema14[htfSignalIndex] > ema21[htfSignalIndex];
+          md.trendDownHtf = ema14[htfSignalIndex] < ema21[htfSignalIndex];
 
           if (
             md.trendUpHtf &&
