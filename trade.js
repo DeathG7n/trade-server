@@ -66,7 +66,7 @@ const symbols = [
   // "1HZ30V",
   // "1HZ50V",
   // "R_50",
-  "1HZ75V",
+  // "1HZ75V",
   "R_75",
   // "1HZ90V",
   // "1HZ100V",
@@ -285,7 +285,7 @@ function clearSymbolPending(symbol) {
 
 async function getMultiProposal(direction, symbol, stake, multiplier) {
   const stopLoss = stake / 2;
-  const takeProfit = stopLoss * 10;
+  const takeProfit = stopLoss * 6;
 
   const request = {
     proposal: 1,
@@ -1378,7 +1378,7 @@ async function connectWebSocket() {
           }
 
           if (
-            pip >= risk * 8 &&
+            pip >= risk * 6 &&
             position.stoploss === Math.abs(lossAmount * 2)
           ) {
             position.stoploss = Math.abs(lossAmount * 4);
