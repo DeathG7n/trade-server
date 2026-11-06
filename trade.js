@@ -44,7 +44,7 @@ let lastBalance = null;
 
 const hiHtf = 900;
 const htf = 900;
-const ltf = 180;
+const ltf = 60;
 const timeframes = [ltf, htf];
 // Only backfill from API when arrays are short or this interval has elapsed (ms)
 const HISTORY_RESYNC_MS = 15 * 60 * 1000;
@@ -62,12 +62,12 @@ const symbols = [
   // "R_10",
   // "1HZ15V",
   // "1HZ25V",
-  "R_25",
+  //"R_25",
   // "1HZ30V",
   // "1HZ50V",
   // "R_50",
   // "1HZ75V",
-  "R_75",
+  //"R_75",
   // "1HZ90V",
   // "1HZ100V",
   // "R_100",
@@ -75,7 +75,7 @@ const symbols = [
   // "JD25",
   // "JD50",
   // "JD75",
-  // "JD100",
+  "JD100",
 ];
 
 const tradeSymbols = [
@@ -101,7 +101,7 @@ const tradeSymbols = [
   // "JD25",
   // "JD50",
   // "JD75",
-  // "JD100",
+  "JD100",
 ];
 
 const alertSymbols = [
