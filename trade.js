@@ -45,7 +45,7 @@ let lastBalance = null;
 const hiHtf = 900;
 const htf = 300;
 const ltf = 60;
-const timeframes = [ltf, htf];
+const timeframes = [ltf];
 // Only backfill from API when arrays are short or this interval has elapsed (ms)
 const HISTORY_RESYNC_MS = 15 * 60 * 1000;
 const subscribedContracts = new Set();
