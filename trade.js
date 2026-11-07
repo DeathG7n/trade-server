@@ -971,11 +971,11 @@ async function connectWebSocket() {
         }
 
         if (data.echo_req.granularity === htf) {
-          if (md.openTime === 0) {
-            md.openTime = data.ohlc.open_time;
+          if (md.openTimeHtf === 0) {
+            md.openTimeHtf = data.ohlc.open_time;
           }
 
-          const isNewHtfCandle = md.openTime !== data.ohlc.open_time;
+          const isNewHtfCandle = md.openTimeHtf !== data.ohlc.open_time;
 
           if (isNewHtfCandle) {
             md.openTimeHtf = data.ohlc.open_time;
