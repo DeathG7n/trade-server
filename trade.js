@@ -62,7 +62,7 @@ const symbols = [
   // "R_10",
   // "1HZ15V",
   // "1HZ25V",
-  "R_25",
+  //"R_25",
   // "1HZ30V",
   // "1HZ50V",
   // "R_50",
@@ -75,7 +75,7 @@ const symbols = [
   // "JD25",
   // "JD50",
   // "JD75",
-  // "JD100",
+  "JD100",
 ];
 
 const tradeSymbols = [
