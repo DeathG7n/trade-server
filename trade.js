@@ -1136,7 +1136,10 @@ async function connectWebSocket() {
                 continue;
               }
 
-              if (position.type === "MULTUP") {
+              if (
+                position.type === "MULTUP" &&
+                position.amount / position.risk == 2
+              ) {
                 if (md.trendDownHtf) {
                   try {
                     closePosition(symbol, contractId, "Opposite Signal");
@@ -1144,7 +1147,10 @@ async function connectWebSocket() {
                     sendMessage(String(error));
                   }
                 }
-              } else if (position.type === "MULTDOWN") {
+              } else if (
+                position.type === "MULTDOWN" &&
+                position.amount / position.risk == 2
+              ) {
                 if (md.trendUpHtf) {
                   try {
                     closePosition(symbol, contractId, "Opposite Signal");
@@ -1323,7 +1329,10 @@ async function connectWebSocket() {
                 continue;
               }
 
-              if (position.type === "MULTUP") {
+              if (
+                position.type === "MULTUP" &&
+                position.amount / position.risk == 4
+              ) {
                 if (md.trendDown) {
                   try {
                     closePosition(symbol, contractId, "Opposite Signal");
@@ -1331,7 +1340,10 @@ async function connectWebSocket() {
                     sendMessage(String(error));
                   }
                 }
-              } else if (position.type === "MULTDOWN") {
+              } else if (
+                position.type === "MULTDOWN" &&
+                position.amount / position.risk == 4
+              ) {
                 if (md.trendUp) {
                   try {
                     closePosition(symbol, contractId, "Opposite Signal");
@@ -1441,6 +1453,8 @@ async function connectWebSocket() {
         if (position) {
           position.subscribed = true;
           position.profit = profit;
+          position.amount = orderAmount;
+          position.risk = lossAmount;
         }
 
         if (connection && type !== "ONETOUCH") {
