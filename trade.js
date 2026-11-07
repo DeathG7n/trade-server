@@ -971,28 +971,40 @@ async function connectWebSocket() {
         }
 
         if (data.echo_req.granularity === htf) {
-          if (md.openTimeHtf === 0) {
-            md.openTimeHtf = data.ohlc.open_time;
+          if (md.openTime === 0) {
+            md.openTime = data.ohlc.open_time;
           }
 
-          const isNewHtfCandle = md.openTimeHtf !== data.ohlc.open_time;
+          const isNewHtfCandle = md.openTime !== data.ohlc.open_time;
 
           if (isNewHtfCandle) {
             md.openTimeHtf = data.ohlc.open_time;
             md.canAlertHtf = true;
 
-            // In-place: append the new forming HTF candle (no mandatory full history)
+            // (2) In-place: append the new forming LTF candle instead of
+            // refetching 500 bars every minute.
             md.closeHtf.push(Number(data.ohlc.close));
             md.openHtf.push(Number(data.ohlc.open));
             md.highHtf.push(Number(data.ohlc.high));
             md.lowHtf.push(Number(data.ohlc.low));
 
-            // Optional backfill only if short history or resync interval elapsed
+            // Keep arrays from growing without bound
+            const MAX_BARS = 600;
+            if (md.closeHtf.length > MAX_BARS) {
+              const drop = md.closeHtf.length - MAX_BARS;
+              md.closeHtf.splice(0, drop);
+              md.openHtf.splice(0, drop);
+              md.highHtf.splice(0, drop);
+              md.lowHtf.splice(0, drop);
+            }
+
+            // Backfill only when history is short or periodic resync is due
             const needHtfHistory =
               md.closeHtf.length < 200 ||
               Date.now() - md.lastHtfHistoryAt > HISTORY_RESYNC_MS;
 
             if (needHtfHistory && !md.htfHistoryPending) {
+              // (1) Gate evaluation until this history response arrives
               md.htfHistoryPending = true;
               send({
                 ticks_history: data.echo_req.ticks_history,
@@ -1016,44 +1028,132 @@ async function connectWebSocket() {
           }
 
           const len = md.closeHtf.length;
+          const signalIndex = len - 2;
 
-          // Use the just-closed candle when a new one starts, otherwise the previous confirmed one
-          const htfCurrIndex = len - 1;
-          const htfSignalIndex = len - 2;
-          const htfThirdIndex = len - 3;
-          const htfFourthIndex = len - 4;
-
-          if (len < 200 || htfSignalIndex < 0 || md.htfHistoryPending) {
+          // (1) Do not evaluate while a history refresh is in flight
+          if (len < 200 || signalIndex < 0 || md.htfHistoryPending) {
             return;
           }
 
           const ema21 = calculateEMA(md.closeHtf, 21);
           const ema50 = calculateEMA(md.closeHtf, 50);
 
-          md.trendUpHtf = ema21[htfSignalIndex] > ema50[htfSignalIndex];
-          md.trendDownHtf = ema21[htfSignalIndex] < ema50[htfSignalIndex];
+          const cross = crossedEma(md.highHtf, md.lowHtf, signalIndex, ema50);
+
+          md.trendUpHtf = ema21[signalIndex] > ema50[signalIndex];
+          md.trendDownHtf = ema21[signalIndex] < ema50[signalIndex];
+
+          const symbolIsPending =
+            md.tradeState === "PROPOSAL_PENDING" ||
+            md.tradeState === "BUY_PENDING";
+
+          const hasOpenPosition = multiplierPositions.length > 0;
+
+          if (md.canAlertHtf && alertSymbols.includes(symbol)) {
+            if (
+              md.trendUpHtf &&
+              recentEmaCross(ema21, ema50, 50) === "bullish" &&
+              cross &&
+              bullish(md.openHtf, md.closeHtf, signalIndex) &&
+              md.closeHtf[signalIndex] >= ema50[signalIndex]
+            ) {
+              sendMessage(`Bullish Signal on ${symbol}`);
+              md.canAlertHtf = false;
+            } else if (
+              md.trendDownHtf &&
+              recentEmaCross(ema21, ema50, 50) === "bearish" &&
+              cross &&
+              bearish(md.openHtf, md.closeHtf, signalIndex) &&
+              md.closeHtf[signalIndex] <= ema50[signalIndex]
+            ) {
+              sendMessage(`Bearish Signal on ${symbol}`);
+              md.canAlertHtf = false;
+            }
+          }
 
           if (
-            md.trendUpHtf &&
-            (md.lowHtf[htfCurrIndex] <= ema21[htfCurrIndex] ||
-              md.lowHtf[htfSignalIndex] <= ema21[htfSignalIndex] ||
-              md.lowHtf[htfThirdIndex] <= ema21[htfThirdIndex] ||
-              md.lowHtf[htfFourthIndex] <= ema21[htfFourthIndex])
+            !hasOpenPosition &&
+            !symbolIsPending &&
+            Math.trunc(balance) !== 0 &&
+            tradeSymbols.includes(symbol) &&
+            md.tradeState === "IDLE"
           ) {
-            md.canBuy = true;
-            md.canSell = false;
-          } else if (
-            md.trendDownHtf &&
-            (md.highHtf[htfCurrIndex] >= ema21[htfCurrIndex] ||
-              md.highHtf[htfSignalIndex] >= ema21[htfSignalIndex] ||
-              md.highHtf[htfThirdIndex] >= ema21[htfThirdIndex] ||
-              md.highHtf[htfFourthIndex] >= ema21[htfFourthIndex])
-          ) {
-            md.canBuy = false;
-            md.canSell = true;
-          } else {
-            md.canBuy = false;
-            md.canSell = false;
+            if (
+              md.trendUpHtf &&
+              recentEmaCross(ema21, ema50, 50) === "bullish" &&
+              cross &&
+              bullish(md.openHtf, md.closeHtf, signalIndex) &&
+              md.closeHtf[signalIndex] >= ema50[signalIndex]
+            ) {
+              md.entryCandle = data.ohlc.open_time;
+              setSymbolPending(symbol, "PROPOSAL_PENDING");
+              try {
+                await getMultiProposal(
+                  "MULTUP",
+                  symbol,
+                  amount,
+                  md.multiplier_range[0],
+                  4,
+                );
+              } catch (error) {
+                clearSymbolPending(symbol);
+
+                sendMessage(String(error));
+              }
+            }
+            if (
+              md.trendDownHtf &&
+              recentEmaCross(ema21, ema50, 50) === "bearish" &&
+              cross &&
+              bearish(md.openHtf, md.closeHtf, signalIndex) &&
+              md.closeHtf[signalIndex] <= ema50[signalIndex]
+            ) {
+              md.entryCandle = data.ohlc.open_time;
+              setSymbolPending(symbol, "PROPOSAL_PENDING");
+              try {
+                await getMultiProposal(
+                  "MULTDOWN",
+                  symbol,
+                  amount,
+                  md.multiplier_range[0],
+                  4,
+                );
+              } catch (error) {
+                clearSymbolPending(symbol);
+
+                sendMessage(String(error));
+              }
+            }
+          }
+
+          if (multiplierPositions.length > 0) {
+            for (const position of multiplierPositions) {
+              const contractId = position.contract_id;
+
+              const contractState = getContractState(contractId);
+
+              if (contractState?.state === "CLOSING") {
+                continue;
+              }
+
+              if (position.type === "MULTUP") {
+                if (md.trendDownHtf) {
+                  try {
+                    closePosition(symbol, contractId, "Opposite Signal");
+                  } catch (error) {
+                    sendMessage(String(error));
+                  }
+                }
+              } else if (position.type === "MULTDOWN") {
+                if (md.trendUpHtf) {
+                  try {
+                    closePosition(symbol, contractId, "Opposite Signal");
+                  } catch (error) {
+                    sendMessage(String(error));
+                  }
+                }
+              }
+            }
           }
         }
 
