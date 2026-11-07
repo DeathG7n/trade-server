@@ -43,7 +43,7 @@ let portfolioSynced = false;
 let lastBalance = null;
 
 const hiHtf = 900;
-const htf = 900;
+const htf = 300;
 const ltf = 60;
 const timeframes = [ltf, htf];
 // Only backfill from API when arrays are short or this interval has elapsed (ms)
@@ -62,7 +62,7 @@ const symbols = [
   // "R_10",
   // "1HZ15V",
   // "1HZ25V",
-  //"R_25",
+  "R_25",
   // "1HZ30V",
   // "1HZ50V",
   // "R_50",
@@ -101,7 +101,7 @@ const tradeSymbols = [
   // "JD25",
   // "JD50",
   // "JD75",
-  "JD100",
+  // "JD100",
 ];
 
 const alertSymbols = [
@@ -1057,7 +1057,7 @@ async function connectWebSocket() {
               bullish(md.openHtf, md.closeHtf, signalIndex) &&
               md.closeHtf[signalIndex] >= ema50[signalIndex]
             ) {
-              sendMessage(`Bullish Signal on ${symbol}`);
+              sendMessage(`Bullish Signal on ${symbol} on ${htf / 60}m`);
               md.canAlertHtf = false;
             } else if (
               md.trendDownHtf &&
@@ -1066,7 +1066,7 @@ async function connectWebSocket() {
               bearish(md.openHtf, md.closeHtf, signalIndex) &&
               md.closeHtf[signalIndex] <= ema50[signalIndex]
             ) {
-              sendMessage(`Bearish Signal on ${symbol}`);
+              sendMessage(`Bearish Signal on ${symbol} on ${htf / 60}m`);
               md.canAlertHtf = false;
             }
           }
@@ -1093,7 +1093,7 @@ async function connectWebSocket() {
                   symbol,
                   amount,
                   md.multiplier_range[0],
-                  4,
+                  2,
                 );
               } catch (error) {
                 clearSymbolPending(symbol);
@@ -1116,7 +1116,7 @@ async function connectWebSocket() {
                   symbol,
                   amount,
                   md.multiplier_range[0],
-                  4,
+                  2,
                 );
               } catch (error) {
                 clearSymbolPending(symbol);
@@ -1244,7 +1244,7 @@ async function connectWebSocket() {
               bullish(md.open, md.close, signalIndex) &&
               md.close[signalIndex] >= ema50[signalIndex]
             ) {
-              sendMessage(`Bullish Signal on ${symbol}`);
+              sendMessage(`Bullish Signal on ${symbol} on ${ltf / 60}m`);
               md.canAlert = false;
             } else if (
               md.trendDown &&
@@ -1253,7 +1253,7 @@ async function connectWebSocket() {
               bearish(md.open, md.close, signalIndex) &&
               md.close[signalIndex] <= ema50[signalIndex]
             ) {
-              sendMessage(`Bearish Signal on ${symbol}`);
+              sendMessage(`Bearish Signal on ${symbol} on ${ltf / 60}m`);
               md.canAlert = false;
             }
           }
