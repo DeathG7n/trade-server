@@ -320,7 +320,7 @@ function clearSymbolPending(symbol) {
 async function getTouchProposal(barrier, symbol, stake) {
   const request = {
     proposal: 1,
-    amount: stake,
+    amount: stake * 0.35,
     barrier: String(barrier),
     basis: "stake",
     contract_type: "ONETOUCH",
