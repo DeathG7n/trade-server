@@ -20,20 +20,6 @@ export function detectCrossover(emaFast, emaSlow) {
   return null;
 }
 
-// export async function getTouchProposal(barrier, symbol, stake) {
-//   const request = {
-//     proposal: 1,
-//     amount: stake * 0.35,
-//     barrier: barrier,
-//     basis: "stake",
-//     contract_type: "ONETOUCH",
-//     currency: "USD",
-//     duration: 20,
-//     duration_unit: "m",
-//     underlying_symbol: symbol,
-//   };
-//   ws.send(JSON.stringify(request));
-// }
 
 export function isNumberBetween(number, lowerBound, upperBound) {
   return number >= lowerBound && number <= upperBound;
