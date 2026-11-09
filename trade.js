@@ -6,7 +6,15 @@ import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
-import { bullish, bearish, crossedEma, recentEmaCross } from "./util.js";
+import {
+  bullish,
+  bearish,
+  structureBias,
+  weakStrongLevels,
+  detectBosChoch,
+  previousDayRange,
+  findSwings,
+} from "./util.js";
 
 dotenv.config();
 
@@ -42,55 +50,27 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const hiHtf = 900;
-const htf = 300;
-const ltf = 60;
-const timeframes = [ltf];
-// Only backfill from API when arrays are short or this interval has elapsed (ms)
+// Structure strategy timeframes
+const TF_DAILY = 86400;
+const TF_4H = 14400;
+const TF_15M = 900;
+const TF_5M = 300;
+const timeframes = [TF_DAILY, TF_4H, TF_15M, TF_5M];
 const HISTORY_RESYNC_MS = 15 * 60 * 1000;
-// Touch (ONETOUCH) — from historical touch commits; entry uses current EMA strategy
-const TOUCH_DURATION = 15;
-const TOUCH_DURATION_UNIT = "m";
-const TOUCH_BARRIER_UP = "+4"; // bullish: price must touch above
-const TOUCH_BARRIER_DOWN = "-4"; // bearish: price must touch below
-// Close open touch trades this many seconds before duration elapses
-const TOUCH_CLOSE_BEFORE_END_SEC = 2 * 60; // 2 minutes
+// Multiplier risk: SL = stake/PORTION, TP = 3x SL
+const MULT_PORTION = 4;
+const SWING_LEFT = 2;
+const SWING_RIGHT = 2;
 const subscribedContracts = new Set();
 const contractStates = new Map();
 const pendingTrades = new Map();
 
 const symbols = [
-  // "stpRNG",
-  // "stpRNG2",
-  // "stpRNG3",
-  // "stpRNG4",
-  // "stpRNG5",
-  // "1HZ10V",
-  // "R_10",
-  // "1HZ15V",
-  // "1HZ25V",
-  "R_25",
-  // "1HZ30V",
-  // "1HZ50V",
-  // "R_50",
-  // "1HZ75V",
-  //"R_75",
-  // "1HZ90V",
-  // "1HZ100V",
-  //"R_100",
-  // "JD10",
-  // "JD25",
-  // "JD50",
-  // "JD75",
-  "JD100",
-];
-
-const tradeSymbols = [
-  // "stpRNG",
-  // "stpRNG2",
-  // "stpRNG3",
-  // "stpRNG4",
-  // "stpRNG5",
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
+  "stpRNG5",
   "1HZ10V",
   "R_10",
   "1HZ15V",
@@ -104,76 +84,109 @@ const tradeSymbols = [
   "1HZ90V",
   "1HZ100V",
   "R_100",
-  // "JD10",
-  // "JD25",
-  // "JD50",
-  // "JD75",
-  // "JD100",
+  "JD10",
+  "JD25",
+  "JD50",
+  "JD75",
+  "JD100",
+];
+
+const tradeSymbols = [
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
+  "stpRNG5",
+  "1HZ10V",
+  "R_10",
+  "1HZ15V",
+  "1HZ25V",
+  "R_25",
+  "1HZ30V",
+  "1HZ50V",
+  "R_50",
+  "1HZ75V",
+  "R_75",
+  "1HZ90V",
+  "1HZ100V",
+  "R_100",
+  "JD10",
+  "JD25",
+  "JD50",
+  "JD75",
+  "JD100",
 ];
 
 const alertSymbols = [
-  // "stpRNG",
-  // "stpRNG2",
-  // "stpRNG3",
-  // "stpRNG4",
-  // "stpRNG5",
-  // "1HZ10V",
-  // "R_10",
-  // "1HZ25V",
-  // "R_25",
-  // "1HZ50V",
-  // "R_50",
-  // "1HZ75V",
-  // "R_75",
-  // "1HZ100V",
-  // "R_100",
-  // "JD10",
-  // "JD25",
-  // "JD50",
-  // "JD75",
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
+  "stpRNG5",
+  "1HZ10V",
+  "R_10",
+  "1HZ25V",
+  "R_25",
+  "1HZ50V",
+  "R_50",
+  "1HZ75V",
+  "R_75",
+  "1HZ100V",
+  "R_100",
+  "JD10",
+  "JD25",
+  "JD50",
+  "JD75",
   "JD100",
 ];
 
 const marketData = {};
 
-symbols.forEach((symbol) => {
-  marketData[symbol] = {
+function emptySeries() {
+  return {
     close: [],
     open: [],
     high: [],
     low: [],
     openTime: 0,
-    trendUp: false,
-    trendDown: false,
-    closeHtf: [],
-    openHtf: [],
-    highHtf: [],
-    lowHtf: [],
-    emaHtf: [],
-    openTimeHtf: 0,
-    trendUpHtf: false,
-    trendDownHtf: false,
-    closeHiHtf: [],
-    openHiHtf: [],
-    highHiHtf: [],
-    lowHiHtf: [],
-    openTimeHiHtf: 0,
-    trendUpHiHtf: false,
-    trendDownHiHtf: false,
-    canBuy: false,
-    canSell: false,
+    historyPending: false,
+    lastHistoryAt: 0,
+  };
+}
+
+symbols.forEach((symbol) => {
+  marketData[symbol] = {
+    // Per-timeframe OHLCV-like series
+    daily: emptySeries(),
+    h4: emptySeries(),
+    m15: emptySeries(),
+    m5: emptySeries(),
+    // Legacy aliases used in older close logic
+    close: [],
+    open: [],
+    high: [],
+    low: [],
+    openTime: 0,
+    bias: "none", // 4H structure bias
+    dayRange: null,
+    lastBosChoch: null,
+    canAlertBias: true,
+    canAlertStructure: true,
+    canAlertBos: true,
     multiplier_range: [],
-    canAlert: true,
     tradeState: "IDLE",
     pendingProposalId: null,
     entryCandle: 0,
-    pendingTouchBarrier: null,
-    ltfHistoryPending: false,
-    htfHistoryPending: false,
-    lastLtfHistoryAt: 0,
-    lastHtfHistoryAt: 0,
   };
 });
+
+function seriesForGranularity(md, granularity) {
+  if (granularity === TF_DAILY) return md.daily;
+  if (granularity === TF_4H) return md.h4;
+  if (granularity === TF_15M) return md.m15;
+  if (granularity === TF_5M) return md.m5;
+  return null;
+}
 
 app.use(cors());
 
@@ -200,23 +213,23 @@ function send(message) {
   }
 }
 
-function calculateEMA(prices, period) {
-  const k = 2 / (period + 1);
+// function calculateEMA(prices, period) {
+//   const k = 2 / (period + 1);
 
-  const emaArray = [];
+//   const emaArray = [];
 
-  if (!prices.length) {
-    return emaArray;
-  }
+//   if (!prices.length) {
+//     return emaArray;
+//   }
 
-  emaArray[0] = prices[0];
+//   emaArray[0] = prices[0];
 
-  for (let i = 1; i < prices.length; i++) {
-    emaArray[i] = prices[i] * k + emaArray[i - 1] * (1 - k);
-  }
+//   for (let i = 1; i < prices.length; i++) {
+//     emaArray[i] = prices[i] * k + emaArray[i - 1] * (1 - k);
+//   }
 
-  return emaArray;
-}
+//   return emaArray;
+// }
 
 const sendMessage = async (message) => {
   try {
@@ -291,48 +304,25 @@ function clearSymbolPending(symbol) {
   console.log(`🔄 ${symbol} state -> IDLE`);
 }
 
-// async function getMultiProposal(direction, symbol, stake, multiplier, portion) {
-//   const stopLoss = stake / portion;
-//   const takeProfit = stopLoss * 3;
+async function getMultiProposal(direction, symbol, stake, multiplier, portion) {
+  const stopLoss = stake / portion;
+  const takeProfit = stopLoss * 3;
 
-//   const request = {
-//     proposal: 1,
-//     amount: stake,
-//     contract_type: direction,
-//     currency: "USD",
-//     underlying_symbol: symbol,
-//     multiplier: multiplier,
-//     basis: "stake",
-
-//     limit_order: {
-//       stop_loss: stopLoss,
-//       take_profit: takeProfit,
-//     },
-//   };
-
-//   send(request);
-// }
-
-/**
- * Touch option (ONETOUCH) — wins if spot touches barrier within duration.
- * Entry criteria come from the current EMA strategy; this only builds the proposal.
- */
-async function getTouchProposal(barrier, symbol, stake) {
   const request = {
     proposal: 1,
     amount: stake,
-    barrier: String(barrier),
-    basis: "stake",
-    contract_type: "ONETOUCH",
+    contract_type: direction,
     currency: "USD",
-    duration: TOUCH_DURATION,
-    duration_unit: TOUCH_DURATION_UNIT,
     underlying_symbol: symbol,
+    multiplier: multiplier,
+    basis: "stake",
+
+    limit_order: {
+      stop_loss: stopLoss,
+      take_profit: takeProfit,
+    },
   };
 
-  console.log(
-    `🎯 Touch proposal ${symbol} barrier=${barrier} stake=${stake} ${TOUCH_DURATION}${TOUCH_DURATION_UNIT}`,
-  );
   send(request);
 }
 
@@ -887,344 +877,276 @@ async function connectWebSocket() {
 
       if (data.msg_type === "candles") {
         const symbol = data.echo_req.ticks_history;
-
         const md = marketData[symbol];
-
-        if (!md) return;
+        if (!md || !data.candles?.length) return;
 
         const current = new Date();
-
         if (now.getHours() !== current.getHours()) {
           now = new Date();
-
           sendMessage("Bot is still running");
         }
 
         try {
-          if (data.echo_req.granularity === hiHtf) {
-            md.closeHiHtf = data.candles.map((c) => c.close);
-            md.openHiHtf = data.candles.map((c) => c.open);
-            md.highHiHtf = data.candles.map((c) => c.high);
-            md.lowHiHtf = data.candles.map((c) => c.low);
-          }
-
-          if (data.echo_req.granularity === htf) {
-            md.closeHtf = data.candles.map((c) => c.close);
-            md.openHtf = data.candles.map((c) => c.open);
-            md.highHtf = data.candles.map((c) => c.high);
-            md.lowHtf = data.candles.map((c) => c.low);
-            md.htfHistoryPending = false;
-            md.lastHtfHistoryAt = Date.now();
-          }
-
-          if (data.echo_req.granularity === ltf) {
-            md.close = data.candles.map((c) => c.close);
-            md.open = data.candles.map((c) => c.open);
-            md.high = data.candles.map((c) => c.high);
-            md.low = data.candles.map((c) => c.low);
-            md.ltfHistoryPending = false;
-            md.lastLtfHistoryAt = Date.now();
+          const series = seriesForGranularity(md, data.echo_req.granularity);
+          if (!series) return;
+          series.close = data.candles.map((c) => Number(c.close));
+          series.open = data.candles.map((c) => Number(c.open));
+          series.high = data.candles.map((c) => Number(c.high));
+          series.low = data.candles.map((c) => Number(c.low));
+          series.historyPending = false;
+          series.lastHistoryAt = Date.now();
+          // Keep m5 mirrored on legacy fields for any residual code
+          if (data.echo_req.granularity === TF_5M) {
+            md.close = series.close;
+            md.open = series.open;
+            md.high = series.high;
+            md.low = series.low;
           }
         } catch (error) {
           sendMessage(String(error));
         }
-
         return;
       }
 
       if (data.msg_type === "ohlc" && portfolioSynced) {
         const symbol = data.echo_req.ticks_history;
-
         const md = marketData[symbol];
-
         if (!md) return;
-
-        const matchingPositions = positions.filter((p) => p?.name === symbol);
-
-        const multiplierPositions = matchingPositions.filter(
-          (p) => p.type !== "ONETOUCH",
-        );
 
         if (!md.multiplier_range?.length) {
           console.log(`⛔ ${symbol}: No multiplier range available`);
-
           return;
         }
 
-        if (data.echo_req.granularity === hiHtf) {
-          if (md.openTimeHiHtf === 0) {
-            md.openTimeHiHtf = data.ohlc.open_time;
+        const granularity = data.echo_req.granularity;
+        const series = seriesForGranularity(md, granularity);
+        if (!series) return;
+
+        // --- Update series (in-place OHLC) ---
+        if (series.openTime === 0) {
+          series.openTime = data.ohlc.open_time;
+        }
+        const isNewCandle = series.openTime !== data.ohlc.open_time;
+        if (isNewCandle) {
+          series.openTime = data.ohlc.open_time;
+          series.close.push(Number(data.ohlc.close));
+          series.open.push(Number(data.ohlc.open));
+          series.high.push(Number(data.ohlc.high));
+          series.low.push(Number(data.ohlc.low));
+          const MAX_BARS = 600;
+          if (series.close.length > MAX_BARS) {
+            const drop = series.close.length - MAX_BARS;
+            series.close.splice(0, drop);
+            series.open.splice(0, drop);
+            series.high.splice(0, drop);
+            series.low.splice(0, drop);
           }
-
-          const isNewHiHtfCandle = md.openTimeHiHtf !== data.ohlc.open_time;
-
-          if (isNewHiHtfCandle) {
-            md.openTimeHiHtf = data.ohlc.open_time;
-            md.canAlertHiHtf = true;
-
-            // Request fresh history for accuracy, but do NOT return early.
-            // This allows evaluation on the candle that just closed.
+          if (granularity === TF_5M) {
+            md.canAlertBos = true;
+            md.canAlertStructure = true;
+          }
+          if (granularity === TF_4H) md.canAlertBias = true;
+          // Periodic history resync
+          const needHistory =
+            series.close.length < 50 ||
+            Date.now() - series.lastHistoryAt > HISTORY_RESYNC_MS;
+          if (needHistory && !series.historyPending) {
+            series.historyPending = true;
             send({
-              ticks_history: data.echo_req.ticks_history,
+              ticks_history: symbol,
               style: "candles",
               count: 500,
-              granularity: data.echo_req.granularity,
+              granularity,
               end: "latest",
             });
           }
-
-          if (md.closeHiHtf.length === 0) {
-            md.closeHiHtf.push(Number(data.ohlc.close));
-            md.openHiHtf.push(Number(data.ohlc.open));
-            md.highHiHtf.push(Number(data.ohlc.high));
-            md.lowHiHtf.push(Number(data.ohlc.low));
-          } else {
-            const last = md.closeHiHtf.length - 1;
-            md.closeHiHtf[last] = Number(data.ohlc.close);
-            md.openHiHtf[last] = Number(data.ohlc.open);
-            md.highHiHtf[last] = Number(data.ohlc.high);
-            md.lowHiHtf[last] = Number(data.ohlc.low);
-          }
-
-          const len = md.closeHiHtf.length;
-
-          const hiHtfSignalIndex = len - 2;
-
-          if (len < 200 || hiHtfSignalIndex < 0) {
-            return;
-          }
-
-          const ema9 = calculateEMA(md.closeHiHtf, 9);
-          const ema50 = calculateEMA(md.closeHiHtf, 50);
-
-          md.trendUpHiHtf = ema9[hiHtfSignalIndex] > ema50[hiHtfSignalIndex];
-          md.trendDownHiHtf = ema9[hiHtfSignalIndex] < ema50[hiHtfSignalIndex];
+        } else if (series.close.length === 0) {
+          series.close.push(Number(data.ohlc.close));
+          series.open.push(Number(data.ohlc.open));
+          series.high.push(Number(data.ohlc.high));
+          series.low.push(Number(data.ohlc.low));
+        } else {
+          const last = series.close.length - 1;
+          series.close[last] = Number(data.ohlc.close);
+          series.open[last] = Number(data.ohlc.open);
+          series.high[last] = Number(data.ohlc.high);
+          series.low[last] = Number(data.ohlc.low);
         }
 
-        if (data.echo_req.granularity === ltf) {
-          if (md.openTime === 0) {
-            md.openTime = data.ohlc.open_time;
-          }
+        if (granularity === TF_5M) {
+          md.close = series.close;
+          md.open = series.open;
+          md.high = series.high;
+          md.low = series.low;
+        }
 
-          const isNewLtfCandle = md.openTime !== data.ohlc.open_time;
+        // Only evaluate structure / entries on a newly closed 5m bar
+        if (granularity !== TF_5M || !isNewCandle) {
+          return;
+        }
+        if (series.historyPending) return;
 
-          if (isNewLtfCandle) {
-            md.openTime = data.ohlc.open_time;
-            md.canAlert = true;
+        const m5 = md.m5;
+        const h4 = md.h4;
+        const m15 = md.m15;
+        const daily = md.daily;
+        const signalIndex = m5.close.length - 2;
+        if (signalIndex < 10) return;
 
-            // (2) In-place: append the new forming LTF candle instead of
-            // refetching 500 bars every minute.
-            md.close.push(Number(data.ohlc.close));
-            md.open.push(Number(data.ohlc.open));
-            md.high.push(Number(data.ohlc.high));
-            md.low.push(Number(data.ohlc.low));
+        // Daily range (previous completed day)
+        if (daily.close.length >= 2) {
+          const dIdx = daily.close.length - 2;
+          md.dayRange = previousDayRange(daily.high, daily.low, dIdx);
+        }
 
-            // Keep arrays from growing without bound
-            const MAX_BARS = 600;
-            if (md.close.length > MAX_BARS) {
-              const drop = md.close.length - MAX_BARS;
-              md.close.splice(0, drop);
-              md.open.splice(0, drop);
-              md.high.splice(0, drop);
-              md.low.splice(0, drop);
-            }
-
-            // Backfill only when history is short or periodic resync is due
-            const needLtfHistory =
-              md.close.length < 200 ||
-              Date.now() - md.lastLtfHistoryAt > HISTORY_RESYNC_MS;
-
-            if (needLtfHistory && !md.ltfHistoryPending) {
-              // (1) Gate evaluation until this history response arrives
-              md.ltfHistoryPending = true;
-              send({
-                ticks_history: data.echo_req.ticks_history,
-                style: "candles",
-                count: 500,
-                granularity: data.echo_req.granularity,
-                end: "latest",
-              });
-            }
-          } else if (md.close.length === 0) {
-            md.close.push(Number(data.ohlc.close));
-            md.open.push(Number(data.ohlc.open));
-            md.high.push(Number(data.ohlc.high));
-            md.low.push(Number(data.ohlc.low));
-          } else {
-            const last = md.close.length - 1;
-            md.close[last] = Number(data.ohlc.close);
-            md.open[last] = Number(data.ohlc.open);
-            md.high[last] = Number(data.ohlc.high);
-            md.low[last] = Number(data.ohlc.low);
-          }
-
-          const len = md.close.length;
-          const signalIndex = len - 2;
-
-          // (1) Do not evaluate while a history refresh is in flight
-          if (len < 200 || signalIndex < 0 || md.ltfHistoryPending) {
-            return;
-          }
-
-          const ema21 = calculateEMA(md.close, 21);
-          const ema50 = calculateEMA(md.close, 50);
-
-          const cross = crossedEma(md.high, md.low, signalIndex, ema50);
-
-          md.trendUp = ema21[signalIndex] > ema50[signalIndex];
-          md.trendDown = ema21[signalIndex] < ema50[signalIndex];
-
-          const symbolIsPending =
-            md.tradeState === "PROPOSAL_PENDING" ||
-            md.tradeState === "BUY_PENDING";
-
-          // Touch options: one ONETOUCH per symbol (multipliers ignored for entry gating)
-          const touchPositions = matchingPositions.filter(
-            (p) => p.type === "ONETOUCH",
-          );
-          const hasOpenTouch = touchPositions.length > 0;
-
-          const longSetup =
-            md.trendUp &&
-            recentEmaCross(ema21, ema50, 50) === "bullish" &&
-            cross &&
-            bullish(md.open, md.close, signalIndex) &&
-            md.close[signalIndex] >= ema50[signalIndex];
-          const shortSetup =
-            md.trendDown &&
-            recentEmaCross(ema21, ema50, 50) === "bearish" &&
-            cross &&
-            bearish(md.open, md.close, signalIndex) &&
-            md.close[signalIndex] <= ema50[signalIndex];
-
-          if (md.canAlert && alertSymbols.includes(symbol)) {
-            if (longSetup) {
-              sendMessage(
-                `Bullish Signal on ${symbol} on ${ltf / 60}m → TOUCH ${TOUCH_BARRIER_UP}`,
-              );
-              md.canAlert = false;
-            } else if (shortSetup) {
-              sendMessage(
-                `Bearish Signal on ${symbol} on ${ltf / 60}m → TOUCH ${TOUCH_BARRIER_DOWN}`,
-              );
-              md.canAlert = false;
-            }
-          }
-
-          // Entry: current EMA strategy → ONETOUCH (not multiplier)
+        // 4H bias
+        if (h4.close.length >= 20) {
+          const prevBias = md.bias;
+          md.bias = structureBias(h4.high, h4.low, SWING_LEFT, SWING_RIGHT);
           if (
-            !hasOpenTouch &&
-            !symbolIsPending &&
-            // Math.trunc(balance) !== 0 &&
-            amount != null &&
-            tradeSymbols.includes(symbol) &&
-            md.tradeState === "IDLE"
+            md.canAlertBias &&
+            md.bias !== "none" &&
+            md.bias !== prevBias &&
+            alertSymbols.includes(symbol)
           ) {
-            if (longSetup) {
-              md.entryCandle = data.ohlc.open_time;
-              md.pendingTouchBarrier = TOUCH_BARRIER_UP;
-              setSymbolPending(symbol, "PROPOSAL_PENDING");
-              try {
-                await getTouchProposal(TOUCH_BARRIER_UP, symbol, amount);
-              } catch (error) {
-                clearSymbolPending(symbol);
-                sendMessage(String(error));
-              }
-            } else if (shortSetup) {
-              md.entryCandle = data.ohlc.open_time;
-              md.pendingTouchBarrier = TOUCH_BARRIER_DOWN;
-              setSymbolPending(symbol, "PROPOSAL_PENDING");
-              try {
-                await getTouchProposal(TOUCH_BARRIER_DOWN, symbol, amount);
-              } catch (error) {
-                clearSymbolPending(symbol);
-                sendMessage(String(error));
-              }
-            }
+            sendMessage(`📐 ${symbol} 4H bias → ${md.bias.toUpperCase()}`);
+            md.canAlertBias = false;
           }
+        }
 
-          // Close ONETOUCH early on EMA50 invalidation (last closed candle)
-          // barrier up (+): close if close < EMA50
-          // barrier down (-): close if close > EMA50
-          if (touchPositions.length > 0) {
-            const lastClose = md.close[signalIndex];
-            const ema50Signal = ema50[signalIndex];
+        // 15m weak/strong levels (alerts)
+        if (m15.close.length >= 30 && md.canAlertStructure) {
+          const levels = weakStrongLevels(
+            m15.high,
+            m15.low,
+            SWING_LEFT,
+            SWING_RIGHT,
+          );
+          const tips = [];
+          if (levels.weakHighs.length) {
+            const wh = levels.weakHighs[levels.weakHighs.length - 1];
+            tips.push(`WeakHigh@${wh.price.toFixed(2)}`);
+          }
+          if (levels.weakLows.length) {
+            const wl = levels.weakLows[levels.weakLows.length - 1];
+            tips.push(`WeakLow@${wl.price.toFixed(2)}`);
+          }
+          if (tips.length && alertSymbols.includes(symbol)) {
+            sendMessage(`🏷 ${symbol} 15m structure: ${tips.join(" | ")}`);
+            md.canAlertStructure = false;
+          }
+        }
 
-            for (const position of touchPositions) {
-              const contractId = position.contract_id;
-              const contractState = getContractState(contractId);
+        // 5m BOS / CHOCH
+        const event = detectBosChoch(
+          m5.high,
+          m5.low,
+          m5.close,
+          signalIndex,
+          md.bias,
+          SWING_LEFT,
+          SWING_RIGHT,
+        );
 
-              if (contractState?.state === "CLOSING") {
-                continue;
-              }
+        if (event && md.canAlertBos) {
+          md.lastBosChoch = event;
+          const msg = `⚡ ${symbol} 5m ${event.type} ${event.direction} @ ${Number(event.level).toFixed(2)} (bias=${md.bias})`;
+          console.log(msg);
+          if (alertSymbols.includes(symbol)) {
+            sendMessage(msg);
+          }
+          md.canAlertBos = false;
+        }
 
-              const barrier = String(
-                position.barrier ?? md.pendingTouchBarrier ?? "",
+        // --- Multiplier entry: bias-aligned BOS/CHOCH ---
+        const matchingPositions = positions.filter((p) => p?.name === symbol);
+        const openMult = matchingPositions.filter(
+          (p) => p.type === "MULTUP" || p.type === "MULTDOWN",
+        );
+        const symbolIsPending =
+          md.tradeState === "PROPOSAL_PENDING" ||
+          md.tradeState === "BUY_PENDING";
+        const hasOpen = openMult.length > 0;
+
+        if (
+          event &&
+          !hasOpen &&
+          !symbolIsPending &&
+          md.tradeState === "IDLE" &&
+          Math.trunc(balance) !== 0 &&
+          amount != null &&
+          amount <= balance &&
+          tradeSymbols.includes(symbol) &&
+          md.multiplier_range?.length
+        ) {
+          const bullEntry =
+            event.direction === "bullish" &&
+            (md.bias === "up" || md.bias === "none") &&
+            (event.type === "BOS" || event.type === "CHOCH");
+          const bearEntry =
+            event.direction === "bearish" &&
+            (md.bias === "down" || md.bias === "none") &&
+            (event.type === "BOS" || event.type === "CHOCH");
+
+          // Prefer trading only with clear 4H bias when available
+          const allowBull = md.bias === "up" && event.direction === "bullish";
+          const allowBear = md.bias === "down" && event.direction === "bearish";
+
+          if (allowBull) {
+            md.entryCandle = data.ohlc.open_time;
+            setSymbolPending(symbol, "PROPOSAL_PENDING");
+            sendMessage(
+              `📈 ${symbol} MULTUP — 5m ${event.type} bullish with 4H up bias`,
+            );
+            try {
+              await getMultiProposal(
+                "MULTUP",
+                symbol,
+                amount,
+                md.multiplier_range[0],
+                MULT_PORTION,
               );
-              const isBarrierUp =
-                barrier.startsWith("+") ||
-                (!barrier.startsWith("-") && Number(barrier) > 0);
-              const isBarrierDown =
-                barrier.startsWith("-") || Number(barrier) < 0;
-
-              if (isBarrierUp && lastClose < ema50Signal) {
-                try {
-                  closePosition(
-                    symbol,
-                    contractId,
-                    "Touch barrier-up: last candle closed below EMA50",
-                  );
-                } catch (error) {
-                  sendMessage(String(error));
-                }
-              } else if (isBarrierDown && lastClose > ema50Signal) {
-                try {
-                  closePosition(
-                    symbol,
-                    contractId,
-                    "Touch barrier-down: last candle closed above EMA50",
-                  );
-                } catch (error) {
-                  sendMessage(String(error));
-                }
-              }
+            } catch (error) {
+              clearSymbolPending(symbol);
+              sendMessage(String(error));
+            }
+          } else if (allowBear) {
+            md.entryCandle = data.ohlc.open_time;
+            setSymbolPending(symbol, "PROPOSAL_PENDING");
+            sendMessage(
+              `📉 ${symbol} MULTDOWN — 5m ${event.type} bearish with 4H down bias`,
+            );
+            try {
+              await getMultiProposal(
+                "MULTDOWN",
+                symbol,
+                amount,
+                md.multiplier_range[0],
+                MULT_PORTION,
+              );
+            } catch (error) {
+              clearSymbolPending(symbol);
+              sendMessage(String(error));
             }
           }
+        }
 
-          // Multiplier opposite-exit kept only if a legacy MULT position exists
-          if (multiplierPositions.length > 0) {
-            for (const position of multiplierPositions) {
-              const contractId = position.contract_id;
-
-              const contractState = getContractState(contractId);
-
-              if (contractState?.state === "CLOSING") {
-                continue;
-              }
-
-              if (
-                position.type === "MULTUP" &&
-                position.amount / position.risk == 4
-              ) {
-                if (md.trendDown) {
-                  try {
-                    closePosition(symbol, contractId, "Opposite Signal");
-                  } catch (error) {
-                    sendMessage(String(error));
-                  }
-                }
-              } else if (
-                position.type === "MULTDOWN" &&
-                position.amount / position.risk == 4
-              ) {
-                if (md.trendUp) {
-                  try {
-                    closePosition(symbol, contractId, "Opposite Signal");
-                  } catch (error) {
-                    sendMessage(String(error));
-                  }
-                }
-              }
+        // Opposite bias exit for open multipliers
+        for (const position of openMult) {
+          const contractId = position.contract_id;
+          const st = getContractState(contractId);
+          if (st?.state === "CLOSING") continue;
+          if (position.type === "MULTUP" && md.bias === "down") {
+            try {
+              closePosition(symbol, contractId, "4H bias flipped down");
+            } catch (e) {
+              sendMessage(String(e));
+            }
+          } else if (position.type === "MULTDOWN" && md.bias === "up") {
+            try {
+              closePosition(symbol, contractId, "4H bias flipped up");
+            } catch (e) {
+              sendMessage(String(e));
             }
           }
         }
@@ -1343,44 +1265,6 @@ async function connectWebSocket() {
           }
         }
 
-        // ONETOUCH: close exactly 2 minutes before duration elapses if still open
-        if (connection && type === "ONETOUCH") {
-          const currentContractState = getContractState(id);
-
-          if (currentContractState?.state !== "CLOSING") {
-            const elapsedSec = Number(
-              contract?.current_spot_time - contract?.date_start,
-            );
-            const durationSec =
-              TOUCH_DURATION_UNIT === "m"
-                ? TOUCH_DURATION * 60
-                : TOUCH_DURATION;
-            const closeAfterSec = durationSec - TOUCH_CLOSE_BEFORE_END_SEC;
-
-            // Prefer expiry timestamp when API provides it
-            const dateExpiry = Number(contract?.date_expiry);
-            const spotTime = Number(contract?.current_spot_time);
-            const reachedByExpiry =
-              Number.isFinite(dateExpiry) &&
-              Number.isFinite(spotTime) &&
-              spotTime >= dateExpiry - TOUCH_CLOSE_BEFORE_END_SEC;
-            const reachedByElapsed =
-              Number.isFinite(elapsedSec) && elapsedSec >= closeAfterSec;
-
-            if (reachedByExpiry || reachedByElapsed) {
-              try {
-                closePosition(
-                  symbol,
-                  id,
-                  "Touch: 2 minutes before duration elapsed",
-                );
-              } catch (error) {
-                sendMessage(String(error));
-              }
-            }
-          }
-        }
-
         if (connection && type !== "ONETOUCH") {
           if (!position) {
             return;
@@ -1465,13 +1349,78 @@ async function connectWebSocket() {
       }
 
       if (data.msg_type === "buy") {
-        const contractId = data?.buy?.contract_id;
+        // Buy can fail (e.g. insufficient balance) with error and no buy.contract_id
+        if (data.error) {
+          const errMsg =
+            data.error.message || data.error.code || JSON.stringify(data.error);
+          console.error("❌ Buy failed:", errMsg);
+          sendMessage(`❌ Buy failed: ${errMsg}`);
+
+          const failSymbol =
+            data?.echo_req?.underlying_symbol ||
+            data?.echo_req?.passthrough?.symbol;
+          // Clear any symbol left in BUY_PENDING / PROPOSAL_PENDING
+          for (const sym of Object.keys(marketData)) {
+            const md = marketData[sym];
+            if (
+              md &&
+              (md.tradeState === "BUY_PENDING" ||
+                md.tradeState === "PROPOSAL_PENDING")
+            ) {
+              clearSymbolPending(sym);
+            }
+          }
+          if (failSymbol && marketData[failSymbol]) {
+            clearSymbolPending(failSymbol);
+          }
+          return;
+        }
+
+        const contractId =
+          data?.buy?.contract_id ?? data?.buy?.contractId ?? data?.contract_id;
 
         console.log(`🟢 Bought contract ${contractId}`);
+        console.log("Buy response:", JSON.stringify(data?.buy ?? data));
 
-        if (contractId) {
-          setContractState(contractId, "BUY_PENDING");
+        if (!contractId) {
+          console.error(
+            "❌ Buy response missing contract_id:",
+            JSON.stringify(data),
+          );
+          sendMessage(
+            `❌ Buy response missing contract_id — check balance/stake. Raw: ${JSON.stringify(data?.buy ?? data?.error ?? {})}`,
+          );
+          for (const sym of Object.keys(marketData)) {
+            const md = marketData[sym];
+            if (
+              md &&
+              (md.tradeState === "BUY_PENDING" ||
+                md.tradeState === "PROPOSAL_PENDING")
+            ) {
+              clearSymbolPending(sym);
+            }
+          }
+          return;
         }
+
+        setContractState(contractId, "OPEN");
+
+        // Subscribe to open-contract updates for touch management / early close
+        send({
+          proposal_open_contract: 1,
+          contract_id: contractId,
+          subscribe: 1,
+        });
+
+        // Clear pending on the symbol that was buying
+        for (const sym of Object.keys(marketData)) {
+          const md = marketData[sym];
+          if (md && md.tradeState === "BUY_PENDING") {
+            clearSymbolPending(sym);
+          }
+        }
+
+        sendMessage(`🟢 Bought contract ${contractId}`);
 
         return;
       }
