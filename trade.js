@@ -311,7 +311,9 @@ async function getMultiProposal(direction, symbol, stake, multiplier, portion) {
   const request = {
     proposal: 1,
     amount: stake,
-    contract_type: direction,
+    barrier: String(barrier),
+    basis: "stake",
+    contract_type: "ONETOUCH",
     currency: "USD",
     underlying_symbol: symbol,
     multiplier: multiplier,
