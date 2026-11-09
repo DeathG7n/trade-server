@@ -66,37 +66,37 @@ const contractStates = new Map();
 const pendingTrades = new Map();
 
 const symbols = [
-  "stpRNG",
-  "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
-  "stpRNG5",
-  "1HZ10V",
-  "R_10",
-  "1HZ15V",
-  "1HZ25V",
+  // "stpRNG",
+  // "stpRNG2",
+  // "stpRNG3",
+  // "stpRNG4",
+  // "stpRNG5",
+  // "1HZ10V",
+  // "R_10",
+  // "1HZ15V",
+  // "1HZ25V",
   "R_25",
-  "1HZ30V",
-  "1HZ50V",
-  "R_50",
-  "1HZ75V",
-  "R_75",
-  "1HZ90V",
-  "1HZ100V",
-  "R_100",
-  "JD10",
-  "JD25",
-  "JD50",
-  "JD75",
+  // "1HZ30V",
+  // "1HZ50V",
+  // "R_50",
+  // "1HZ75V",
+  //"R_75",
+  // "1HZ90V",
+  // "1HZ100V",
+  //"R_100",
+  // "JD10",
+  // "JD25",
+  // "JD50",
+  // "JD75",
   "JD100",
 ];
 
 const tradeSymbols = [
-  "stpRNG",
-  "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
-  "stpRNG5",
+  // "stpRNG",
+  // "stpRNG2",
+  // "stpRNG3",
+  // "stpRNG4",
+  // "stpRNG5",
   "1HZ10V",
   "R_10",
   "1HZ15V",
@@ -110,48 +110,40 @@ const tradeSymbols = [
   "1HZ90V",
   "1HZ100V",
   "R_100",
-  "JD10",
-  "JD25",
-  "JD50",
-  "JD75",
-  "JD100",
+  // "JD10",
+  // "JD25",
+  // "JD50",
+  // "JD75",
+  // "JD100",
 ];
 
 const alertSymbols = [
-  "stpRNG",
-  "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
-  "stpRNG5",
-  "1HZ10V",
-  "R_10",
-  "1HZ25V",
+  // "stpRNG",
+  // "stpRNG2",
+  // "stpRNG3",
+  // "stpRNG4",
+  // "stpRNG5",
+  // "1HZ10V",
+  // "R_10",
+  // "1HZ25V",
   "R_25",
-  "1HZ50V",
-  "R_50",
-  "1HZ75V",
-  "R_75",
-  "1HZ100V",
-  "R_100",
-  "JD10",
-  "JD25",
-  "JD50",
-  "JD75",
+  // "1HZ50V",
+  // "R_50",
+  // "1HZ75V",
+  // "R_75",
+  // "1HZ100V",
+  // "R_100",
+  // "JD10",
+  // "JD25",
+  // "JD50",
+  // "JD75",
   "JD100",
 ];
 
 const marketData = {};
 
 function emptySeries() {
-  return {
-    close: [],
-    open: [],
-    high: [],
-    low: [],
-    openTime: 0,
-    historyPending: false,
-    lastHistoryAt: 0,
-  };
+  return { close: [], open: [], high: [], low: [], openTime: 0, historyPending: false, lastHistoryAt: 0 };
 }
 
 symbols.forEach((symbol) => {
@@ -212,24 +204,6 @@ function send(message) {
     return false;
   }
 }
-
-// function calculateEMA(prices, period) {
-//   const k = 2 / (period + 1);
-
-//   const emaArray = [];
-
-//   if (!prices.length) {
-//     return emaArray;
-//   }
-
-//   emaArray[0] = prices[0];
-
-//   for (let i = 1; i < prices.length; i++) {
-//     emaArray[i] = prices[i] * k + emaArray[i - 1] * (1 - k);
-//   }
-
-//   return emaArray;
-// }
 
 const sendMessage = async (message) => {
   try {
@@ -311,9 +285,7 @@ async function getMultiProposal(direction, symbol, stake, multiplier, portion) {
   const request = {
     proposal: 1,
     amount: stake,
-    barrier: String(barrier),
-    basis: "stake",
-    contract_type: "ONETOUCH",
+    contract_type: direction,
     currency: "USD",
     underlying_symbol: symbol,
     multiplier: multiplier,
@@ -327,6 +299,8 @@ async function getMultiProposal(direction, symbol, stake, multiplier, portion) {
 
   send(request);
 }
+
+
 
 function buyContract(direction, id, stake) {
   console.log(`📈 Buying ${direction} contract...`);
@@ -877,6 +851,7 @@ async function connectWebSocket() {
         return;
       }
 
+
       if (data.msg_type === "candles") {
         const symbol = data.echo_req.ticks_history;
         const md = marketData[symbol];
@@ -1011,7 +986,9 @@ async function connectWebSocket() {
             md.bias !== prevBias &&
             alertSymbols.includes(symbol)
           ) {
-            sendMessage(`📐 ${symbol} 4H bias → ${md.bias.toUpperCase()}`);
+            sendMessage(
+              `📐 ${symbol} 4H bias → ${md.bias.toUpperCase()}`,
+            );
             md.canAlertBias = false;
           }
         }
@@ -1082,13 +1059,13 @@ async function connectWebSocket() {
           md.multiplier_range?.length
         ) {
           const bullEntry =
-            event.direction === "bullish" &&
-            (md.bias === "up" || md.bias === "none") &&
-            (event.type === "BOS" || event.type === "CHOCH");
+            (event.direction === "bullish" &&
+              (md.bias === "up" || md.bias === "none") &&
+              (event.type === "BOS" || event.type === "CHOCH"));
           const bearEntry =
-            event.direction === "bearish" &&
-            (md.bias === "down" || md.bias === "none") &&
-            (event.type === "BOS" || event.type === "CHOCH");
+            (event.direction === "bearish" &&
+              (md.bias === "down" || md.bias === "none") &&
+              (event.type === "BOS" || event.type === "CHOCH"));
 
           // Prefer trading only with clear 4H bias when available
           const allowBull = md.bias === "up" && event.direction === "bullish";
@@ -1183,7 +1160,11 @@ async function connectWebSocket() {
               `🎯 Buying ONETOUCH ${symbol} barrier=${barrier ?? "?"} ask=${data?.proposal?.ask_price}`,
             );
           }
-          buyContract(ctype, proposalId, data?.proposal?.ask_price);
+          buyContract(
+            ctype,
+            proposalId,
+            data?.proposal?.ask_price,
+          );
         } catch (error) {
           clearSymbolPending(symbol);
 
@@ -1266,6 +1247,8 @@ async function connectWebSocket() {
             }
           }
         }
+
+
 
         if (connection && type !== "ONETOUCH") {
           if (!position) {
@@ -1379,7 +1362,9 @@ async function connectWebSocket() {
         }
 
         const contractId =
-          data?.buy?.contract_id ?? data?.buy?.contractId ?? data?.contract_id;
+          data?.buy?.contract_id ??
+          data?.buy?.contractId ??
+          data?.contract_id;
 
         console.log(`🟢 Bought contract ${contractId}`);
         console.log("Buy response:", JSON.stringify(data?.buy ?? data));

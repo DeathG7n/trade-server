@@ -20,6 +20,24 @@ export function detectCrossover(emaFast, emaSlow) {
   return null;
 }
 
+export function calculateEMA(prices, period) {
+  const k = 2 / (period + 1);
+
+  const emaArray = [];
+
+  if (!prices.length) {
+    return emaArray;
+  }
+
+  emaArray[0] = prices[0];
+
+  for (let i = 1; i < prices.length; i++) {
+    emaArray[i] = prices[i] * k + emaArray[i - 1] * (1 - k);
+  }
+
+  return emaArray;
+}
+
 // export async function getTouchProposal(barrier, symbol, stake) {
 //   const request = {
 //     proposal: 1,
