@@ -6,7 +6,15 @@ import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
-import { bullish, bearish, crossedEma, recentEmaCross } from "./util.js";
+import {
+  bullish,
+  bearish,
+  trendContinuation,
+  candleRangeTheoryEntry,
+  engulfingCandleEntry,
+  haramiEntry,
+  withinHtfCandleRange,
+} from "./util.js";
 
 dotenv.config();
 
@@ -42,12 +50,12 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-const hiHtf = 900;
-const htf = 900;
-const ltf = 60;
-const timeframes = [ltf, htf];
-// Only backfill from API when arrays are short or this interval has elapsed (ms)
+// HTF 1h = direction + trend continuation; LTF 5m = entry patterns inside HTF range
+const htf = 3600;
+const ltf = 300;
+const timeframes = [htf, ltf];
 const HISTORY_RESYNC_MS = 15 * 60 * 1000;
+const MULT_PORTION = 4;
 const subscribedContracts = new Set();
 const contractStates = new Map();
 const pendingTrades = new Map();
@@ -62,7 +70,7 @@ const symbols = [
   // "R_10",
   // "1HZ15V",
   // "1HZ25V",
-  //"R_25",
+  "R_25",
   // "1HZ30V",
   // "1HZ50V",
   // "R_50",
@@ -70,7 +78,7 @@ const symbols = [
   //"R_75",
   // "1HZ90V",
   // "1HZ100V",
-  // "R_100",
+  //"R_100",
   // "JD10",
   // "JD25",
   // "JD50",
@@ -101,7 +109,7 @@ const tradeSymbols = [
   // "JD25",
   // "JD50",
   // "JD75",
-  "JD100",
+  // "JD100",
 ];
 
 const alertSymbols = [
@@ -131,30 +139,20 @@ const marketData = {};
 
 symbols.forEach((symbol) => {
   marketData[symbol] = {
+    // LTF 5m
     close: [],
     open: [],
     high: [],
     low: [],
     openTime: 0,
-    trendUp: false,
-    trendDown: false,
+    // HTF 1h
     closeHtf: [],
     openHtf: [],
     highHtf: [],
     lowHtf: [],
-    emaHtf: [],
     openTimeHtf: 0,
     trendUpHtf: false,
     trendDownHtf: false,
-    closeHiHtf: [],
-    openHiHtf: [],
-    highHiHtf: [],
-    lowHiHtf: [],
-    openTimeHiHtf: 0,
-    trendUpHiHtf: false,
-    trendDownHiHtf: false,
-    canBuy: false,
-    canSell: false,
     multiplier_range: [],
     canAlert: true,
     tradeState: "IDLE",
@@ -283,9 +281,9 @@ function clearSymbolPending(symbol) {
   console.log(`🔄 ${symbol} state -> IDLE`);
 }
 
-async function getMultiProposal(direction, symbol, stake, multiplier) {
-  const stopLoss = stake / 2;
-  const takeProfit = stopLoss * 6;
+async function getMultiProposal(direction, symbol, stake, multiplier, portion) {
+  const stopLoss = stake / portion;
+  const takeProfit = stopLoss * 3;
 
   const request = {
     proposal: 1,
@@ -854,151 +852,86 @@ async function connectWebSocket() {
         return;
       }
 
+
       if (data.msg_type === "candles") {
         const symbol = data.echo_req.ticks_history;
-
         const md = marketData[symbol];
-
-        if (!md) return;
+        if (!md || !data.candles?.length) return;
 
         const current = new Date();
-
         if (now.getHours() !== current.getHours()) {
           now = new Date();
-
           sendMessage("Bot is still running");
         }
 
         try {
-          if (data.echo_req.granularity === hiHtf) {
-            md.closeHiHtf = data.candles.map((c) => c.close);
-            md.openHiHtf = data.candles.map((c) => c.open);
-            md.highHiHtf = data.candles.map((c) => c.high);
-            md.lowHiHtf = data.candles.map((c) => c.low);
-          }
-
           if (data.echo_req.granularity === htf) {
-            md.closeHtf = data.candles.map((c) => c.close);
-            md.openHtf = data.candles.map((c) => c.open);
-            md.highHtf = data.candles.map((c) => c.high);
-            md.lowHtf = data.candles.map((c) => c.low);
+            md.closeHtf = data.candles.map((c) => Number(c.close));
+            md.openHtf = data.candles.map((c) => Number(c.open));
+            md.highHtf = data.candles.map((c) => Number(c.high));
+            md.lowHtf = data.candles.map((c) => Number(c.low));
             md.htfHistoryPending = false;
             md.lastHtfHistoryAt = Date.now();
           }
-
           if (data.echo_req.granularity === ltf) {
-            md.close = data.candles.map((c) => c.close);
-            md.open = data.candles.map((c) => c.open);
-            md.high = data.candles.map((c) => c.high);
-            md.low = data.candles.map((c) => c.low);
+            md.close = data.candles.map((c) => Number(c.close));
+            md.open = data.candles.map((c) => Number(c.open));
+            md.high = data.candles.map((c) => Number(c.high));
+            md.low = data.candles.map((c) => Number(c.low));
             md.ltfHistoryPending = false;
             md.lastLtfHistoryAt = Date.now();
           }
         } catch (error) {
           sendMessage(String(error));
         }
-
         return;
       }
 
       if (data.msg_type === "ohlc" && portfolioSynced) {
         const symbol = data.echo_req.ticks_history;
-
         const md = marketData[symbol];
-
         if (!md) return;
 
         const matchingPositions = positions.filter((p) => p?.name === symbol);
-
         const multiplierPositions = matchingPositions.filter(
-          (p) => p.type !== "ONETOUCH",
+          (p) => p.type === "MULTUP" || p.type === "MULTDOWN",
         );
 
         if (!md.multiplier_range?.length) {
           console.log(`⛔ ${symbol}: No multiplier range available`);
-
           return;
         }
 
-        if (data.echo_req.granularity === hiHtf) {
-          if (md.openTimeHiHtf === 0) {
-            md.openTimeHiHtf = data.ohlc.open_time;
-          }
+        const granularity = data.echo_req.granularity;
 
-          const isNewHiHtfCandle = md.openTimeHiHtf !== data.ohlc.open_time;
-
-          if (isNewHiHtfCandle) {
-            md.openTimeHiHtf = data.ohlc.open_time;
-            md.canAlertHiHtf = true;
-
-            // Request fresh history for accuracy, but do NOT return early.
-            // This allows evaluation on the candle that just closed.
-            send({
-              ticks_history: data.echo_req.ticks_history,
-              style: "candles",
-              count: 500,
-              granularity: data.echo_req.granularity,
-              end: "latest",
-            });
-          }
-
-          if (md.closeHiHtf.length === 0) {
-            md.closeHiHtf.push(Number(data.ohlc.close));
-            md.openHiHtf.push(Number(data.ohlc.open));
-            md.highHiHtf.push(Number(data.ohlc.high));
-            md.lowHiHtf.push(Number(data.ohlc.low));
-          } else {
-            const last = md.closeHiHtf.length - 1;
-            md.closeHiHtf[last] = Number(data.ohlc.close);
-            md.openHiHtf[last] = Number(data.ohlc.open);
-            md.highHiHtf[last] = Number(data.ohlc.high);
-            md.lowHiHtf[last] = Number(data.ohlc.low);
-          }
-
-          const len = md.closeHiHtf.length;
-
-          const hiHtfSignalIndex = len - 2;
-
-          if (len < 200 || hiHtfSignalIndex < 0) {
-            return;
-          }
-
-          const ema9 = calculateEMA(md.closeHiHtf, 9);
-          const ema50 = calculateEMA(md.closeHiHtf, 50);
-
-          md.trendUpHiHtf = ema9[hiHtfSignalIndex] > ema50[hiHtfSignalIndex];
-          md.trendDownHiHtf = ema9[hiHtfSignalIndex] < ema50[hiHtfSignalIndex];
-        }
-
-        if (data.echo_req.granularity === htf) {
-          if (md.openTimeHtf === 0) {
+        // ---------- HTF 1h: direction (EMA14/21) ----------
+        if (granularity === htf) {
+          if (md.openTimeHtf === 0) md.openTimeHtf = data.ohlc.open_time;
+          const isNewHtf = md.openTimeHtf !== data.ohlc.open_time;
+          if (isNewHtf) {
             md.openTimeHtf = data.ohlc.open_time;
-          }
-
-          const isNewHtfCandle = md.openTimeHtf !== data.ohlc.open_time;
-
-          if (isNewHtfCandle) {
-            md.openTimeHtf = data.ohlc.open_time;
-            md.canAlertHtf = true;
-
-            // In-place: append the new forming HTF candle (no mandatory full history)
             md.closeHtf.push(Number(data.ohlc.close));
             md.openHtf.push(Number(data.ohlc.open));
             md.highHtf.push(Number(data.ohlc.high));
             md.lowHtf.push(Number(data.ohlc.low));
-
-            // Optional backfill only if short history or resync interval elapsed
-            const needHtfHistory =
-              md.closeHtf.length < 200 ||
+            const MAX_BARS = 600;
+            if (md.closeHtf.length > MAX_BARS) {
+              const drop = md.closeHtf.length - MAX_BARS;
+              md.closeHtf.splice(0, drop);
+              md.openHtf.splice(0, drop);
+              md.highHtf.splice(0, drop);
+              md.lowHtf.splice(0, drop);
+            }
+            const needHist =
+              md.closeHtf.length < 50 ||
               Date.now() - md.lastHtfHistoryAt > HISTORY_RESYNC_MS;
-
-            if (needHtfHistory && !md.htfHistoryPending) {
+            if (needHist && !md.htfHistoryPending) {
               md.htfHistoryPending = true;
               send({
-                ticks_history: data.echo_req.ticks_history,
+                ticks_history: symbol,
                 style: "candles",
                 count: 500,
-                granularity: data.echo_req.granularity,
+                granularity: htf,
                 end: "latest",
               });
             }
@@ -1015,232 +948,177 @@ async function connectWebSocket() {
             md.lowHtf[last] = Number(data.ohlc.low);
           }
 
-          const len = md.closeHtf.length;
-
-          // Use the just-closed candle when a new one starts, otherwise the previous confirmed one
-          const htfCurrIndex = len - 1;
-          const htfSignalIndex = len - 2;
-          const htfThirdIndex = len - 3;
-          const htfFourthIndex = len - 4;
-
-          if (len < 200 || htfSignalIndex < 0 || md.htfHistoryPending) {
-            return;
+          const lenH = md.closeHtf.length;
+          const prevH = lenH - 2;
+          if (lenH >= 30 && prevH >= 0 && !md.htfHistoryPending) {
+            const ema14 = calculateEMA(md.closeHtf, 14);
+            const ema21 = calculateEMA(md.closeHtf, 21);
+            md.trendUpHtf = ema14[prevH] > ema21[prevH];
+            md.trendDownHtf = ema14[prevH] < ema21[prevH];
           }
+          return;
+        }
 
-          const ema21 = calculateEMA(md.closeHtf, 21);
-          const ema50 = calculateEMA(md.closeHtf, 50);
+        // ---------- LTF 5m: entry patterns ----------
+        if (granularity !== ltf) return;
 
-          md.trendUpHtf = ema21[htfSignalIndex] > ema50[htfSignalIndex];
-          md.trendDownHtf = ema21[htfSignalIndex] < ema50[htfSignalIndex];
+        if (md.openTime === 0) md.openTime = data.ohlc.open_time;
+        const isNewLtf = md.openTime !== data.ohlc.open_time;
+        if (isNewLtf) {
+          md.openTime = data.ohlc.open_time;
+          md.canAlert = true;
+          md.close.push(Number(data.ohlc.close));
+          md.open.push(Number(data.ohlc.open));
+          md.high.push(Number(data.ohlc.high));
+          md.low.push(Number(data.ohlc.low));
+          const MAX_BARS = 600;
+          if (md.close.length > MAX_BARS) {
+            const drop = md.close.length - MAX_BARS;
+            md.close.splice(0, drop);
+            md.open.splice(0, drop);
+            md.high.splice(0, drop);
+            md.low.splice(0, drop);
+          }
+          const needHist =
+            md.close.length < 50 ||
+            Date.now() - md.lastLtfHistoryAt > HISTORY_RESYNC_MS;
+          if (needHist && !md.ltfHistoryPending) {
+            md.ltfHistoryPending = true;
+            send({
+              ticks_history: symbol,
+              style: "candles",
+              count: 500,
+              granularity: ltf,
+              end: "latest",
+            });
+          }
+        } else if (md.close.length === 0) {
+          md.close.push(Number(data.ohlc.close));
+          md.open.push(Number(data.ohlc.open));
+          md.high.push(Number(data.ohlc.high));
+          md.low.push(Number(data.ohlc.low));
+        } else {
+          const last = md.close.length - 1;
+          md.close[last] = Number(data.ohlc.close);
+          md.open[last] = Number(data.ohlc.open);
+          md.high[last] = Number(data.ohlc.high);
+          md.low[last] = Number(data.ohlc.low);
+        }
 
-          if (
-            md.trendUpHtf &&
-            (md.lowHtf[htfCurrIndex] <= ema21[htfCurrIndex] ||
-              md.lowHtf[htfSignalIndex] <= ema21[htfSignalIndex] ||
-              md.lowHtf[htfThirdIndex] <= ema21[htfThirdIndex] ||
-              md.lowHtf[htfFourthIndex] <= ema21[htfFourthIndex])
-          ) {
-            md.canBuy = true;
-            md.canSell = false;
-          } else if (
-            md.trendDownHtf &&
-            (md.highHtf[htfCurrIndex] >= ema21[htfCurrIndex] ||
-              md.highHtf[htfSignalIndex] >= ema21[htfSignalIndex] ||
-              md.highHtf[htfThirdIndex] >= ema21[htfThirdIndex] ||
-              md.highHtf[htfFourthIndex] >= ema21[htfFourthIndex])
-          ) {
-            md.canBuy = false;
-            md.canSell = true;
-          } else {
-            md.canBuy = false;
-            md.canSell = false;
+        // Evaluate only on newly closed 5m bar
+        if (!isNewLtf) return;
+        if (md.ltfHistoryPending || md.htfHistoryPending) return;
+
+        const len = md.close.length;
+        const prevIndex = len - 2;
+        if (len < 30 || prevIndex < 3) return;
+        if (md.closeHtf.length < 30) return;
+
+        const ema14 = calculateEMA(md.close, 14);
+
+        const longSetup =
+          md.trendUpHtf &&
+          trendContinuation(
+            "up",
+            md.openHtf,
+            md.closeHtf,
+            md.highHtf,
+            md.lowHtf,
+          ) &&
+          withinHtfCandleRange(md.highHtf, md.lowHtf, md.close) &&
+          md.close[prevIndex] <= ema14[prevIndex] &&
+          (candleRangeTheoryEntry("up", md.high, md.low, md.close) ||
+            engulfingCandleEntry("up", md.open, md.close) ||
+            haramiEntry("up", md.open, md.close, md.high, md.low));
+
+        const shortSetup =
+          md.trendDownHtf &&
+          trendContinuation(
+            "down",
+            md.openHtf,
+            md.closeHtf,
+            md.highHtf,
+            md.lowHtf,
+          ) &&
+          withinHtfCandleRange(md.highHtf, md.lowHtf, md.close) &&
+          md.close[prevIndex] >= ema14[prevIndex] &&
+          (candleRangeTheoryEntry("down", md.high, md.low, md.close) ||
+            engulfingCandleEntry("down", md.open, md.close) ||
+            haramiEntry("down", md.open, md.close, md.high, md.low));
+
+        if (md.canAlert && alertSymbols.includes(symbol)) {
+          if (longSetup) {
+            sendMessage(`Bullish Signal on ${symbol} (1h up + 5m entry)`);
+            md.canAlert = false;
+          } else if (shortSetup) {
+            sendMessage(`Bearish Signal on ${symbol} (1h down + 5m entry)`);
+            md.canAlert = false;
           }
         }
 
-        if (data.echo_req.granularity === ltf) {
-          if (md.openTime === 0) {
-            md.openTime = data.ohlc.open_time;
-          }
+        const symbolIsPending =
+          md.tradeState === "PROPOSAL_PENDING" ||
+          md.tradeState === "BUY_PENDING";
+        const hasOpenPosition = multiplierPositions.length > 0;
 
-          const isNewLtfCandle = md.openTime !== data.ohlc.open_time;
-
-          if (isNewLtfCandle) {
-            md.openTime = data.ohlc.open_time;
-            md.canAlert = true;
-
-            // (2) In-place: append the new forming LTF candle instead of
-            // refetching 500 bars every minute.
-            md.close.push(Number(data.ohlc.close));
-            md.open.push(Number(data.ohlc.open));
-            md.high.push(Number(data.ohlc.high));
-            md.low.push(Number(data.ohlc.low));
-
-            // Keep arrays from growing without bound
-            const MAX_BARS = 600;
-            if (md.close.length > MAX_BARS) {
-              const drop = md.close.length - MAX_BARS;
-              md.close.splice(0, drop);
-              md.open.splice(0, drop);
-              md.high.splice(0, drop);
-              md.low.splice(0, drop);
+        if (
+          !hasOpenPosition &&
+          !symbolIsPending &&
+          md.tradeState === "IDLE" &&
+          Math.trunc(balance) !== 0 &&
+          amount != null &&
+          amount <= balance &&
+          tradeSymbols.includes(symbol)
+        ) {
+          if (longSetup) {
+            md.entryCandle = data.ohlc.open_time;
+            setSymbolPending(symbol, "PROPOSAL_PENDING");
+            try {
+              await getMultiProposal(
+                "MULTUP",
+                symbol,
+                amount,
+                md.multiplier_range[0],
+                MULT_PORTION,
+              );
+            } catch (error) {
+              clearSymbolPending(symbol);
+              sendMessage(String(error));
             }
-
-            // Backfill only when history is short or periodic resync is due
-            const needLtfHistory =
-              md.close.length < 200 ||
-              Date.now() - md.lastLtfHistoryAt > HISTORY_RESYNC_MS;
-
-            if (needLtfHistory && !md.ltfHistoryPending) {
-              // (1) Gate evaluation until this history response arrives
-              md.ltfHistoryPending = true;
-              send({
-                ticks_history: data.echo_req.ticks_history,
-                style: "candles",
-                count: 500,
-                granularity: data.echo_req.granularity,
-                end: "latest",
-              });
-            }
-          } else if (md.close.length === 0) {
-            md.close.push(Number(data.ohlc.close));
-            md.open.push(Number(data.ohlc.open));
-            md.high.push(Number(data.ohlc.high));
-            md.low.push(Number(data.ohlc.low));
-          } else {
-            const last = md.close.length - 1;
-            md.close[last] = Number(data.ohlc.close);
-            md.open[last] = Number(data.ohlc.open);
-            md.high[last] = Number(data.ohlc.high);
-            md.low[last] = Number(data.ohlc.low);
-          }
-
-          const len = md.close.length;
-          const signalIndex = len - 2;
-
-          // (1) Do not evaluate while a history refresh is in flight
-          if (len < 200 || signalIndex < 0 || md.ltfHistoryPending) {
-            return;
-          }
-
-          const ema21 = calculateEMA(md.close, 21);
-          const ema50 = calculateEMA(md.close, 50);
-          const ema100 = calculateEMA(md.close, 100);
-
-          const cross = crossedEma(md.high, md.low, signalIndex, ema100);
-
-          md.trendUp = ema21[signalIndex] > ema50[signalIndex];
-          md.trendDown = ema21[signalIndex] < ema50[signalIndex];
-
-          const symbolIsPending =
-            md.tradeState === "PROPOSAL_PENDING" ||
-            md.tradeState === "BUY_PENDING";
-
-          const hasOpenPosition = multiplierPositions.length > 0;
-
-          if (md.canAlert && alertSymbols.includes(symbol)) {
-            if (
-              md.trendUpHtf &&
-              (md.trendDown ||
-                recentEmaCross(ema21, ema50, 50) === "bullish") &&
-              cross &&
-              bullish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] >= ema100[signalIndex]
-            ) {
-              sendMessage(`Bullish Signal on ${symbol}`);
-              md.canAlert = false;
-            } else if (
-              md.trendDownHtf &&
-              (md.trendUp || recentEmaCross(ema21, ema50, 50) === "bearish") &&
-              cross &&
-              bearish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] <= ema100[signalIndex]
-            ) {
-              sendMessage(`Bearish Signal on ${symbol}`);
-              md.canAlert = false;
+          } else if (shortSetup) {
+            md.entryCandle = data.ohlc.open_time;
+            setSymbolPending(symbol, "PROPOSAL_PENDING");
+            try {
+              await getMultiProposal(
+                "MULTDOWN",
+                symbol,
+                amount,
+                md.multiplier_range[0],
+                MULT_PORTION,
+              );
+            } catch (error) {
+              clearSymbolPending(symbol);
+              sendMessage(String(error));
             }
           }
+        }
 
-          if (
-            !hasOpenPosition &&
-            !symbolIsPending &&
-            Math.trunc(balance) !== 0 &&
-            tradeSymbols.includes(symbol) &&
-            md.tradeState === "IDLE"
-          ) {
-            if (
-              md.trendUpHtf &&
-              (md.trendDown ||
-                recentEmaCross(ema21, ema50, 50) === "bullish") &&
-              cross &&
-              bullish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] >= ema100[signalIndex]
-            ) {
-              md.entryCandle = data.ohlc.open_time;
-              setSymbolPending(symbol, "PROPOSAL_PENDING");
-              try {
-                await getMultiProposal(
-                  "MULTUP",
-                  symbol,
-                  amount,
-                  md.multiplier_range[0],
-                );
-              } catch (error) {
-                clearSymbolPending(symbol);
-
-                sendMessage(String(error));
-              }
+        // Exit on opposite HTF trend
+        for (const position of multiplierPositions) {
+          const contractId = position.contract_id;
+          const contractState = getContractState(contractId);
+          if (contractState?.state === "CLOSING") continue;
+          if (position.type === "MULTUP" && md.trendDownHtf) {
+            try {
+              closePosition(symbol, contractId, "Opposite 1h trend");
+            } catch (error) {
+              sendMessage(String(error));
             }
-            if (
-              md.trendDownHtf &&
-              (md.trendUp || recentEmaCross(ema21, ema50, 50) === "bearish") &&
-              cross &&
-              bearish(md.open, md.close, signalIndex) &&
-              md.close[signalIndex] <= ema100[signalIndex]
-            ) {
-              md.entryCandle = data.ohlc.open_time;
-              setSymbolPending(symbol, "PROPOSAL_PENDING");
-              try {
-                await getMultiProposal(
-                  "MULTDOWN",
-                  symbol,
-                  amount,
-                  md.multiplier_range[0],
-                );
-              } catch (error) {
-                clearSymbolPending(symbol);
-
-                sendMessage(String(error));
-              }
-            }
-          }
-
-          if (multiplierPositions.length > 0) {
-            for (const position of multiplierPositions) {
-              const contractId = position.contract_id;
-
-              const contractState = getContractState(contractId);
-
-              if (contractState?.state === "CLOSING") {
-                continue;
-              }
-
-              if (position.type === "MULTUP") {
-                if (md.trendDownHtf) {
-                  try {
-                    closePosition(symbol, contractId, "Opposite Signal");
-                  } catch (error) {
-                    sendMessage(String(error));
-                  }
-                }
-              } else if (position.type === "MULTDOWN") {
-                if (md.trendUpHtf) {
-                  try {
-                    closePosition(symbol, contractId, "Opposite Signal");
-                  } catch (error) {
-                    sendMessage(String(error));
-                  }
-                }
-              }
+          } else if (position.type === "MULTDOWN" && md.trendUpHtf) {
+            try {
+              closePosition(symbol, contractId, "Opposite 1h trend");
+            } catch (error) {
+              sendMessage(String(error));
             }
           }
         }
@@ -1342,6 +1220,8 @@ async function connectWebSocket() {
         if (position) {
           position.subscribed = true;
           position.profit = profit;
+          position.amount = orderAmount;
+          position.risk = lossAmount;
         }
 
         if (connection && type !== "ONETOUCH") {
@@ -1371,7 +1251,7 @@ async function connectWebSocket() {
             await update(position.stoploss, id, symbol);
           }
 
-          if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount)) {
+          if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
             position.stoploss = Math.abs(lossAmount * 2);
 
             await update(position.stoploss, id, symbol);
