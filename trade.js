@@ -6,15 +6,7 @@ import axios from "axios";
 import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
-import {
-  bullish,
-  bearish,
-  structureBias,
-  weakStrongLevels,
-  detectBosChoch,
-  previousDayRange,
-  findSwings,
-} from "./util.js";
+import { bullish, bearish, crossedEma, recentEmaCross } from "./util.js";
 
 dotenv.config();
 
@@ -50,17 +42,12 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-// Structure strategy timeframes
-const TF_DAILY = 86400;
-const TF_4H = 14400;
-const TF_15M = 900;
-const TF_5M = 300;
-const timeframes = [TF_DAILY, TF_4H, TF_15M, TF_5M];
+const hiHtf = 900;
+const htf = 900;
+const ltf = 60;
+const timeframes = [ltf, htf];
+// Only backfill from API when arrays are short or this interval has elapsed (ms)
 const HISTORY_RESYNC_MS = 15 * 60 * 1000;
-// Multiplier risk: SL = stake/PORTION, TP = 3x SL
-const MULT_PORTION = 4;
-const SWING_LEFT = 2;
-const SWING_RIGHT = 2;
 const subscribedContracts = new Set();
 const contractStates = new Map();
 const pendingTrades = new Map();
@@ -71,19 +58,19 @@ const symbols = [
   // "stpRNG3",
   // "stpRNG4",
   // "stpRNG5",
-  "1HZ10V",
-  "R_10",
-  "1HZ15V",
-  "1HZ25V",
-  "R_25",
-  "1HZ30V",
-  "1HZ50V",
-  "R_50",
-  "1HZ75V",
-  "R_75",
-  "1HZ90V",
-  "1HZ100V",
-  "R_100",
+  // "1HZ10V",
+  // "R_10",
+  // "1HZ15V",
+  // "1HZ25V",
+  //"R_25",
+  // "1HZ30V",
+  // "1HZ50V",
+  // "R_50",
+  // "1HZ75V",
+  //"R_75",
+  // "1HZ90V",
+  // "1HZ100V",
+  // "R_100",
   // "JD10",
   // "JD25",
   // "JD50",
@@ -123,19 +110,16 @@ const alertSymbols = [
   // "stpRNG3",
   // "stpRNG4",
   // "stpRNG5",
-  "1HZ10V",
-  "R_10",
-  "1HZ15V",
-  "1HZ25V",
-  "R_25",
-  "1HZ30V",
-  "1HZ50V",
-  "R_50",
-  "1HZ75V",
-  "R_75",
-  "1HZ90V",
-  "1HZ100V",
-  "R_100",
+  // "1HZ10V",
+  // "R_10",
+  // "1HZ25V",
+  // "R_25",
+  // "1HZ50V",
+  // "R_50",
+  // "1HZ75V",
+  // "R_75",
+  // "1HZ100V",
+  // "R_100",
   // "JD10",
   // "JD25",
   // "JD50",
@@ -145,43 +129,43 @@ const alertSymbols = [
 
 const marketData = {};
 
-function emptySeries() {
-  return { close: [], open: [], high: [], low: [], openTime: 0, historyPending: false, lastHistoryAt: 0 };
-}
-
 symbols.forEach((symbol) => {
   marketData[symbol] = {
-    // Per-timeframe OHLCV-like series
-    daily: emptySeries(),
-    h4: emptySeries(),
-    m15: emptySeries(),
-    m5: emptySeries(),
-    // Legacy aliases used in older close logic
     close: [],
     open: [],
     high: [],
     low: [],
     openTime: 0,
-    bias: "none", // 4H structure bias
-    dayRange: null,
-    lastBosChoch: null,
-    canAlertBias: true,
-    canAlertStructure: true,
-    canAlertBos: true,
+    trendUp: false,
+    trendDown: false,
+    closeHtf: [],
+    openHtf: [],
+    highHtf: [],
+    lowHtf: [],
+    emaHtf: [],
+    openTimeHtf: 0,
+    trendUpHtf: false,
+    trendDownHtf: false,
+    closeHiHtf: [],
+    openHiHtf: [],
+    highHiHtf: [],
+    lowHiHtf: [],
+    openTimeHiHtf: 0,
+    trendUpHiHtf: false,
+    trendDownHiHtf: false,
+    canBuy: false,
+    canSell: false,
     multiplier_range: [],
+    canAlert: true,
     tradeState: "IDLE",
     pendingProposalId: null,
     entryCandle: 0,
+    ltfHistoryPending: false,
+    htfHistoryPending: false,
+    lastLtfHistoryAt: 0,
+    lastHtfHistoryAt: 0,
   };
 });
-
-function seriesForGranularity(md, granularity) {
-  if (granularity === TF_DAILY) return md.daily;
-  if (granularity === TF_4H) return md.h4;
-  if (granularity === TF_15M) return md.m15;
-  if (granularity === TF_5M) return md.m5;
-  return null;
-}
 
 app.use(cors());
 
@@ -208,6 +192,23 @@ function send(message) {
   }
 }
 
+function calculateEMA(prices, period) {
+  const k = 2 / (period + 1);
+
+  const emaArray = [];
+
+  if (!prices.length) {
+    return emaArray;
+  }
+
+  emaArray[0] = prices[0];
+
+  for (let i = 1; i < prices.length; i++) {
+    emaArray[i] = prices[i] * k + emaArray[i - 1] * (1 - k);
+  }
+
+  return emaArray;
+}
 
 const sendMessage = async (message) => {
   try {
@@ -282,9 +283,9 @@ function clearSymbolPending(symbol) {
   console.log(`🔄 ${symbol} state -> IDLE`);
 }
 
-async function getMultiProposal(direction, symbol, stake, multiplier, portion) {
-  const stopLoss = stake / portion;
-  const takeProfit = stopLoss * 3;
+async function getMultiProposal(direction, symbol, stake, multiplier) {
+  const stopLoss = stake / 2;
+  const takeProfit = stopLoss * 6;
 
   const request = {
     proposal: 1,
@@ -303,8 +304,6 @@ async function getMultiProposal(direction, symbol, stake, multiplier, portion) {
 
   send(request);
 }
-
-
 
 function buyContract(direction, id, stake) {
   console.log(`📈 Buying ${direction} contract...`);
@@ -855,284 +854,393 @@ async function connectWebSocket() {
         return;
       }
 
-
       if (data.msg_type === "candles") {
         const symbol = data.echo_req.ticks_history;
+
         const md = marketData[symbol];
-        if (!md || !data.candles?.length) return;
+
+        if (!md) return;
 
         const current = new Date();
+
         if (now.getHours() !== current.getHours()) {
           now = new Date();
+
           sendMessage("Bot is still running");
         }
 
         try {
-          const series = seriesForGranularity(md, data.echo_req.granularity);
-          if (!series) return;
-          series.close = data.candles.map((c) => Number(c.close));
-          series.open = data.candles.map((c) => Number(c.open));
-          series.high = data.candles.map((c) => Number(c.high));
-          series.low = data.candles.map((c) => Number(c.low));
-          series.historyPending = false;
-          series.lastHistoryAt = Date.now();
-          // Keep m5 mirrored on legacy fields for any residual code
-          if (data.echo_req.granularity === TF_5M) {
-            md.close = series.close;
-            md.open = series.open;
-            md.high = series.high;
-            md.low = series.low;
+          if (data.echo_req.granularity === hiHtf) {
+            md.closeHiHtf = data.candles.map((c) => c.close);
+            md.openHiHtf = data.candles.map((c) => c.open);
+            md.highHiHtf = data.candles.map((c) => c.high);
+            md.lowHiHtf = data.candles.map((c) => c.low);
+          }
+
+          if (data.echo_req.granularity === htf) {
+            md.closeHtf = data.candles.map((c) => c.close);
+            md.openHtf = data.candles.map((c) => c.open);
+            md.highHtf = data.candles.map((c) => c.high);
+            md.lowHtf = data.candles.map((c) => c.low);
+            md.htfHistoryPending = false;
+            md.lastHtfHistoryAt = Date.now();
+          }
+
+          if (data.echo_req.granularity === ltf) {
+            md.close = data.candles.map((c) => c.close);
+            md.open = data.candles.map((c) => c.open);
+            md.high = data.candles.map((c) => c.high);
+            md.low = data.candles.map((c) => c.low);
+            md.ltfHistoryPending = false;
+            md.lastLtfHistoryAt = Date.now();
           }
         } catch (error) {
           sendMessage(String(error));
         }
+
         return;
       }
 
       if (data.msg_type === "ohlc" && portfolioSynced) {
         const symbol = data.echo_req.ticks_history;
+
         const md = marketData[symbol];
+
         if (!md) return;
+
+        const matchingPositions = positions.filter((p) => p?.name === symbol);
+
+        const multiplierPositions = matchingPositions.filter(
+          (p) => p.type !== "ONETOUCH",
+        );
 
         if (!md.multiplier_range?.length) {
           console.log(`⛔ ${symbol}: No multiplier range available`);
+
           return;
         }
 
-        const granularity = data.echo_req.granularity;
-        const series = seriesForGranularity(md, granularity);
-        if (!series) return;
+        if (data.echo_req.granularity === hiHtf) {
+          if (md.openTimeHiHtf === 0) {
+            md.openTimeHiHtf = data.ohlc.open_time;
+          }
 
-        // --- Update series (in-place OHLC) ---
-        if (series.openTime === 0) {
-          series.openTime = data.ohlc.open_time;
-        }
-        const isNewCandle = series.openTime !== data.ohlc.open_time;
-        if (isNewCandle) {
-          series.openTime = data.ohlc.open_time;
-          series.close.push(Number(data.ohlc.close));
-          series.open.push(Number(data.ohlc.open));
-          series.high.push(Number(data.ohlc.high));
-          series.low.push(Number(data.ohlc.low));
-          const MAX_BARS = 600;
-          if (series.close.length > MAX_BARS) {
-            const drop = series.close.length - MAX_BARS;
-            series.close.splice(0, drop);
-            series.open.splice(0, drop);
-            series.high.splice(0, drop);
-            series.low.splice(0, drop);
-          }
-          if (granularity === TF_5M) {
-            md.canAlertBos = true;
-            md.canAlertStructure = true;
-          }
-          if (granularity === TF_4H) md.canAlertBias = true;
-          // Periodic history resync
-          const needHistory =
-            series.close.length < 50 ||
-            Date.now() - series.lastHistoryAt > HISTORY_RESYNC_MS;
-          if (needHistory && !series.historyPending) {
-            series.historyPending = true;
+          const isNewHiHtfCandle = md.openTimeHiHtf !== data.ohlc.open_time;
+
+          if (isNewHiHtfCandle) {
+            md.openTimeHiHtf = data.ohlc.open_time;
+            md.canAlertHiHtf = true;
+
+            // Request fresh history for accuracy, but do NOT return early.
+            // This allows evaluation on the candle that just closed.
             send({
-              ticks_history: symbol,
+              ticks_history: data.echo_req.ticks_history,
               style: "candles",
               count: 500,
-              granularity,
+              granularity: data.echo_req.granularity,
               end: "latest",
             });
           }
-        } else if (series.close.length === 0) {
-          series.close.push(Number(data.ohlc.close));
-          series.open.push(Number(data.ohlc.open));
-          series.high.push(Number(data.ohlc.high));
-          series.low.push(Number(data.ohlc.low));
-        } else {
-          const last = series.close.length - 1;
-          series.close[last] = Number(data.ohlc.close);
-          series.open[last] = Number(data.ohlc.open);
-          series.high[last] = Number(data.ohlc.high);
-          series.low[last] = Number(data.ohlc.low);
+
+          if (md.closeHiHtf.length === 0) {
+            md.closeHiHtf.push(Number(data.ohlc.close));
+            md.openHiHtf.push(Number(data.ohlc.open));
+            md.highHiHtf.push(Number(data.ohlc.high));
+            md.lowHiHtf.push(Number(data.ohlc.low));
+          } else {
+            const last = md.closeHiHtf.length - 1;
+            md.closeHiHtf[last] = Number(data.ohlc.close);
+            md.openHiHtf[last] = Number(data.ohlc.open);
+            md.highHiHtf[last] = Number(data.ohlc.high);
+            md.lowHiHtf[last] = Number(data.ohlc.low);
+          }
+
+          const len = md.closeHiHtf.length;
+
+          const hiHtfSignalIndex = len - 2;
+
+          if (len < 200 || hiHtfSignalIndex < 0) {
+            return;
+          }
+
+          const ema9 = calculateEMA(md.closeHiHtf, 9);
+          const ema50 = calculateEMA(md.closeHiHtf, 50);
+
+          md.trendUpHiHtf = ema9[hiHtfSignalIndex] > ema50[hiHtfSignalIndex];
+          md.trendDownHiHtf = ema9[hiHtfSignalIndex] < ema50[hiHtfSignalIndex];
         }
 
-        if (granularity === TF_5M) {
-          md.close = series.close;
-          md.open = series.open;
-          md.high = series.high;
-          md.low = series.low;
-        }
+        if (data.echo_req.granularity === htf) {
+          if (md.openTimeHtf === 0) {
+            md.openTimeHtf = data.ohlc.open_time;
+          }
 
-        // Only evaluate structure / entries on a newly closed 5m bar
-        if (granularity !== TF_5M || !isNewCandle) {
-          return;
-        }
-        if (series.historyPending) return;
+          const isNewHtfCandle = md.openTimeHtf !== data.ohlc.open_time;
 
-        const m5 = md.m5;
-        const h4 = md.h4;
-        const m15 = md.m15;
-        const daily = md.daily;
-        const signalIndex = m5.close.length - 2;
-        if (signalIndex < 10) return;
+          if (isNewHtfCandle) {
+            md.openTimeHtf = data.ohlc.open_time;
+            md.canAlertHtf = true;
 
-        // Daily range (previous completed day)
-        if (daily.close.length >= 2) {
-          const dIdx = daily.close.length - 2;
-          md.dayRange = previousDayRange(daily.high, daily.low, dIdx);
-        }
+            // In-place: append the new forming HTF candle (no mandatory full history)
+            md.closeHtf.push(Number(data.ohlc.close));
+            md.openHtf.push(Number(data.ohlc.open));
+            md.highHtf.push(Number(data.ohlc.high));
+            md.lowHtf.push(Number(data.ohlc.low));
 
-        // 4H bias (no standalone alert — alerts only on aligned BOS/CHOCH)
-        if (h4.close.length >= 20) {
-          md.bias = structureBias(h4.high, h4.low, SWING_LEFT, SWING_RIGHT);
-        }
+            // Optional backfill only if short history or resync interval elapsed
+            const needHtfHistory =
+              md.closeHtf.length < 200 ||
+              Date.now() - md.lastHtfHistoryAt > HISTORY_RESYNC_MS;
 
-        // 15m weak/strong levels (used in aligned BOS/CHOCH alerts only)
-        let levels15 = null;
-        if (m15.close.length >= 30) {
-          levels15 = weakStrongLevels(
-            m15.high,
-            m15.low,
-            SWING_LEFT,
-            SWING_RIGHT,
-          );
-        }
-
-        // 5m BOS / CHOCH
-        const event = detectBosChoch(
-          m5.high,
-          m5.low,
-          m5.close,
-          signalIndex,
-          md.bias,
-          SWING_LEFT,
-          SWING_RIGHT,
-        );
-
-        // Alert ONLY when BOS/CHOCH is aligned with 4H bias.
-        // Include the bias-relevant 15m weak level (weak high for up, weak low for down).
-        if (event && md.canAlertBos) {
-          md.lastBosChoch = event;
-          const alignedBull =
-            md.bias === "up" && event.direction === "bullish";
-          const alignedBear =
-            md.bias === "down" && event.direction === "bearish";
-
-          if ((alignedBull || alignedBear) && alertSymbols.includes(symbol)) {
-            let weakInfo = "n/a";
-            if (alignedBull && levels15?.weakHighs?.length) {
-              const wh = levels15.weakHighs[levels15.weakHighs.length - 1];
-              weakInfo = `WeakHigh@${Number(wh.price).toFixed(2)}`;
-            } else if (alignedBear && levels15?.weakLows?.length) {
-              const wl = levels15.weakLows[levels15.weakLows.length - 1];
-              weakInfo = `WeakLow@${Number(wl.price).toFixed(2)}`;
-            } else if (alignedBull && levels15?.lastSwingHigh) {
-              weakInfo = `SwingHigh@${Number(levels15.lastSwingHigh.price).toFixed(2)}`;
-            } else if (alignedBear && levels15?.lastSwingLow) {
-              weakInfo = `SwingLow@${Number(levels15.lastSwingLow.price).toFixed(2)}`;
+            if (needHtfHistory && !md.htfHistoryPending) {
+              md.htfHistoryPending = true;
+              send({
+                ticks_history: data.echo_req.ticks_history,
+                style: "candles",
+                count: 500,
+                granularity: data.echo_req.granularity,
+                end: "latest",
+              });
             }
+          } else if (md.closeHtf.length === 0) {
+            md.closeHtf.push(Number(data.ohlc.close));
+            md.openHtf.push(Number(data.ohlc.open));
+            md.highHtf.push(Number(data.ohlc.high));
+            md.lowHtf.push(Number(data.ohlc.low));
+          } else {
+            const last = md.closeHtf.length - 1;
+            md.closeHtf[last] = Number(data.ohlc.close);
+            md.openHtf[last] = Number(data.ohlc.open);
+            md.highHtf[last] = Number(data.ohlc.high);
+            md.lowHtf[last] = Number(data.ohlc.low);
+          }
 
-            const msg =
-              `⚡ ${symbol} 5m ${event.type} ${event.direction} @ ${Number(event.level).toFixed(2)}` +
-              ` | bias=${md.bias} | 15m ${weakInfo}`;
-            console.log(msg);
-            sendMessage(msg);
-            md.canAlertBos = false;
-          } else if (event) {
-            // Counter-bias: log only, no Telegram
-            console.log(
-              `skip alert ${symbol} ${event.type} ${event.direction} (bias=${md.bias})`,
-            );
+          const len = md.closeHtf.length;
+
+          // Use the just-closed candle when a new one starts, otherwise the previous confirmed one
+          const htfCurrIndex = len - 1;
+          const htfSignalIndex = len - 2;
+          const htfThirdIndex = len - 3;
+          const htfFourthIndex = len - 4;
+
+          if (len < 200 || htfSignalIndex < 0 || md.htfHistoryPending) {
+            return;
+          }
+
+          const ema21 = calculateEMA(md.closeHtf, 21);
+          const ema50 = calculateEMA(md.closeHtf, 50);
+
+          md.trendUpHtf = ema21[htfSignalIndex] > ema50[htfSignalIndex];
+          md.trendDownHtf = ema21[htfSignalIndex] < ema50[htfSignalIndex];
+
+          if (
+            md.trendUpHtf &&
+            (md.lowHtf[htfCurrIndex] <= ema21[htfCurrIndex] ||
+              md.lowHtf[htfSignalIndex] <= ema21[htfSignalIndex] ||
+              md.lowHtf[htfThirdIndex] <= ema21[htfThirdIndex] ||
+              md.lowHtf[htfFourthIndex] <= ema21[htfFourthIndex])
+          ) {
+            md.canBuy = true;
+            md.canSell = false;
+          } else if (
+            md.trendDownHtf &&
+            (md.highHtf[htfCurrIndex] >= ema21[htfCurrIndex] ||
+              md.highHtf[htfSignalIndex] >= ema21[htfSignalIndex] ||
+              md.highHtf[htfThirdIndex] >= ema21[htfThirdIndex] ||
+              md.highHtf[htfFourthIndex] >= ema21[htfFourthIndex])
+          ) {
+            md.canBuy = false;
+            md.canSell = true;
+          } else {
+            md.canBuy = false;
+            md.canSell = false;
           }
         }
 
-        // --- Multiplier entry: bias-aligned BOS/CHOCH ---
-        const matchingPositions = positions.filter((p) => p?.name === symbol);
-        const openMult = matchingPositions.filter(
-          (p) => p.type === "MULTUP" || p.type === "MULTDOWN",
-        );
-        const symbolIsPending =
-          md.tradeState === "PROPOSAL_PENDING" ||
-          md.tradeState === "BUY_PENDING";
-        const hasOpen = openMult.length > 0;
+        if (data.echo_req.granularity === ltf) {
+          if (md.openTime === 0) {
+            md.openTime = data.ohlc.open_time;
+          }
 
-        if (
-          event &&
-          !hasOpen &&
-          !symbolIsPending &&
-          md.tradeState === "IDLE" &&
-          Math.trunc(balance) !== 0 &&
-          amount != null &&
-          amount <= balance &&
-          tradeSymbols.includes(symbol) &&
-          md.multiplier_range?.length
-        ) {
-          const bullEntry =
-            (event.direction === "bullish" &&
-              (md.bias === "up" || md.bias === "none") &&
-              (event.type === "BOS" || event.type === "CHOCH"));
-          const bearEntry =
-            (event.direction === "bearish" &&
-              (md.bias === "down" || md.bias === "none") &&
-              (event.type === "BOS" || event.type === "CHOCH"));
+          const isNewLtfCandle = md.openTime !== data.ohlc.open_time;
 
-          // Prefer trading only with clear 4H bias when available
-          const allowBull = md.bias === "up" && event.direction === "bullish";
-          const allowBear = md.bias === "down" && event.direction === "bearish";
+          if (isNewLtfCandle) {
+            md.openTime = data.ohlc.open_time;
+            md.canAlert = true;
 
-          if (allowBull) {
-            md.entryCandle = data.ohlc.open_time;
-            setSymbolPending(symbol, "PROPOSAL_PENDING");
-            sendMessage(
-              `📈 ${symbol} MULTUP — 5m ${event.type} bullish with 4H up bias`,
-            );
-            try {
-              await getMultiProposal(
-                "MULTUP",
-                symbol,
-                amount,
-                md.multiplier_range[0],
-                MULT_PORTION,
-              );
-            } catch (error) {
-              clearSymbolPending(symbol);
-              sendMessage(String(error));
+            // (2) In-place: append the new forming LTF candle instead of
+            // refetching 500 bars every minute.
+            md.close.push(Number(data.ohlc.close));
+            md.open.push(Number(data.ohlc.open));
+            md.high.push(Number(data.ohlc.high));
+            md.low.push(Number(data.ohlc.low));
+
+            // Keep arrays from growing without bound
+            const MAX_BARS = 600;
+            if (md.close.length > MAX_BARS) {
+              const drop = md.close.length - MAX_BARS;
+              md.close.splice(0, drop);
+              md.open.splice(0, drop);
+              md.high.splice(0, drop);
+              md.low.splice(0, drop);
             }
-          } else if (allowBear) {
-            md.entryCandle = data.ohlc.open_time;
-            setSymbolPending(symbol, "PROPOSAL_PENDING");
-            sendMessage(
-              `📉 ${symbol} MULTDOWN — 5m ${event.type} bearish with 4H down bias`,
-            );
-            try {
-              await getMultiProposal(
-                "MULTDOWN",
-                symbol,
-                amount,
-                md.multiplier_range[0],
-                MULT_PORTION,
-              );
-            } catch (error) {
-              clearSymbolPending(symbol);
-              sendMessage(String(error));
+
+            // Backfill only when history is short or periodic resync is due
+            const needLtfHistory =
+              md.close.length < 200 ||
+              Date.now() - md.lastLtfHistoryAt > HISTORY_RESYNC_MS;
+
+            if (needLtfHistory && !md.ltfHistoryPending) {
+              // (1) Gate evaluation until this history response arrives
+              md.ltfHistoryPending = true;
+              send({
+                ticks_history: data.echo_req.ticks_history,
+                style: "candles",
+                count: 500,
+                granularity: data.echo_req.granularity,
+                end: "latest",
+              });
+            }
+          } else if (md.close.length === 0) {
+            md.close.push(Number(data.ohlc.close));
+            md.open.push(Number(data.ohlc.open));
+            md.high.push(Number(data.ohlc.high));
+            md.low.push(Number(data.ohlc.low));
+          } else {
+            const last = md.close.length - 1;
+            md.close[last] = Number(data.ohlc.close);
+            md.open[last] = Number(data.ohlc.open);
+            md.high[last] = Number(data.ohlc.high);
+            md.low[last] = Number(data.ohlc.low);
+          }
+
+          const len = md.close.length;
+          const signalIndex = len - 2;
+
+          // (1) Do not evaluate while a history refresh is in flight
+          if (len < 200 || signalIndex < 0 || md.ltfHistoryPending) {
+            return;
+          }
+
+          const ema21 = calculateEMA(md.close, 21);
+          const ema50 = calculateEMA(md.close, 50);
+          const ema100 = calculateEMA(md.close, 100);
+
+          const cross = crossedEma(md.high, md.low, signalIndex, ema100);
+
+          md.trendUp = ema21[signalIndex] > ema50[signalIndex];
+          md.trendDown = ema21[signalIndex] < ema50[signalIndex];
+
+          const symbolIsPending =
+            md.tradeState === "PROPOSAL_PENDING" ||
+            md.tradeState === "BUY_PENDING";
+
+          const hasOpenPosition = multiplierPositions.length > 0;
+
+          if (md.canAlert && alertSymbols.includes(symbol)) {
+            if (
+              md.trendUpHtf &&
+              (md.trendDown ||
+                recentEmaCross(ema21, ema50, 50) === "bullish") &&
+              cross &&
+              bullish(md.open, md.close, signalIndex) &&
+              md.close[signalIndex] >= ema100[signalIndex]
+            ) {
+              sendMessage(`Bullish Signal on ${symbol}`);
+              md.canAlert = false;
+            } else if (
+              md.trendDownHtf &&
+              (md.trendUp || recentEmaCross(ema21, ema50, 50) === "bearish") &&
+              cross &&
+              bearish(md.open, md.close, signalIndex) &&
+              md.close[signalIndex] <= ema100[signalIndex]
+            ) {
+              sendMessage(`Bearish Signal on ${symbol}`);
+              md.canAlert = false;
             }
           }
-        }
 
-        // Opposite bias exit for open multipliers
-        for (const position of openMult) {
-          const contractId = position.contract_id;
-          const st = getContractState(contractId);
-          if (st?.state === "CLOSING") continue;
-          if (position.type === "MULTUP" && md.bias === "down") {
-            try {
-              closePosition(symbol, contractId, "4H bias flipped down");
-            } catch (e) {
-              sendMessage(String(e));
+          if (
+            !hasOpenPosition &&
+            !symbolIsPending &&
+            Math.trunc(balance) !== 0 &&
+            tradeSymbols.includes(symbol) &&
+            md.tradeState === "IDLE"
+          ) {
+            if (
+              md.trendUpHtf &&
+              (md.trendDown ||
+                recentEmaCross(ema21, ema50, 50) === "bullish") &&
+              cross &&
+              bullish(md.open, md.close, signalIndex) &&
+              md.close[signalIndex] >= ema100[signalIndex]
+            ) {
+              md.entryCandle = data.ohlc.open_time;
+              setSymbolPending(symbol, "PROPOSAL_PENDING");
+              try {
+                await getMultiProposal(
+                  "MULTUP",
+                  symbol,
+                  amount,
+                  md.multiplier_range[0],
+                );
+              } catch (error) {
+                clearSymbolPending(symbol);
+
+                sendMessage(String(error));
+              }
             }
-          } else if (position.type === "MULTDOWN" && md.bias === "up") {
-            try {
-              closePosition(symbol, contractId, "4H bias flipped up");
-            } catch (e) {
-              sendMessage(String(e));
+            if (
+              md.trendDownHtf &&
+              (md.trendUp || recentEmaCross(ema21, ema50, 50) === "bearish") &&
+              cross &&
+              bearish(md.open, md.close, signalIndex) &&
+              md.close[signalIndex] <= ema100[signalIndex]
+            ) {
+              md.entryCandle = data.ohlc.open_time;
+              setSymbolPending(symbol, "PROPOSAL_PENDING");
+              try {
+                await getMultiProposal(
+                  "MULTDOWN",
+                  symbol,
+                  amount,
+                  md.multiplier_range[0],
+                );
+              } catch (error) {
+                clearSymbolPending(symbol);
+
+                sendMessage(String(error));
+              }
+            }
+          }
+
+          if (multiplierPositions.length > 0) {
+            for (const position of multiplierPositions) {
+              const contractId = position.contract_id;
+
+              const contractState = getContractState(contractId);
+
+              if (contractState?.state === "CLOSING") {
+                continue;
+              }
+
+              if (position.type === "MULTUP") {
+                if (md.trendDownHtf) {
+                  try {
+                    closePosition(symbol, contractId, "Opposite Signal");
+                  } catch (error) {
+                    sendMessage(String(error));
+                  }
+                }
+              } else if (position.type === "MULTDOWN") {
+                if (md.trendUpHtf) {
+                  try {
+                    closePosition(symbol, contractId, "Opposite Signal");
+                  } catch (error) {
+                    sendMessage(String(error));
+                  }
+                }
+              }
             }
           }
         }
@@ -1160,15 +1268,8 @@ async function connectWebSocket() {
         setSymbolPending(symbol, "BUY_PENDING", proposalId);
 
         try {
-          const ctype = data?.echo_req?.contract_type;
-          const barrier = data?.echo_req?.barrier;
-          if (ctype === "ONETOUCH") {
-            sendMessage(
-              `🎯 Buying ONETOUCH ${symbol} barrier=${barrier ?? "?"} ask=${data?.proposal?.ask_price}`,
-            );
-          }
           buyContract(
-            ctype,
+            data?.echo_req?.contract_type,
             proposalId,
             data?.proposal?.ask_price,
           );
@@ -1241,21 +1342,7 @@ async function connectWebSocket() {
         if (position) {
           position.subscribed = true;
           position.profit = profit;
-          position.amount = orderAmount;
-          position.risk = lossAmount;
-          // Persist touch barrier for close rules
-          if (type === "ONETOUCH") {
-            const barrier =
-              contract?.barrier ??
-              data?.echo_req?.barrier ??
-              marketData[symbol]?.pendingTouchBarrier;
-            if (barrier != null && barrier !== "") {
-              position.barrier = String(barrier);
-            }
-          }
         }
-
-
 
         if (connection && type !== "ONETOUCH") {
           if (!position) {
@@ -1284,7 +1371,7 @@ async function connectWebSocket() {
             await update(position.stoploss, id, symbol);
           }
 
-          if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
+          if (pip >= risk * 4 && position.stoploss === Math.abs(lossAmount)) {
             position.stoploss = Math.abs(lossAmount * 2);
 
             await update(position.stoploss, id, symbol);
@@ -1341,80 +1428,13 @@ async function connectWebSocket() {
       }
 
       if (data.msg_type === "buy") {
-        // Buy can fail (e.g. insufficient balance) with error and no buy.contract_id
-        if (data.error) {
-          const errMsg =
-            data.error.message || data.error.code || JSON.stringify(data.error);
-          console.error("❌ Buy failed:", errMsg);
-          sendMessage(`❌ Buy failed: ${errMsg}`);
-
-          const failSymbol =
-            data?.echo_req?.underlying_symbol ||
-            data?.echo_req?.passthrough?.symbol;
-          // Clear any symbol left in BUY_PENDING / PROPOSAL_PENDING
-          for (const sym of Object.keys(marketData)) {
-            const md = marketData[sym];
-            if (
-              md &&
-              (md.tradeState === "BUY_PENDING" ||
-                md.tradeState === "PROPOSAL_PENDING")
-            ) {
-              clearSymbolPending(sym);
-            }
-          }
-          if (failSymbol && marketData[failSymbol]) {
-            clearSymbolPending(failSymbol);
-          }
-          return;
-        }
-
-        const contractId =
-          data?.buy?.contract_id ??
-          data?.buy?.contractId ??
-          data?.contract_id;
+        const contractId = data?.buy?.contract_id;
 
         console.log(`🟢 Bought contract ${contractId}`);
-        console.log("Buy response:", JSON.stringify(data?.buy ?? data));
 
-        if (!contractId) {
-          console.error(
-            "❌ Buy response missing contract_id:",
-            JSON.stringify(data),
-          );
-          sendMessage(
-            `❌ Buy response missing contract_id — check balance/stake. Raw: ${JSON.stringify(data?.buy ?? data?.error ?? {})}`,
-          );
-          for (const sym of Object.keys(marketData)) {
-            const md = marketData[sym];
-            if (
-              md &&
-              (md.tradeState === "BUY_PENDING" ||
-                md.tradeState === "PROPOSAL_PENDING")
-            ) {
-              clearSymbolPending(sym);
-            }
-          }
-          return;
+        if (contractId) {
+          setContractState(contractId, "BUY_PENDING");
         }
-
-        setContractState(contractId, "OPEN");
-
-        // Subscribe to open-contract updates for touch management / early close
-        send({
-          proposal_open_contract: 1,
-          contract_id: contractId,
-          subscribe: 1,
-        });
-
-        // Clear pending on the symbol that was buying
-        for (const sym of Object.keys(marketData)) {
-          const md = marketData[sym];
-          if (md && md.tradeState === "BUY_PENDING") {
-            clearSymbolPending(sym);
-          }
-        }
-
-        sendMessage(`🟢 Bought contract ${contractId}`);
 
         return;
       }
