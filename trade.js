@@ -66,11 +66,11 @@ const contractStates = new Map();
 const pendingTrades = new Map();
 
 const symbols = [
-  "stpRNG",
-  "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
-  "stpRNG5",
+  // "stpRNG",
+  // "stpRNG2",
+  // "stpRNG3",
+  // "stpRNG4",
+  // "stpRNG5",
   "1HZ10V",
   "R_10",
   "1HZ15V",
@@ -84,19 +84,19 @@ const symbols = [
   "1HZ90V",
   "1HZ100V",
   "R_100",
-  "JD10",
-  "JD25",
-  "JD50",
-  "JD75",
+  // "JD10",
+  // "JD25",
+  // "JD50",
+  // "JD75",
   "JD100",
 ];
 
 const tradeSymbols = [
-  "stpRNG",
-  "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
-  "stpRNG5",
+  // "stpRNG",
+  // "stpRNG2",
+  // "stpRNG3",
+  // "stpRNG4",
+  // "stpRNG5",
   "1HZ10V",
   "R_10",
   "1HZ15V",
@@ -110,33 +110,36 @@ const tradeSymbols = [
   "1HZ90V",
   "1HZ100V",
   "R_100",
-  "JD10",
-  "JD25",
-  "JD50",
-  "JD75",
+  // "JD10",
+  // "JD25",
+  // "JD50",
+  // "JD75",
   "JD100",
 ];
 
 const alertSymbols = [
-  "stpRNG",
-  "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
-  "stpRNG5",
+  // "stpRNG",
+  // "stpRNG2",
+  // "stpRNG3",
+  // "stpRNG4",
+  // "stpRNG5",
   "1HZ10V",
   "R_10",
+  "1HZ15V",
   "1HZ25V",
   "R_25",
+  "1HZ30V",
   "1HZ50V",
   "R_50",
   "1HZ75V",
   "R_75",
+  "1HZ90V",
   "1HZ100V",
   "R_100",
-  "JD10",
-  "JD25",
-  "JD50",
-  "JD75",
+  // "JD10",
+  // "JD25",
+  // "JD50",
+  // "JD75",
   "JD100",
 ];
 
@@ -204,6 +207,7 @@ function send(message) {
     return false;
   }
 }
+
 
 const sendMessage = async (message) => {
   try {
@@ -976,44 +980,20 @@ async function connectWebSocket() {
           md.dayRange = previousDayRange(daily.high, daily.low, dIdx);
         }
 
-        // 4H bias
+        // 4H bias (no standalone alert — alerts only on aligned BOS/CHOCH)
         if (h4.close.length >= 20) {
-          const prevBias = md.bias;
           md.bias = structureBias(h4.high, h4.low, SWING_LEFT, SWING_RIGHT);
-          if (
-            md.canAlertBias &&
-            md.bias !== "none" &&
-            md.bias !== prevBias &&
-            alertSymbols.includes(symbol)
-          ) {
-            sendMessage(
-              `📐 ${symbol} 4H bias → ${md.bias.toUpperCase()}`,
-            );
-            md.canAlertBias = false;
-          }
         }
 
-        // 15m weak/strong levels (alerts)
-        if (m15.close.length >= 30 && md.canAlertStructure) {
-          const levels = weakStrongLevels(
+        // 15m weak/strong levels (used in aligned BOS/CHOCH alerts only)
+        let levels15 = null;
+        if (m15.close.length >= 30) {
+          levels15 = weakStrongLevels(
             m15.high,
             m15.low,
             SWING_LEFT,
             SWING_RIGHT,
           );
-          const tips = [];
-          if (levels.weakHighs.length) {
-            const wh = levels.weakHighs[levels.weakHighs.length - 1];
-            tips.push(`WeakHigh@${wh.price.toFixed(2)}`);
-          }
-          if (levels.weakLows.length) {
-            const wl = levels.weakLows[levels.weakLows.length - 1];
-            tips.push(`WeakLow@${wl.price.toFixed(2)}`);
-          }
-          if (tips.length && alertSymbols.includes(symbol)) {
-            sendMessage(`🏷 ${symbol} 15m structure: ${tips.join(" | ")}`);
-            md.canAlertStructure = false;
-          }
         }
 
         // 5m BOS / CHOCH
@@ -1027,14 +1007,41 @@ async function connectWebSocket() {
           SWING_RIGHT,
         );
 
+        // Alert ONLY when BOS/CHOCH is aligned with 4H bias.
+        // Include the bias-relevant 15m weak level (weak high for up, weak low for down).
         if (event && md.canAlertBos) {
           md.lastBosChoch = event;
-          const msg = `⚡ ${symbol} 5m ${event.type} ${event.direction} @ ${Number(event.level).toFixed(2)} (bias=${md.bias})`;
-          console.log(msg);
-          if (alertSymbols.includes(symbol)) {
+          const alignedBull =
+            md.bias === "up" && event.direction === "bullish";
+          const alignedBear =
+            md.bias === "down" && event.direction === "bearish";
+
+          if ((alignedBull || alignedBear) && alertSymbols.includes(symbol)) {
+            let weakInfo = "n/a";
+            if (alignedBull && levels15?.weakHighs?.length) {
+              const wh = levels15.weakHighs[levels15.weakHighs.length - 1];
+              weakInfo = `WeakHigh@${Number(wh.price).toFixed(2)}`;
+            } else if (alignedBear && levels15?.weakLows?.length) {
+              const wl = levels15.weakLows[levels15.weakLows.length - 1];
+              weakInfo = `WeakLow@${Number(wl.price).toFixed(2)}`;
+            } else if (alignedBull && levels15?.lastSwingHigh) {
+              weakInfo = `SwingHigh@${Number(levels15.lastSwingHigh.price).toFixed(2)}`;
+            } else if (alignedBear && levels15?.lastSwingLow) {
+              weakInfo = `SwingLow@${Number(levels15.lastSwingLow.price).toFixed(2)}`;
+            }
+
+            const msg =
+              `⚡ ${symbol} 5m ${event.type} ${event.direction} @ ${Number(event.level).toFixed(2)}` +
+              ` | bias=${md.bias} | 15m ${weakInfo}`;
+            console.log(msg);
             sendMessage(msg);
+            md.canAlertBos = false;
+          } else if (event) {
+            // Counter-bias: log only, no Telegram
+            console.log(
+              `skip alert ${symbol} ${event.type} ${event.direction} (bias=${md.bias})`,
+            );
           }
-          md.canAlertBos = false;
         }
 
         // --- Multiplier entry: bias-aligned BOS/CHOCH ---
