@@ -92,11 +92,11 @@ function emptyPairState() {
 }
 
 const symbols = [
-  "stpRNG",
-  "stpRNG2",
-  "stpRNG3",
-  "stpRNG4",
-  "stpRNG5",
+  // "stpRNG",
+  // "stpRNG2",
+  // "stpRNG3",
+  // "stpRNG4",
+  // "stpRNG5",
   "1HZ10V",
   "R_10",
   "1HZ15V",
@@ -110,11 +110,11 @@ const symbols = [
   "1HZ90V",
   "1HZ100V",
   "R_100",
-  "JD10",
-  "JD25",
-  "JD50",
-  "JD75",
-  "JD100",
+  // "JD10",
+  // "JD25",
+  // "JD50",
+  // "JD75",
+  // "JD100",
 ];
 
 const tradeSymbols = [
