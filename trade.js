@@ -60,7 +60,6 @@ const TF_PAIRS = [
 ];
 const timeframes = [...new Set(TF_PAIRS.flatMap((p) => [p.htf, p.ltf]))];
 const HISTORY_RESYNC_MS = 15 * 60 * 1000;
-const MULT_PORTION = 4;
 const subscribedContracts = new Set();
 const contractStates = new Map();
 const pendingTrades = new Map(); // key: `${symbol}::${pairId}`
@@ -914,8 +913,6 @@ async function connectWebSocket() {
         return;
       }
 
-
-
       if (data.msg_type === "candles") {
         const symbol = data.echo_req.ticks_history;
         const md = marketData[symbol];
@@ -1028,7 +1025,8 @@ async function connectWebSocket() {
           const ltfSeries = md.series[cfg.ltf];
 
           if (htfSeries.historyPending || ltfSeries.historyPending) continue;
-          if (ltfSeries.close.length < 30 || htfSeries.close.length < 30) continue;
+          if (ltfSeries.close.length < 30 || htfSeries.close.length < 30)
+            continue;
 
           const prevIndex = ltfSeries.close.length - 2;
           if (prevIndex < 3) continue;
@@ -1224,11 +1222,9 @@ async function connectWebSocket() {
 
       if (data.msg_type === "proposal") {
         const symbol =
-          data?.echo_req?.underlying_symbol ||
-          data?.passthrough?.symbol;
+          data?.echo_req?.underlying_symbol || data?.passthrough?.symbol;
         const pairId =
-          data?.passthrough?.pairId ||
-          data?.echo_req?.passthrough?.pairId;
+          data?.passthrough?.pairId || data?.echo_req?.passthrough?.pairId;
 
         const md = marketData[symbol];
         if (!md) return;
@@ -1434,11 +1430,9 @@ async function connectWebSocket() {
       if (data.msg_type === "buy") {
         const contractId = data?.buy?.contract_id;
         const symbol =
-          data?.echo_req?.underlying_symbol ||
-          data?.passthrough?.symbol;
+          data?.echo_req?.underlying_symbol || data?.passthrough?.symbol;
         const pairId =
-          data?.passthrough?.pairId ||
-          data?.echo_req?.passthrough?.pairId;
+          data?.passthrough?.pairId || data?.echo_req?.passthrough?.pairId;
 
         if (data.error) {
           console.log(`⚠️ Buy error: ${data.error.message}`);
@@ -1471,7 +1465,9 @@ async function connectWebSocket() {
         } else if (symbol) {
           const pending = findPairPendingProposal(symbol);
           if (pending) {
-            const existing = positions.find((p) => p.contract_id === contractId);
+            const existing = positions.find(
+              (p) => p.contract_id === contractId,
+            );
             if (existing) existing.pairId = pending.pairId;
             clearPairPending(symbol, pending.pairId);
           }
@@ -1567,8 +1563,7 @@ async function connectWebSocket() {
         if (echoReq?.underlying_symbol) {
           const symbol = echoReq.underlying_symbol;
           const pairId =
-            echoReq?.passthrough?.pairId ||
-            data?.passthrough?.pairId;
+            echoReq?.passthrough?.pairId || data?.passthrough?.pairId;
           if (pairId) {
             clearPairPending(symbol, pairId);
             console.log(
