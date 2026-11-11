@@ -97,19 +97,19 @@ const symbols = [
   // "stpRNG3",
   // "stpRNG4",
   // "stpRNG5",
-  "1HZ10V",
-  "R_10",
-  "1HZ15V",
-  "1HZ25V",
+  // "1HZ10V",
+  // "R_10",
+  // "1HZ15V",
+  // "1HZ25V",
   "R_25",
-  "1HZ30V",
-  "1HZ50V",
-  "R_50",
-  "1HZ75V",
+  // "1HZ30V",
+  // "1HZ50V",
+  // "R_50",
+  // "1HZ75V",
   "R_75",
-  "1HZ90V",
-  "1HZ100V",
-  "R_100",
+  // "1HZ90V",
+  // "1HZ100V",
+  // "R_100",
   // "JD10",
   // "JD25",
   // "JD50",
@@ -1034,8 +1034,6 @@ async function connectWebSocket() {
           // Reset alert gate on new LTF bar
           pair.canAlert = true;
 
-          const ema5 = calculateEMA(ltfSeries.close, 5);
-
           // HTF continuation stack:
           // 1) EMA14/21 trend flag
           // 2) classic trendContinuation (pullback / 2-bear-1-bull etc.)
@@ -1045,14 +1043,14 @@ async function connectWebSocket() {
           // LTF: inside HTF range + EMA5 filter + engulfing / CRT / harami
           const longSetup =
             pair.trendUp &&
-            trendContinuation(
+            (trendContinuation(
               "up",
               htfSeries.open,
               htfSeries.close,
               htfSeries.high,
               htfSeries.low,
-            ) &&
-            ema21CrossContinuation("up", htfSeries.open, htfSeries.close) &&
+            ) ||
+            ema21CrossContinuation("up", htfSeries.open, htfSeries.close)) &&
             ema21LevelOk(
               "up",
               htfSeries.high,
@@ -1065,7 +1063,6 @@ async function connectWebSocket() {
               htfSeries.low,
               ltfSeries.close,
             ) &&
-            ltfSeries.close[prevIndex] <= ema5[prevIndex] &&
             (candleRangeTheoryEntry(
               "up",
               ltfSeries.high,
@@ -1083,14 +1080,14 @@ async function connectWebSocket() {
 
           const shortSetup =
             pair.trendDown &&
-            trendContinuation(
+            (trendContinuation(
               "down",
               htfSeries.open,
               htfSeries.close,
               htfSeries.high,
               htfSeries.low,
-            ) &&
-            ema21CrossContinuation("down", htfSeries.open, htfSeries.close) &&
+            ) ||
+            ema21CrossContinuation("down", htfSeries.open, htfSeries.close)) &&
             ema21LevelOk(
               "down",
               htfSeries.high,
@@ -1103,7 +1100,6 @@ async function connectWebSocket() {
               htfSeries.low,
               ltfSeries.close,
             ) &&
-            ltfSeries.close[prevIndex] >= ema5[prevIndex] &&
             (candleRangeTheoryEntry(
               "down",
               ltfSeries.high,
