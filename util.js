@@ -317,6 +317,40 @@ export function trendContinuation(trend, open, close, high, low) {
   return null;
 }
 
+
+/**
+ * HTF continuation: closed bar crosses EMA21 in trend direction with matching candle color.
+ * up  -> bullish candle and close crosses above EMA21
+ * down -> bearish candle and close crosses below EMA21
+ */
+export function ema21CrossContinuation(trend, open, close) {
+  const len = close.length;
+  const i = len - 2;
+  if (i < 1) return false;
+
+  // EMA21 up to signal bar
+  const period = 21;
+  if (len < period + 2) return false;
+  const k = 2 / (period + 1);
+  let emaPrev = close[0];
+  for (let j = 1; j <= i - 1; j++) {
+    emaPrev = close[j] * k + emaPrev * (1 - k);
+  }
+  const emaCurr = close[i] * k + emaPrev * (1 - k);
+
+  if (trend === "up") {
+    const isBull = close[i] > open[i];
+    const crossedUp = close[i - 1] <= emaPrev && close[i] > emaCurr;
+    return isBull && crossedUp;
+  }
+  if (trend === "down") {
+    const isBear = close[i] < open[i];
+    const crossedDown = close[i - 1] >= emaPrev && close[i] < emaCurr;
+    return isBear && crossedDown;
+  }
+  return false;
+}
+
 export function candleRangeTheoryEntry(trend, high, low, close) {
   const len = close.length;
   const prevIndex = len - 2;
@@ -389,6 +423,57 @@ export function withinHtfCandleRange(high, low, close) {
     high[prevHtfCandle] >= close[prevLtfCandle] &&
     close[prevLtfCandle] >= low[prevHtfCandle]
   );
+}
+
+
+/**
+ * Last closed bar (signalIndex) interacts with EMA21 in trend direction.
+ * up: high or low is at/above EMA21
+ * down: high or low is at/below EMA21
+ */
+export function ema21LevelOk(trend, high, low, close, signalIndex = null) {
+  const len = close.length;
+  const i = signalIndex == null ? len - 2 : signalIndex;
+  if (i < 21) return false;
+
+  const period = 21;
+  const k = 2 / (period + 1);
+  let ema = close[0];
+  for (let j = 1; j <= i; j++) {
+    ema = close[j] * k + ema * (1 - k);
+  }
+
+  if (trend === "up") {
+    return high[i] >= ema || low[i] >= ema;
+  }
+  if (trend === "down") {
+    return high[i] <= ema || low[i] <= ema;
+  }
+  return false;
+}
+
+/**
+ * Forming HTF candle must pull back past 50% of the previous (range) HTF candle.
+ * up:   forming.low  < midpoint of previous HTF candle
+ * down: forming.high > midpoint of previous HTF candle
+ * Previous closed bar = len-2, forming = len-1.
+ */
+export function htfFormingPullback(trend, high, low) {
+  const len = high.length;
+  if (len < 2) return false;
+  const prev = len - 2;
+  const forming = len - 1;
+  // 50% level of the previous (closed) HTF candle that defines the trade range
+  const mid = (high[prev] + low[prev]) / 2;
+  if (trend === "up") {
+    // forming low at or below 50% of previous HTF candle
+    return low[forming] <= mid;
+  }
+  if (trend === "down") {
+    // forming high at or above 50% of previous HTF candle
+    return high[forming] >= mid;
+  }
+  return false;
 }
 
 export function sleep(ms) {
