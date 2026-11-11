@@ -60,6 +60,7 @@ const TF_PAIRS = [
 ];
 const timeframes = [...new Set(TF_PAIRS.flatMap((p) => [p.htf, p.ltf]))];
 const HISTORY_RESYNC_MS = 15 * 60 * 1000;
+const MULT_PORTION = 4;
 const subscribedContracts = new Set();
 const contractStates = new Map();
 const pendingTrades = new Map(); // key: `${symbol}::${pairId}`
