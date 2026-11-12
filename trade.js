@@ -1048,13 +1048,7 @@ async function connectWebSocket() {
           const longSetup =
             pair.trendUp &&
             crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
-            (bullish(htfSeries.high, htfSeries.low, prevIndexHtf) ||
-              candleRangeTheoryEntry(
-                "up",
-                htfSeries.high,
-                htfSeries.low,
-                htfSeries.close,
-              )) &&
+            bullish(htfSeries.high, htfSeries.low, prevIndexHtf) &&
             htfFormingPullback("up", htfSeries.high, htfSeries.low) &&
             withinHtfCandleRange(
               htfSeries.high,
@@ -1079,13 +1073,7 @@ async function connectWebSocket() {
           const shortSetup =
             pair.trendDown &&
             crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
-            (bearish(htfSeries.high, htfSeries.low, prevIndexHtf) ||
-              candleRangeTheoryEntry(
-                "down",
-                htfSeries.high,
-                htfSeries.low,
-                htfSeries.close,
-              )) &&
+            bearish(htfSeries.high, htfSeries.low, prevIndexHtf) &&
             htfFormingPullback("down", htfSeries.high, htfSeries.low) &&
             withinHtfCandleRange(
               htfSeries.high,
