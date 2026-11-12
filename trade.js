@@ -7,14 +7,12 @@ import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 
 import {
-  trendContinuation,
-  ema21CrossContinuation,
-  ema21LevelOk,
   htfFormingPullback,
   candleRangeTheoryEntry,
   engulfingCandleEntry,
   haramiEntry,
   withinHtfCandleRange,
+  crossedEma,
 } from "./util.js";
 
 dotenv.config();
@@ -1029,6 +1027,8 @@ async function connectWebSocket() {
             continue;
 
           const prevIndex = ltfSeries.close.length - 2;
+          const prevIndexHtf = htfSeries.close.length - 2;
+          const ema21 = calculateEMA(htfSeries.close, 21);
           if (prevIndex < 3) continue;
 
           // Reset alert gate on new LTF bar
@@ -1043,20 +1043,7 @@ async function connectWebSocket() {
           // LTF: inside HTF range + EMA5 filter + engulfing / CRT / harami
           const longSetup =
             pair.trendUp &&
-            (trendContinuation(
-              "up",
-              htfSeries.open,
-              htfSeries.close,
-              htfSeries.high,
-              htfSeries.low,
-            ) ||
-            ema21CrossContinuation("up", htfSeries.open, htfSeries.close)) &&
-            ema21LevelOk(
-              "up",
-              htfSeries.high,
-              htfSeries.low,
-              htfSeries.close,
-            ) &&
+            crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
             htfFormingPullback("up", htfSeries.high, htfSeries.low) &&
             withinHtfCandleRange(
               htfSeries.high,
@@ -1080,20 +1067,7 @@ async function connectWebSocket() {
 
           const shortSetup =
             pair.trendDown &&
-            (trendContinuation(
-              "down",
-              htfSeries.open,
-              htfSeries.close,
-              htfSeries.high,
-              htfSeries.low,
-            ) ||
-            ema21CrossContinuation("down", htfSeries.open, htfSeries.close)) &&
-            ema21LevelOk(
-              "down",
-              htfSeries.high,
-              htfSeries.low,
-              htfSeries.close,
-            ) &&
+            crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
             htfFormingPullback("down", htfSeries.high, htfSeries.low) &&
             withinHtfCandleRange(
               htfSeries.high,
