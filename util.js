@@ -458,20 +458,21 @@ export function ema21LevelOk(trend, high, low, close, signalIndex = null) {
  * down: forming.high > midpoint of previous HTF candle
  * Previous closed bar = len-2, forming = len-1.
  */
-export function htfFormingPullback(trend, high, low) {
+export function htfFormingPullback(trend, high, low, pct = 0.35) {
   const len = high.length;
   if (len < 2) return false;
   const prev = len - 2;
   const forming = len - 1;
-  // 50% level of the previous (closed) HTF candle that defines the trade range
-  const mid = (high[prev] + low[prev]) / 2;
+  const range = high[prev] - low[prev];
+  // pct retracement of previous (closed) HTF candle that defines the trade range
+  // up: level is pct down from high; down: level is pct up from low
   if (trend === "up") {
-    // forming low at or below 50% of previous HTF candle
-    return low[forming] <= mid;
+    const level = high[prev] - pct * range;
+    return low[forming] <= level;
   }
   if (trend === "down") {
-    // forming high at or above 50% of previous HTF candle
-    return high[forming] >= mid;
+    const level = low[prev] + pct * range;
+    return high[forming] >= level;
   }
   return false;
 }

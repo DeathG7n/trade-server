@@ -13,6 +13,8 @@ import {
   haramiEntry,
   withinHtfCandleRange,
   crossedEma,
+  bearish,
+  bullish,
 } from "./util.js";
 
 dotenv.config();
@@ -50,11 +52,12 @@ let portfolioSynced = false;
 let lastBalance = null;
 
 // Independent TF pairs: each (symbol, pair) can hold its own multiplier trade
-// portion = stake divisor for SL (SL = stake/portion, TP = 3*SL)
+// portion = stake divisor for SL (SL = stake/portion)
+// rr = take-profit multiple of SL (TP = SL * rr) — 15m→1m is 1:1, others 1:3
 const TF_PAIRS = [
-  { id: "15m_1m", htf: 900, ltf: 60, portion: 4, label: "15m→1m" },
-  { id: "1h_5m", htf: 3600, ltf: 300, portion: 2, label: "1h→5m" },
-  { id: "4h_15m", htf: 14400, ltf: 900, portion: 1, label: "4h→15m" },
+  { id: "15m_1m", htf: 900, ltf: 60, portion: 4, rr: 1, label: "15m→1m" },
+  { id: "1h_5m", htf: 3600, ltf: 300, portion: 2, rr: 3, label: "1h→5m" },
+  { id: "4h_15m", htf: 14400, ltf: 900, portion: 1, rr: 3, label: "4h→15m" },
 ];
 const timeframes = [...new Set(TF_PAIRS.flatMap((p) => [p.htf, p.ltf]))];
 const HISTORY_RESYNC_MS = 15 * 60 * 1000;
@@ -326,9 +329,10 @@ async function getMultiProposal(
   multiplier,
   portion,
   pairId,
+  rr = 3,
 ) {
   const stopLoss = stake / portion;
-  const takeProfit = stopLoss * 3;
+  const takeProfit = stopLoss * rr;
 
   const request = {
     proposal: 1,
@@ -1044,6 +1048,13 @@ async function connectWebSocket() {
           const longSetup =
             pair.trendUp &&
             crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
+            (bullish(htfSeries.high, htfSeries.low, prevIndexHtf) ||
+              candleRangeTheoryEntry(
+                "up",
+                htfSeries.high,
+                htfSeries.low,
+                htfSeries.close,
+              )) &&
             htfFormingPullback("up", htfSeries.high, htfSeries.low) &&
             withinHtfCandleRange(
               htfSeries.high,
@@ -1068,6 +1079,13 @@ async function connectWebSocket() {
           const shortSetup =
             pair.trendDown &&
             crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
+            (bearish(htfSeries.high, htfSeries.low, prevIndexHtf) ||
+              candleRangeTheoryEntry(
+                "down",
+                htfSeries.high,
+                htfSeries.low,
+                htfSeries.close,
+              )) &&
             htfFormingPullback("down", htfSeries.high, htfSeries.low) &&
             withinHtfCandleRange(
               htfSeries.high,
@@ -1092,12 +1110,12 @@ async function connectWebSocket() {
           if (pair.canAlert && alertSymbols.includes(symbol)) {
             if (longSetup) {
               sendMessage(
-                `Bullish ${cfg.label} on ${symbol} (HTF cont + EMA21 + 50% pullback + LTF entry)`,
+                `Bullish ${cfg.label} on ${symbol} (HTF cont + EMA21 + 35% pullback + LTF entry)`,
               );
               pair.canAlert = false;
             } else if (shortSetup) {
               sendMessage(
-                `Bearish ${cfg.label} on ${symbol} (HTF cont + EMA21 + 50% pullback + LTF entry)`,
+                `Bearish ${cfg.label} on ${symbol} (HTF cont + EMA21 + 35% pullback + LTF entry)`,
               );
               pair.canAlert = false;
             }
@@ -1128,6 +1146,7 @@ async function connectWebSocket() {
                   md.multiplier_range[0],
                   cfg.portion,
                   cfg.id,
+                  cfg.rr,
                 );
               } catch (error) {
                 clearPairPending(symbol, cfg.id);
@@ -1144,6 +1163,7 @@ async function connectWebSocket() {
                   md.multiplier_range[0],
                   cfg.portion,
                   cfg.id,
+                  cfg.rr,
                 );
               } catch (error) {
                 clearPairPending(symbol, cfg.id);
