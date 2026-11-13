@@ -1044,7 +1044,7 @@ async function connectWebSocket() {
           // 3) EMA21 cross with correct candle color
           // 4) last closed HTF bar high/low at or beyond EMA21
           // 5) forming HTF bar pulled back past 50% of previous HTF range candle
-          // LTF: inside HTF range + EMA5 filter + engulfing / CRT / harami
+          // LTF: inside HTF range + engulfing / CRT / harami
           const longSetup =
             pair.trendUp &&
             crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
@@ -1085,8 +1085,8 @@ async function connectWebSocket() {
                 htfSeries.high,
                 htfSeries.low,
                 htfSeries.close,
-              ));
-          htfFormingPullback("down", htfSeries.high, htfSeries.low) &&
+              )) &&
+            htfFormingPullback("down", htfSeries.high, htfSeries.low) &&
             withinHtfCandleRange(
               htfSeries.high,
               htfSeries.low,
