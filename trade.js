@@ -51,13 +51,12 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-// Independent TF pairs: each (symbol, pair) can hold its own multiplier trade
+// Single TF pair: 30m HTF → 2m LTF
 // portion = stake divisor for SL (SL = stake/portion)
-// rr = take-profit multiple of SL (TP = SL * rr) — 15m→1m is 1:1, others 1:3
+// rr = take-profit multiple of SL (TP = SL * rr) → 1:4
+// Max one open multiplier trade per symbol
 const TF_PAIRS = [
-  { id: "15m_1m", htf: 900, ltf: 60, portion: 4, rr: 1, label: "15m→1m" },
-  { id: "1h_5m", htf: 3600, ltf: 300, portion: 2, rr: 3, label: "1h→5m" },
-  { id: "4h_15m", htf: 14400, ltf: 900, portion: 1, rr: 3, label: "4h→15m" },
+  { id: "30m_2m", htf: 1800, ltf: 120, portion: 4, rr: 4, label: "30m→2m" },
 ];
 const timeframes = [...new Set(TF_PAIRS.flatMap((p) => [p.htf, p.ltf]))];
 const HISTORY_RESYNC_MS = 15 * 60 * 1000;
@@ -101,12 +100,12 @@ const symbols = [
   // "1HZ10V",
   // "R_10",
   // "1HZ15V",
-  // "1HZ25V",
+  "1HZ25V",
   "R_25",
   // "1HZ30V",
   // "1HZ50V",
   // "R_50",
-  // "1HZ75V",
+  "1HZ75V",
   "R_75",
   // "1HZ90V",
   // "1HZ100V",
@@ -313,11 +312,20 @@ function findPairPendingProposal(symbol) {
   return null;
 }
 
-function hasOpenForPair(symbol, pairId) {
+// function hasOpenForPair(symbol, pairId) {
+//   return positions.some(
+//     (p) =>
+//       p?.name === symbol &&
+//       p?.pairId === pairId &&
+//       (p.type === "MULTUP" || p.type === "MULTDOWN"),
+//   );
+// }
+
+/** One trade per symbol max (any pair / multiplier) */
+function hasOpenForSymbol(symbol) {
   return positions.some(
     (p) =>
       p?.name === symbol &&
-      p?.pairId === pairId &&
       (p.type === "MULTUP" || p.type === "MULTDOWN"),
   );
 }
@@ -1124,7 +1132,8 @@ async function connectWebSocket() {
           const symbolIsPending =
             pair.tradeState === "PROPOSAL_PENDING" ||
             pair.tradeState === "BUY_PENDING";
-          const hasOpen = hasOpenForPair(symbol, cfg.id);
+          // Hard cap: only one open multiplier per symbol
+          const hasOpen = hasOpenForSymbol(symbol);
 
           if (
             !hasOpen &&
@@ -1349,38 +1358,14 @@ async function connectWebSocket() {
             return;
           }
 
-          if (pip >= risk && position.stoploss === 0) {
+          if (pip >= risk * 2 && position.stoploss === 0) {
             position.stoploss = Math.abs(commission);
 
             await update(position.stoploss, id, symbol);
           }
 
-          if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
+          if (pip >= risk * 4 && position.stoploss === Math.abs(commission)) {
             position.stoploss = Math.abs(lossAmount);
-
-            await update(position.stoploss, id, symbol);
-          }
-
-          if (pip >= risk * 3 && position.stoploss === Math.abs(lossAmount)) {
-            position.stoploss = Math.abs(lossAmount * 2);
-
-            await update(position.stoploss, id, symbol);
-          }
-
-          if (
-            pip >= risk * 6 &&
-            position.stoploss === Math.abs(lossAmount * 2)
-          ) {
-            position.stoploss = Math.abs(lossAmount * 4);
-
-            await update(position.stoploss, id, symbol);
-          }
-
-          if (
-            pip >= risk * 10 &&
-            position.stoploss === Math.abs(lossAmount * 4)
-          ) {
-            position.stoploss = Math.abs(lossAmount * 8);
 
             await update(position.stoploss, id, symbol);
           }
