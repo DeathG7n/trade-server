@@ -15,6 +15,7 @@ import {
   crossedEma,
   bearish,
   bullish,
+  trendContinuation,
 } from "./util.js";
 
 dotenv.config();
@@ -56,7 +57,7 @@ let lastBalance = null;
 // rr = take-profit multiple of SL (TP = SL * rr) → 1:4
 // Max one open multiplier trade per symbol
 const TF_PAIRS = [
-  { id: "30m_2m", htf: 1800, ltf: 120, portion: 4, rr: 4, label: "30m→2m" },
+  { id: "30m_2m", htf: 1800, ltf: 120, portion: 2, rr: 3, label: "30m→2m" },
 ];
 const timeframes = [...new Set(TF_PAIRS.flatMap((p) => [p.htf, p.ltf]))];
 const HISTORY_RESYNC_MS = 15 * 60 * 1000;
@@ -324,9 +325,7 @@ function findPairPendingProposal(symbol) {
 /** One trade per symbol max (any pair / multiplier) */
 function hasOpenForSymbol(symbol) {
   return positions.some(
-    (p) =>
-      p?.name === symbol &&
-      (p.type === "MULTUP" || p.type === "MULTDOWN"),
+    (p) => p?.name === symbol && (p.type === "MULTUP" || p.type === "MULTDOWN"),
   );
 }
 
@@ -1055,14 +1054,16 @@ async function connectWebSocket() {
           // LTF: inside HTF range + engulfing / CRT / harami
           const longSetup =
             pair.trendUp &&
-            crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
-            (bullish(htfSeries.open, htfSeries.close, prevIndexHtf) ||
-              candleRangeTheoryEntry(
+            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
+              bullish(htfSeries.open, htfSeries.close, prevIndexHtf)) ||
+              (trendContinuation(
                 "up",
+                htfSeries.open,
+                htfSeries.close,
                 htfSeries.high,
                 htfSeries.low,
-                htfSeries.close,
-              )) &&
+              ) &&
+                htfSeries.high[prevIndexHtf] < ema21[prevIndexHtf])) &&
             htfFormingPullback("up", htfSeries.high, htfSeries.low) &&
             withinHtfCandleRange(
               htfSeries.high,
@@ -1086,14 +1087,16 @@ async function connectWebSocket() {
 
           const shortSetup =
             pair.trendDown &&
-            crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
-            (bearish(htfSeries.open, htfSeries.close, prevIndexHtf) ||
-              candleRangeTheoryEntry(
+            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
+              bearish(htfSeries.open, htfSeries.close, prevIndexHtf)) ||
+              (trendContinuation(
                 "down",
+                htfSeries.open,
+                htfSeries.close,
                 htfSeries.high,
                 htfSeries.low,
-                htfSeries.close,
-              )) &&
+              ) &&
+                htfSeries.low[prevIndexHtf] > ema21[prevIndexHtf])) &&
             htfFormingPullback("down", htfSeries.high, htfSeries.low) &&
             withinHtfCandleRange(
               htfSeries.high,
@@ -1358,14 +1361,20 @@ async function connectWebSocket() {
             return;
           }
 
-          if (pip >= risk * 2 && position.stoploss === 0) {
+          if (pip >= risk && position.stoploss === 0) {
             position.stoploss = Math.abs(commission);
 
             await update(position.stoploss, id, symbol);
           }
 
-          if (pip >= risk * 4 && position.stoploss === Math.abs(commission)) {
+          if (pip >= risk * 2 && position.stoploss === Math.abs(commission)) {
             position.stoploss = Math.abs(lossAmount);
+
+            await update(position.stoploss, id, symbol);
+          }
+
+          if (pip >= risk * 3 && position.stoploss === Math.abs(commission)) {
+            position.stoploss = Math.abs(lossAmount * 2);
 
             await update(position.stoploss, id, symbol);
           }
