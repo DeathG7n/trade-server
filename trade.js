@@ -1015,10 +1015,10 @@ async function connectWebSocket() {
           const lenH = htfSeries.close.length;
           const prevH = lenH - 2;
           if (lenH >= 30 && prevH >= 0 && !htfSeries.historyPending) {
-            const ema14 = calculateEMA(htfSeries.close, 14);
             const ema21 = calculateEMA(htfSeries.close, 21);
-            pair.trendUp = ema14[prevH] > ema21[prevH];
-            pair.trendDown = ema14[prevH] < ema21[prevH];
+            const ema50 = calculateEMA(htfSeries.close, 50);
+            pair.trendUp = ema21[prevH] > ema50[prevH];
+            pair.trendDown = ema21[prevH] < ema50[prevH];
           }
         }
 
