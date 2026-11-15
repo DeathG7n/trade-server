@@ -453,10 +453,10 @@ export function ema21LevelOk(trend, high, low, close, signalIndex = null) {
 }
 
 /**
- * Forming HTF candle must pull back past 35% of the previous (range) HTF candle.
+ * Forming HTF candle must pull back past 50% of the previous (range) HTF candle.
  * Previous closed bar = len-2, forming = len-1.
  */
-export function htfFormingPullback(trend, high, low, pct = 0.35) {
+export function htfFormingPullback(trend, high, low, pct = 0.5) {
   const len = high.length;
   if (len < 2) return false;
   const prev = len - 2;
