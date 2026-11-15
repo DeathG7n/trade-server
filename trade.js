@@ -1039,7 +1039,7 @@ async function connectWebSocket() {
 
           const prevIndex = ltfSeries.close.length - 2;
           const prevIndexHtf = htfSeries.close.length - 2;
-          const ema21 = calculateEMA(htfSeries.close, 21);
+          const ema50 = calculateEMA(htfSeries.close, 50);
           if (prevIndex < 3) continue;
 
           // Reset alert gate on new LTF bar
@@ -1054,7 +1054,7 @@ async function connectWebSocket() {
           // LTF: inside HTF range + engulfing / CRT / harami
           const longSetup =
             pair.trendUp &&
-            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
+            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema50) &&
               bullish(htfSeries.open, htfSeries.close, prevIndexHtf)) ||
               (trendContinuation(
                 "up",
@@ -1063,7 +1063,7 @@ async function connectWebSocket() {
                 htfSeries.high,
                 htfSeries.low,
               ) &&
-                htfSeries.high[prevIndexHtf] < ema21[prevIndexHtf])) &&
+                htfSeries.high[prevIndexHtf] < ema50[prevIndexHtf])) &&
             htfFormingPullback("up", htfSeries.high, htfSeries.low) &&
             withinHtfCandleRange(
               htfSeries.high,
@@ -1087,7 +1087,7 @@ async function connectWebSocket() {
 
           const shortSetup =
             pair.trendDown &&
-            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
+            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema50) &&
               bearish(htfSeries.open, htfSeries.close, prevIndexHtf)) ||
               (trendContinuation(
                 "down",
@@ -1096,7 +1096,7 @@ async function connectWebSocket() {
                 htfSeries.high,
                 htfSeries.low,
               ) &&
-                htfSeries.low[prevIndexHtf] > ema21[prevIndexHtf])) &&
+                htfSeries.low[prevIndexHtf] > ema50[prevIndexHtf])) &&
             htfFormingPullback("down", htfSeries.high, htfSeries.low) &&
             withinHtfCandleRange(
               htfSeries.high,
