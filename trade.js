@@ -52,12 +52,12 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-// Single TF pair: 30m HTF → 2m LTF
+// Single TF pair: 4h HTF → 15m LTF
 // portion = stake divisor for SL (SL = stake/portion)
 // rr = take-profit multiple of SL (TP = SL * rr) → 1:4
 // Max one open multiplier trade per symbol
 const TF_PAIRS = [
-  { id: "30m_2m", htf: 1800, ltf: 120, portion: 2, rr: 3, label: "30m→2m" },
+  { id: "4h_15m", htf: 14400, ltf: 900, portion: 2, rr: 4, label: "4h→15m" },
 ];
 const timeframes = [...new Set(TF_PAIRS.flatMap((p) => [p.htf, p.ltf]))];
 const HISTORY_RESYNC_MS = 15 * 60 * 1000;
@@ -98,19 +98,19 @@ const symbols = [
   // "stpRNG3",
   // "stpRNG4",
   // "stpRNG5",
-  // "1HZ10V",
-  // "R_10",
-  // "1HZ15V",
+  "1HZ10V",
+  "R_10",
+  "1HZ15V",
   "1HZ25V",
   "R_25",
-  // "1HZ30V",
-  // "1HZ50V",
-  // "R_50",
+  "1HZ30V",
+  "1HZ50V",
+  "R_50",
   "1HZ75V",
   "R_75",
-  // "1HZ90V",
-  // "1HZ100V",
-  // "R_100",
+  "1HZ90V",
+  "1HZ100V",
+  "R_100",
   // "JD10",
   // "JD25",
   // "JD50",
@@ -1015,10 +1015,10 @@ async function connectWebSocket() {
           const lenH = htfSeries.close.length;
           const prevH = lenH - 2;
           if (lenH >= 30 && prevH >= 0 && !htfSeries.historyPending) {
+            const ema14 = calculateEMA(htfSeries.close, 14);
             const ema21 = calculateEMA(htfSeries.close, 21);
-            const ema50 = calculateEMA(htfSeries.close, 50);
-            pair.trendUp = ema21[prevH] > ema50[prevH];
-            pair.trendDown = ema21[prevH] < ema50[prevH];
+            pair.trendUp = ema14[prevH] > ema21[prevH];
+            pair.trendDown = ema14[prevH] < ema21[prevH];
           }
         }
 
@@ -1039,7 +1039,7 @@ async function connectWebSocket() {
 
           const prevIndex = ltfSeries.close.length - 2;
           const prevIndexHtf = htfSeries.close.length - 2;
-          const ema50 = calculateEMA(htfSeries.close, 50);
+          const ema14 = calculateEMA(htfSeries.close, 14);
           if (prevIndex < 3) continue;
 
           // Reset alert gate on new LTF bar
@@ -1054,7 +1054,7 @@ async function connectWebSocket() {
           // LTF: inside HTF range + engulfing / CRT / harami
           const longSetup =
             pair.trendUp &&
-            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema50) &&
+            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema14) &&
               bullish(htfSeries.open, htfSeries.close, prevIndexHtf)) ||
               (trendContinuation(
                 "up",
@@ -1063,7 +1063,7 @@ async function connectWebSocket() {
                 htfSeries.high,
                 htfSeries.low,
               ) &&
-                htfSeries.high[prevIndexHtf] < ema50[prevIndexHtf])) &&
+                htfSeries.high[prevIndexHtf] < ema14[prevIndexHtf])) &&
             htfFormingPullback("up", htfSeries.high, htfSeries.low) &&
             withinHtfCandleRange(
               htfSeries.high,
@@ -1087,7 +1087,7 @@ async function connectWebSocket() {
 
           const shortSetup =
             pair.trendDown &&
-            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema50) &&
+            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema14) &&
               bearish(htfSeries.open, htfSeries.close, prevIndexHtf)) ||
               (trendContinuation(
                 "down",
@@ -1096,7 +1096,7 @@ async function connectWebSocket() {
                 htfSeries.high,
                 htfSeries.low,
               ) &&
-                htfSeries.low[prevIndexHtf] > ema50[prevIndexHtf])) &&
+                htfSeries.low[prevIndexHtf] > ema14[prevIndexHtf])) &&
             htfFormingPullback("down", htfSeries.high, htfSeries.low) &&
             withinHtfCandleRange(
               htfSeries.high,
@@ -1121,12 +1121,12 @@ async function connectWebSocket() {
           if (pair.canAlert && alertSymbols.includes(symbol)) {
             if (longSetup) {
               sendMessage(
-                `Bullish ${cfg.label} on ${symbol} (HTF cont + EMA21 + 35% pullback + LTF entry)`,
+                `Bullish ${cfg.label} on ${symbol} (HTF cont + EMA14/21 + pullback + LTF entry)`,
               );
               pair.canAlert = false;
             } else if (shortSetup) {
               sendMessage(
-                `Bearish ${cfg.label} on ${symbol} (HTF cont + EMA21 + 35% pullback + LTF entry)`,
+                `Bearish ${cfg.label} on ${symbol} (HTF cont + EMA14/21 + pullback + LTF entry)`,
               );
               pair.canAlert = false;
             }
@@ -1373,7 +1373,7 @@ async function connectWebSocket() {
             await update(position.stoploss, id, symbol);
           }
 
-          if (pip >= risk * 3 && position.stoploss === Math.abs(commission)) {
+          if (pip >= risk * 4 && position.stoploss === Math.abs(commission)) {
             position.stoploss = Math.abs(lossAmount * 2);
 
             await update(position.stoploss, id, symbol);
