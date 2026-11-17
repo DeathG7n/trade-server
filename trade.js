@@ -1039,7 +1039,7 @@ async function connectWebSocket() {
 
           const prevIndex = ltfSeries.close.length - 2;
           const prevIndexHtf = htfSeries.close.length - 2;
-          const ema14 = calculateEMA(htfSeries.close, 14);
+          const ema21 = calculateEMA(htfSeries.close, 21);
           if (prevIndex < 3) continue;
 
           // Reset alert gate on new LTF bar
@@ -1054,7 +1054,7 @@ async function connectWebSocket() {
           // LTF: inside HTF range + engulfing / CRT / harami
           const longSetup =
             pair.trendUp &&
-            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema14) &&
+            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
               bullish(htfSeries.open, htfSeries.close, prevIndexHtf)) ||
               (trendContinuation(
                 "up",
@@ -1063,7 +1063,7 @@ async function connectWebSocket() {
                 htfSeries.high,
                 htfSeries.low,
               ) &&
-                htfSeries.high[prevIndexHtf] < ema14[prevIndexHtf])) &&
+                htfSeries.high[prevIndexHtf] < ema21[prevIndexHtf])) &&
             htfFormingPullback("up", htfSeries.high, htfSeries.low) &&
             withinHtfCandleRange(
               htfSeries.high,
@@ -1087,7 +1087,7 @@ async function connectWebSocket() {
 
           const shortSetup =
             pair.trendDown &&
-            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema14) &&
+            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
               bearish(htfSeries.open, htfSeries.close, prevIndexHtf)) ||
               (trendContinuation(
                 "down",
@@ -1096,7 +1096,7 @@ async function connectWebSocket() {
                 htfSeries.high,
                 htfSeries.low,
               ) &&
-                htfSeries.low[prevIndexHtf] > ema14[prevIndexHtf])) &&
+                htfSeries.low[prevIndexHtf] > ema21[prevIndexHtf])) &&
             htfFormingPullback("down", htfSeries.high, htfSeries.low) &&
             withinHtfCandleRange(
               htfSeries.high,
@@ -1373,8 +1373,14 @@ async function connectWebSocket() {
             await update(position.stoploss, id, symbol);
           }
 
-          if (pip >= risk * 4 && position.stoploss === Math.abs(commission)) {
+          if (pip >= risk * 3 && position.stoploss === Math.abs(commission)) {
             position.stoploss = Math.abs(lossAmount * 2);
+
+            await update(position.stoploss, id, symbol);
+          }
+
+          if (pip >= risk * 4 && position.stoploss === Math.abs(commission)) {
+            position.stoploss = Math.abs(lossAmount * 3);
 
             await update(position.stoploss, id, symbol);
           }
