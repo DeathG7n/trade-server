@@ -52,12 +52,12 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-// Single TF pair: 4h HTF → 15m LTF
+// Single TF pair: 15m HTF → 1m LTF
 // portion = stake divisor for SL (SL = stake/portion)
-// rr = take-profit multiple of SL (TP = SL * rr) → 1:4
+// rr = take-profit multiple of SL (TP = SL * rr) → 1:3
 // Max one open multiplier trade per symbol
 const TF_PAIRS = [
-  { id: "4h_15m", htf: 14400, ltf: 900, portion: 2, rr: 4, label: "4h→15m" },
+  { id: "15m_1m", htf: 900, ltf: 60, portion: 4, rr: 3, label: "15m→1m" },
 ];
 const timeframes = [...new Set(TF_PAIRS.flatMap((p) => [p.htf, p.ltf]))];
 const HISTORY_RESYNC_MS = 15 * 60 * 1000;
@@ -1375,12 +1375,6 @@ async function connectWebSocket() {
 
           if (pip >= risk * 3 && position.stoploss === Math.abs(commission)) {
             position.stoploss = Math.abs(lossAmount * 2);
-
-            await update(position.stoploss, id, symbol);
-          }
-
-          if (pip >= risk * 4 && position.stoploss === Math.abs(commission)) {
-            position.stoploss = Math.abs(lossAmount * 3);
 
             await update(position.stoploss, id, symbol);
           }
