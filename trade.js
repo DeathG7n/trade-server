@@ -57,7 +57,7 @@ let lastBalance = null;
 // rr = take-profit multiple of SL (TP = SL * rr) → 1:3
 // Max one open multiplier trade per symbol
 const TF_PAIRS = [
-  { id: "15m_1m", htf: 900, ltf: 60, portion: 4, rr: 3, label: "15m→1m" },
+  { id: "15m_1m", htf: 900, ltf: 60, portion: 4, rr: 1, label: "15m→1m" },
 ];
 const timeframes = [...new Set(TF_PAIRS.flatMap((p) => [p.htf, p.ltf]))];
 const HISTORY_RESYNC_MS = 15 * 60 * 1000;
