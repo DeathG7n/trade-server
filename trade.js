@@ -10,12 +10,9 @@ import {
   htfFormingPullback,
   candleRangeTheoryEntry,
   engulfingCandleEntry,
-  haramiEntry,
   withinHtfCandleRange,
-  crossedEma,
   bearish,
   bullish,
-  trendContinuation,
 } from "./util.js";
 
 dotenv.config();
@@ -52,20 +49,22 @@ let authorized = false;
 let portfolioSynced = false;
 let lastBalance = null;
 
-// Single TF pair: 15m HTF → 1m LTF
-// portion = stake divisor for SL (SL = stake/portion)
-// rr = take-profit multiple of SL (TP = SL * rr) → 1:3
-// Max one open multiplier trade per symbol
-const TF_PAIRS = [
-  { id: "15m_1m", htf: 900, ltf: 60, portion: 4, rr: 1, label: "15m→1m" },
-];
-const timeframes = [...new Set(TF_PAIRS.flatMap((p) => [p.htf, p.ltf]))];
+// Progressive TF strategy: 4h bias → 15m confirm → 1m entry
+// Subscribe only as each stage confirms (reduces rate limit load)
+// portion = stake divisor for SL; rr = TP multiple of SL
+const TF_4H = 14400;
+const TF_15M = 900;
+const TF_1M = 60;
+const PAIR_ID = "4h_15m_1m";
+const PORTION = 4;
+const RR = 3;
+const ALL_TFS = [TF_4H, TF_15M, TF_1M];
 const HISTORY_RESYNC_MS = 15 * 60 * 1000;
 const subscribedContracts = new Set();
 const contractStates = new Map();
-const pendingTrades = new Map(); // key: `${symbol}::${pairId}`
+const pendingTrades = new Map(); // key: `${symbol}::${PAIR_ID}`
 
-function pairKey(symbol, pairId) {
+function pairKey(symbol, pairId = PAIR_ID) {
   return `${symbol}::${pairId}`;
 }
 
@@ -81,23 +80,48 @@ function emptySeries() {
   };
 }
 
-function emptyPairState() {
-  return {
-    tradeState: "IDLE",
-    pendingProposalId: null,
-    trendUp: false,
-    trendDown: false,
-    canAlert: true,
-    entryCandle: 0,
-  };
+/** 4h trend: 2 bearish then 1 bullish = up; 2 bullish then 1 bearish = down */
+function fourHourTrend(open, close) {
+  const len = close.length;
+  const prev = len - 2;
+  const third = len - 3;
+  const fourth = len - 4;
+  if (prev < 3) return "none";
+  if (
+    bearish(open, close, fourth) &&
+    bearish(open, close, third) &&
+    bullish(open, close, prev)
+  ) {
+    return "up";
+  }
+  if (
+    bullish(open, close, fourth) &&
+    bullish(open, close, third) &&
+    bearish(open, close, prev)
+  ) {
+    return "down";
+  }
+  return "none";
+}
+
+function subscribeCandles(symbol, granularity) {
+  send({
+    ticks_history: symbol,
+    style: "candles",
+    count: 500,
+    granularity,
+    end: "latest",
+    subscribe: 1,
+  });
+  console.log(`📡 Subscribed ${symbol} granularity=${granularity}`);
 }
 
 const symbols = [
-  // "stpRNG",
-  // "stpRNG2",
-  // "stpRNG3",
-  // "stpRNG4",
-  // "stpRNG5",
+  "stpRNG",
+  "stpRNG2",
+  "stpRNG3",
+  "stpRNG4",
+  "stpRNG5",
   "1HZ10V",
   "R_10",
   "1HZ15V",
@@ -111,11 +135,11 @@ const symbols = [
   "1HZ90V",
   "1HZ100V",
   "R_100",
-  // "JD10",
-  // "JD25",
-  // "JD50",
-  // "JD75",
-  // "JD100",
+  "JD10",
+  "JD25",
+  "JD50",
+  "JD75",
+  "JD100",
 ];
 
 const tradeSymbols = [
@@ -171,17 +195,22 @@ const marketData = {};
 
 symbols.forEach((symbol) => {
   const series = {};
-  for (const tf of timeframes) {
+  for (const tf of ALL_TFS) {
     series[tf] = emptySeries();
-  }
-  const pairs = {};
-  for (const p of TF_PAIRS) {
-    pairs[p.id] = emptyPairState();
   }
   marketData[symbol] = {
     series,
-    pairs,
     multiplier_range: [],
+    // Progressive subscription flags
+    sub15m: false,
+    sub1m: false,
+    confirm15m: false,
+    trendUp: false,
+    trendDown: false,
+    tradeState: "IDLE",
+    pendingProposalId: null,
+    canAlert: true,
+    entryCandle: 0,
   };
 });
 
@@ -210,23 +239,23 @@ function send(message) {
   }
 }
 
-function calculateEMA(prices, period) {
-  const k = 2 / (period + 1);
+// function calculateEMA(prices, period) {
+//   const k = 2 / (period + 1);
 
-  const emaArray = [];
+//   const emaArray = [];
 
-  if (!prices.length) {
-    return emaArray;
-  }
+//   if (!prices.length) {
+//     return emaArray;
+//   }
 
-  emaArray[0] = prices[0];
+//   emaArray[0] = prices[0];
 
-  for (let i = 1; i < prices.length; i++) {
-    emaArray[i] = prices[i] * k + emaArray[i - 1] * (1 - k);
-  }
+//   for (let i = 1; i < prices.length; i++) {
+//     emaArray[i] = prices[i] * k + emaArray[i - 1] * (1 - k);
+//   }
 
-  return emaArray;
-}
+//   return emaArray;
+// }
 
 const sendMessage = async (message) => {
   try {
@@ -273,42 +302,36 @@ function deleteContractState(contractId) {
 
 function setPairPending(symbol, pairId, state, proposalId = null) {
   const md = marketData[symbol];
-  if (!md?.pairs?.[pairId]) return;
-  const pair = md.pairs[pairId];
-  pair.tradeState = state;
-  pair.pendingProposalId = proposalId;
-  pendingTrades.set(pairKey(symbol, pairId), {
+  if (!md) return;
+  md.tradeState = state;
+  md.pendingProposalId = proposalId;
+  pendingTrades.set(pairKey(symbol, pairId || PAIR_ID), {
     symbol,
-    pairId,
+    pairId: pairId || PAIR_ID,
     state,
     proposalId,
     updatedAt: Date.now(),
   });
-  console.log(`🔄 ${symbol} [${pairId}] state -> ${state}`);
+  console.log(`🔄 ${symbol} state -> ${state}`);
 }
 
 function clearPairPending(symbol, pairId) {
   const md = marketData[symbol];
-  if (!md?.pairs?.[pairId]) return;
-  const pair = md.pairs[pairId];
-  pair.tradeState = "IDLE";
-  pair.pendingProposalId = null;
-  pendingTrades.delete(pairKey(symbol, pairId));
-  console.log(`🔄 ${symbol} [${pairId}] state -> IDLE`);
+  if (!md) return;
+  md.tradeState = "IDLE";
+  md.pendingProposalId = null;
+  pendingTrades.delete(pairKey(symbol, pairId || PAIR_ID));
+  console.log(`🔄 ${symbol} state -> IDLE`);
 }
 
 function findPairPendingProposal(symbol) {
   const md = marketData[symbol];
   if (!md) return null;
-  for (const p of TF_PAIRS) {
-    const pair = md.pairs[p.id];
-    if (
-      pair &&
-      (pair.tradeState === "PROPOSAL_PENDING" ||
-        pair.tradeState === "BUY_PENDING")
-    ) {
-      return { pairId: p.id, pair, config: p };
-    }
+  if (
+    md.tradeState === "PROPOSAL_PENDING" ||
+    md.tradeState === "BUY_PENDING"
+  ) {
+    return { pairId: PAIR_ID, pair: md };
   }
   return null;
 }
@@ -687,17 +710,8 @@ async function connectWebSocket() {
       send({
         contracts_for: symbol,
       });
-
-      timeframes.forEach((timeframe) => {
-        send({
-          ticks_history: symbol,
-          style: "candles",
-          count: 500,
-          granularity: timeframe,
-          end: "latest",
-          subscribe: 1,
-        });
-      });
+      // Stage 1 only: 4h candles for every symbol
+      subscribeCandles(symbol, TF_4H);
     });
   });
 
@@ -862,18 +876,12 @@ async function connectWebSocket() {
             });
           }
 
-          // Attach pairId from any BUY_PENDING pair on this symbol
+          // Attach pairId if this symbol was BUY_PENDING
           const md = marketData[symbol];
-          if (md) {
-            for (const cfg of TF_PAIRS) {
-              const pair = md.pairs[cfg.id];
-              if (pair?.tradeState === "BUY_PENDING") {
-                const pos = positions.find((p) => p.contract_id === contractId);
-                if (pos && !pos.pairId) pos.pairId = cfg.id;
-                clearPairPending(symbol, cfg.id);
-                break;
-              }
-            }
+          if (md && md.tradeState === "BUY_PENDING") {
+            const pos = positions.find((p) => p.contract_id === contractId);
+            if (pos && !pos.pairId) pos.pairId = PAIR_ID;
+            clearPairPending(symbol, PAIR_ID);
           }
 
           if (!subscribedContracts.has(contractId)) {
@@ -1007,211 +1015,190 @@ async function connectWebSocket() {
           series.low[last] = Number(data.ohlc.low);
         }
 
-        // Update HTF trend flags for every pair using this granularity as HTF
-        for (const cfg of TF_PAIRS) {
-          if (cfg.htf !== granularity) continue;
-          const htfSeries = md.series[cfg.htf];
-          const pair = md.pairs[cfg.id];
-          const lenH = htfSeries.close.length;
-          const prevH = lenH - 2;
-          if (lenH >= 30 && prevH >= 0 && !htfSeries.historyPending) {
-            const ema14 = calculateEMA(htfSeries.close, 14);
-            const ema21 = calculateEMA(htfSeries.close, 21);
-            pair.trendUp = ema14[prevH] > ema21[prevH];
-            pair.trendDown = ema14[prevH] < ema21[prevH];
+
+        // ---- Progressive strategy evaluation ----
+        const s4 = md.series[TF_4H];
+        const s15 = md.series[TF_15M];
+        const s1 = md.series[TF_1M];
+
+        // Stage 1: 4h trend (2 bearish → 1 bullish = up; 2 bullish → 1 bearish = down)
+        if (granularity === TF_4H && s4.close.length >= 5 && !s4.historyPending) {
+          const trend = fourHourTrend(s4.open, s4.close);
+          md.trendUp = trend === "up";
+          md.trendDown = trend === "down";
+
+          const prev4 = s4.close.length - 2;
+          // Previous closed 4h must be bullish for up / bearish for down
+          const prevColorOk =
+            (md.trendUp && bullish(s4.open, s4.close, prev4)) ||
+            (md.trendDown && bearish(s4.open, s4.close, prev4));
+          const pullback4 =
+            (md.trendUp && htfFormingPullback("up", s4.high, s4.low, 0.5)) ||
+            (md.trendDown && htfFormingPullback("down", s4.high, s4.low, 0.5));
+
+          if ((md.trendUp || md.trendDown) && prevColorOk && pullback4) {
+            if (!md.sub15m) {
+              md.sub15m = true;
+              subscribeCandles(symbol, TF_15M);
+              sendMessage(
+                `📐 ${symbol} 4h trend ${md.trendUp ? "UP" : "DOWN"} + 50% pullback → subscribed 15m`,
+              );
+            }
           }
         }
 
-        // Only evaluate entries on a newly closed LTF bar for pairs using this LTF
-        if (!isNewCandle) return;
-        if (series.historyPending) return;
+        // Stage 2: 15m confirmation (engulfing/CRT inside 4h range + 50% 15m pullback)
+        if (
+          granularity === TF_15M &&
+          md.sub15m &&
+          s15.close.length >= 5 &&
+          !s15.historyPending
+        ) {
+          // Pattern uses last closed 15m; pullback uses forming 15m (50% of prior)
+          const aligned15 =
+            (md.trendUp &&
+              (candleRangeTheoryEntry("up", s15.high, s15.low, s15.close) ||
+                engulfingCandleEntry("up", s15.open, s15.close))) ||
+            (md.trendDown &&
+              (candleRangeTheoryEntry("down", s15.high, s15.low, s15.close) ||
+                engulfingCandleEntry("down", s15.open, s15.close)));
 
-        for (const cfg of TF_PAIRS) {
-          if (cfg.ltf !== granularity) continue;
+          const inside4h = withinHtfCandleRange(s4.high, s4.low, s15.close);
+          const pullback15 =
+            (md.trendUp && htfFormingPullback("up", s15.high, s15.low, 0.5)) ||
+            (md.trendDown && htfFormingPullback("down", s15.high, s15.low, 0.5));
 
-          const pair = md.pairs[cfg.id];
-          const htfSeries = md.series[cfg.htf];
-          const ltfSeries = md.series[cfg.ltf];
+          // Store mid-stage confirmation for 1m gate
+          md.confirm15m = !!(aligned15 && inside4h);
 
-          if (htfSeries.historyPending || ltfSeries.historyPending) continue;
-          if (ltfSeries.close.length < 30 || htfSeries.close.length < 30)
-            continue;
+          if (md.confirm15m && pullback15 && !md.sub1m) {
+            md.sub1m = true;
+            subscribeCandles(symbol, TF_1M);
+            sendMessage(
+              `🔎 ${symbol} 15m confirm (CRT/engulf + inside 4h + 50% pullback) → subscribed 1m`,
+            );
+          }
+        }
 
-          const prevIndex = ltfSeries.close.length - 2;
-          const prevIndexHtf = htfSeries.close.length - 2;
-          const ema21 = calculateEMA(htfSeries.close, 21);
-          if (prevIndex < 3) continue;
+        // Stage 3: 1m entry on CRT/engulfing (only when higher stages active)
+        if (
+          granularity === TF_1M &&
+          md.sub1m &&
+          isNewCandle &&
+          !s1.historyPending &&
+          s1.close.length >= 5 &&
+          s4.close.length >= 5
+        ) {
+          // Re-validate 4h context
+          const trend = fourHourTrend(s4.open, s4.close);
+          md.trendUp = trend === "up";
+          md.trendDown = trend === "down";
+          const prev4 = s4.close.length - 2;
+          const prevColorOk =
+            (md.trendUp && bullish(s4.open, s4.close, prev4)) ||
+            (md.trendDown && bearish(s4.open, s4.close, prev4));
+          const pullback4 =
+            (md.trendUp && htfFormingPullback("up", s4.high, s4.low, 0.5)) ||
+            (md.trendDown && htfFormingPullback("down", s4.high, s4.low, 0.5));
 
-          // Reset alert gate on new LTF bar
-          pair.canAlert = true;
+          const long1m =
+            md.trendUp &&
+            prevColorOk &&
+            pullback4 &&
+            md.confirm15m &&
+            withinHtfCandleRange(s4.high, s4.low, s1.close) &&
+            (candleRangeTheoryEntry("up", s1.high, s1.low, s1.close) ||
+              engulfingCandleEntry("up", s1.open, s1.close));
 
-          // HTF continuation stack:
-          // 1) EMA14/21 trend flag
-          // 2) classic trendContinuation (pullback / 2-bear-1-bull etc.)
-          // 3) EMA21 cross with correct candle color
-          // 4) last closed HTF bar high/low at or beyond EMA21
-          // 5) forming HTF bar pulled back past 50% of previous HTF range candle
-          // LTF: inside HTF range + engulfing / CRT / harami
-          const longSetup =
-            pair.trendUp &&
-            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
-              bullish(htfSeries.open, htfSeries.close, prevIndexHtf)) ||
-              (trendContinuation(
-                "up",
-                htfSeries.open,
-                htfSeries.close,
-                htfSeries.high,
-                htfSeries.low,
-              ) &&
-                htfSeries.high[prevIndexHtf] < ema21[prevIndexHtf])) &&
-            htfFormingPullback("up", htfSeries.high, htfSeries.low) &&
-            withinHtfCandleRange(
-              htfSeries.high,
-              htfSeries.low,
-              ltfSeries.close,
-            ) &&
-            (candleRangeTheoryEntry(
-              "up",
-              ltfSeries.high,
-              ltfSeries.low,
-              ltfSeries.close,
-            ) ||
-              engulfingCandleEntry("up", ltfSeries.open, ltfSeries.close) ||
-              haramiEntry(
-                "up",
-                ltfSeries.open,
-                ltfSeries.close,
-                ltfSeries.high,
-                ltfSeries.low,
-              ));
+          const short1m =
+            md.trendDown &&
+            prevColorOk &&
+            pullback4 &&
+            md.confirm15m &&
+            withinHtfCandleRange(s4.high, s4.low, s1.close) &&
+            (candleRangeTheoryEntry("down", s1.high, s1.low, s1.close) ||
+              engulfingCandleEntry("down", s1.open, s1.close));
 
-          const shortSetup =
-            pair.trendDown &&
-            ((crossedEma(htfSeries.high, htfSeries.low, prevIndexHtf, ema21) &&
-              bearish(htfSeries.open, htfSeries.close, prevIndexHtf)) ||
-              (trendContinuation(
-                "down",
-                htfSeries.open,
-                htfSeries.close,
-                htfSeries.high,
-                htfSeries.low,
-              ) &&
-                htfSeries.low[prevIndexHtf] > ema21[prevIndexHtf])) &&
-            htfFormingPullback("down", htfSeries.high, htfSeries.low) &&
-            withinHtfCandleRange(
-              htfSeries.high,
-              htfSeries.low,
-              ltfSeries.close,
-            ) &&
-            (candleRangeTheoryEntry(
-              "down",
-              ltfSeries.high,
-              ltfSeries.low,
-              ltfSeries.close,
-            ) ||
-              engulfingCandleEntry("down", ltfSeries.open, ltfSeries.close) ||
-              haramiEntry(
-                "down",
-                ltfSeries.open,
-                ltfSeries.close,
-                ltfSeries.high,
-                ltfSeries.low,
-              ));
-
-          if (pair.canAlert && alertSymbols.includes(symbol)) {
-            if (longSetup) {
-              sendMessage(
-                `Bullish ${cfg.label} on ${symbol} (HTF cont + EMA14/21 + pullback + LTF entry)`,
-              );
-              pair.canAlert = false;
-            } else if (shortSetup) {
-              sendMessage(
-                `Bearish ${cfg.label} on ${symbol} (HTF cont + EMA14/21 + pullback + LTF entry)`,
-              );
-              pair.canAlert = false;
+          if (md.canAlert && alertSymbols.includes(symbol)) {
+            if (long1m) {
+              sendMessage(`Bullish 4h→15m→1m on ${symbol}`);
+              md.canAlert = false;
+            } else if (short1m) {
+              sendMessage(`Bearish 4h→15m→1m on ${symbol}`);
+              md.canAlert = false;
             }
           }
 
           const symbolIsPending =
-            pair.tradeState === "PROPOSAL_PENDING" ||
-            pair.tradeState === "BUY_PENDING";
-          // Hard cap: only one open multiplier per symbol
+            md.tradeState === "PROPOSAL_PENDING" ||
+            md.tradeState === "BUY_PENDING";
           const hasOpen = hasOpenForSymbol(symbol);
 
           if (
             !hasOpen &&
             !symbolIsPending &&
-            pair.tradeState === "IDLE" &&
+            md.tradeState === "IDLE" &&
             Math.trunc(balance) !== 0 &&
             amount != null &&
             amount <= balance &&
             tradeSymbols.includes(symbol)
           ) {
-            if (longSetup) {
-              pair.entryCandle = data.ohlc.open_time;
-              setPairPending(symbol, cfg.id, "PROPOSAL_PENDING");
+            if (long1m) {
+              md.entryCandle = data.ohlc.open_time;
+              setPairPending(symbol, PAIR_ID, "PROPOSAL_PENDING");
               try {
                 await getMultiProposal(
                   "MULTUP",
                   symbol,
                   amount,
                   md.multiplier_range[0],
-                  cfg.portion,
-                  cfg.id,
-                  cfg.rr,
+                  PORTION,
+                  PAIR_ID,
+                  RR,
                 );
               } catch (error) {
-                clearPairPending(symbol, cfg.id);
+                clearPairPending(symbol, PAIR_ID);
                 sendMessage(String(error));
               }
-            } else if (shortSetup) {
-              pair.entryCandle = data.ohlc.open_time;
-              setPairPending(symbol, cfg.id, "PROPOSAL_PENDING");
+            } else if (short1m) {
+              md.entryCandle = data.ohlc.open_time;
+              setPairPending(symbol, PAIR_ID, "PROPOSAL_PENDING");
               try {
                 await getMultiProposal(
                   "MULTDOWN",
                   symbol,
                   amount,
                   md.multiplier_range[0],
-                  cfg.portion,
-                  cfg.id,
-                  cfg.rr,
+                  PORTION,
+                  PAIR_ID,
+                  RR,
                 );
               } catch (error) {
-                clearPairPending(symbol, cfg.id);
+                clearPairPending(symbol, PAIR_ID);
                 sendMessage(String(error));
               }
             }
           }
 
-          // Exit only this pair's positions on opposite HTF trend
-          const pairPositions = positions.filter(
+          // Exit on opposite 4h trend
+          const openPos = positions.filter(
             (p) =>
               p?.name === symbol &&
-              p?.pairId === cfg.id &&
               (p.type === "MULTUP" || p.type === "MULTDOWN"),
           );
-          for (const position of pairPositions) {
+          for (const position of openPos) {
             const contractId = position.contract_id;
             const contractState = getContractState(contractId);
             if (contractState?.state === "CLOSING") continue;
-            if (position.type === "MULTUP" && pair.trendDown) {
+            if (position.type === "MULTUP" && md.trendDown) {
               try {
-                closePosition(
-                  symbol,
-                  contractId,
-                  `Opposite ${cfg.label} HTF trend`,
-                );
+                closePosition(symbol, contractId, "Opposite 4h trend");
               } catch (error) {
                 sendMessage(String(error));
               }
-            } else if (position.type === "MULTDOWN" && pair.trendUp) {
+            } else if (position.type === "MULTDOWN" && md.trendUp) {
               try {
-                closePosition(
-                  symbol,
-                  contractId,
-                  `Opposite ${cfg.label} HTF trend`,
-                );
+                closePosition(symbol, contractId, "Opposite 4h trend");
               } catch (error) {
                 sendMessage(String(error));
               }
@@ -1592,16 +1579,16 @@ async function connectWebSocket() {
                 }
 
                 send({ contracts_for: symbol });
-
-                for (const timeframe of timeframes) {
-                  send({
-                    ticks_history: symbol,
-                    style: "candles",
-                    count: 500,
-                    granularity: timeframe,
-                    end: "latest",
-                    subscribe: 1,
-                  });
+                // Always resubscribe 4h; only resubscribe lower TFs if already staged
+                subscribeCandles(symbol, TF_4H);
+                await new Promise((r) => setTimeout(r, 300));
+                const md = marketData[symbol];
+                if (md?.sub15m) {
+                  subscribeCandles(symbol, TF_15M);
+                  await new Promise((r) => setTimeout(r, 300));
+                }
+                if (md?.sub1m) {
+                  subscribeCandles(symbol, TF_1M);
                   await new Promise((r) => setTimeout(r, 300));
                 }
               }
